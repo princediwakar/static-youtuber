@@ -6,6 +6,7 @@ import path from 'path';
 import { tmpdir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { downloadAsBuffer } from './cloudinary';
+import { TTS_SAMPLE_RATE } from './ttsGenerator';
 import {
   FFMPEG_CRF,
   FFMPEG_PRESET,
@@ -31,7 +32,7 @@ function runFfmpeg(command: ffmpeg.FfmpegCommand): Promise<void> {
   });
 }
 
-/** Combine a single image + audio clip into a per-slide MP4 */
+/** Combine a single image + raw PCM audio into a per-slide MP4 */
 async function buildSlideClip(
   imagePath: string,
   audioPath: string,
@@ -42,6 +43,7 @@ async function buildSlideClip(
       .input(imagePath)
       .inputOptions(['-loop 1'])
       .input(audioPath)
+      .inputOptions(['-f', 's16le', '-ar', `${TTS_SAMPLE_RATE}`, '-ac', '1'])
       .outputOptions([
         '-c:v libx264',
         `-crf ${FFMPEG_CRF}`,
@@ -49,7 +51,7 @@ async function buildSlideClip(
         '-pix_fmt yuv420p',
         '-c:a aac',
         `-b:a ${FFMPEG_AUDIO_BITRATE}`,
-        '-shortest',             // clip length = audio duration
+        '-shortest',
         '-movflags +faststart',
       ])
       .size(`${VIDEO_WIDTH}x${VIDEO_HEIGHT}`)
@@ -126,7 +128,7 @@ export async function assembleVideo(
     );
     const audioPaths = await Promise.all(
       audioBuffers.map(async (buf, i) => {
-        const p = path.join(workDir, `audio-${i}.wav`);
+        const p = path.join(workDir, `audio-${i}.pcm`);
         await fs.writeFile(p, buf);
         return p;
       })

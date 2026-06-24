@@ -7,12 +7,12 @@ export const NICHE = 'psychology';
 export const SLIDE_COUNT = { min: 7, max: 9 } as const;
 
 // Gemini Imagen 3
-export const IMAGEN_MODEL = 'imagen-3.0-generate-002';
+export const IMAGEN_MODEL = 'imagen-4.0-generate-001';
 export const IMAGEN_ASPECT_RATIO = '9:16';
 export const IMAGE_CONCURRENCY = 3; // parallel Imagen calls per job
 
 // Gemini TTS
-export const TTS_MODEL = 'gemini-2.5-pro-tts';
+export const TTS_MODEL = 'gemini-3.1-flash-tts-preview';
 export const TTS_VOICE = 'Charon'; // deep, calm, authoritative narrator
 export const TTS_CONCURRENCY = 4;
 
