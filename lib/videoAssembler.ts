@@ -72,12 +72,9 @@ async function concatClips(clipPaths: string[], outputPath: string): Promise<voi
         .input(listPath)
         .inputOptions(['-f concat', '-safe 0'])
         .outputOptions([
-          '-c:v libx264',
-          `-crf ${FFMPEG_CRF}`,
-          `-preset ${FFMPEG_PRESET}`,
-          '-pix_fmt yuv420p',
-          '-c:a aac',
-          `-b:a ${FFMPEG_AUDIO_BITRATE}`,
+          // Stream-copy: clips are already encoded — no re-encode = no encoder
+          // flush gap between slides. This is the fix for the audio delay.
+          '-c copy',
           '-movflags +faststart',
         ])
         .output(outputPath)

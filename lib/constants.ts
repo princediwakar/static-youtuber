@@ -37,8 +37,8 @@ export const CLOUDINARY_EXPIRE_DAYS = 7;
 
 // Image style prefix injected into every slide image_prompt
 export const IMAGE_STYLE_PREFIX =
-  'flat illustration, clean minimal style, dark navy background, no text, muted earthy palette, professional, high quality digital art,';
+  'cute minimal cartoon illustration, light pastel background, lots of white space, simple flat shapes, friendly playful style, soft colors, no text, airy and clean, like a children\'s editorial illustration,';
 
 // Thumbnail style prefix
 export const THUMBNAIL_STYLE_PREFIX =
-  'bold cinematic illustration, dark dramatic background, vibrant accent colors, high contrast, no text, professional,';
+  'bold cartoonish editorial illustration, bright cheerful background, high contrast, simple graphic style, bold playful typography-friendly composition, no text in image,';

@@ -69,7 +69,7 @@ Schema:
 Slide rules:
 - text: ≤ 18 words, factual, conversational, reads naturally when spoken aloud
 - First slide: immediate curiosity hook — do NOT start with "Did you know"
-- image_prompt: describe only the visual scene, no text in image, suitable for flat illustration style
+- image_prompt: describe only the visual scene, no text in image, suitable for a cute minimal cartoon/editorial illustration style with light background
 - thumbnailPrompt: single dramatic scene that represents the video topic
 
 Tags: mix broad (#psychology #mindset) and specific (#cognitivebias #brainfacts)`;
