@@ -228,6 +228,7 @@ Any item not applicable must be explicitly marked `N/A – <reason>`, not omitte
 
 ---
 
+
 ## QUICK REFERENCE: DECISION TREES
 
 **Product Decision:**
