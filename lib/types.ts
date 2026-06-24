@@ -34,6 +34,7 @@ export interface SlideshowJob {
   slide_audio_urls?: string[];
   video_url?: string;
   thumbnail_url?: string;
+  youtube_video_id?: string;
   error_message?: string;
   created_at: string;
   updated_at: string;

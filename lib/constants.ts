@@ -1,0 +1,44 @@
+// Path: lib/constants.ts
+
+export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'english_shots';
+
+export const NICHE = 'psychology';
+
+export const SLIDE_COUNT = { min: 7, max: 9 } as const;
+
+// Gemini Imagen 3
+export const IMAGEN_MODEL = 'imagen-3.0-generate-002';
+export const IMAGEN_ASPECT_RATIO = '9:16';
+export const IMAGE_CONCURRENCY = 3; // parallel Imagen calls per job
+
+// Gemini TTS
+export const TTS_MODEL = 'gemini-2.5-pro-tts';
+export const TTS_VOICE = 'Charon'; // deep, calm, authoritative narrator
+export const TTS_CONCURRENCY = 4;
+
+// DeepSeek
+export const DEEPSEEK_MODEL = 'deepseek-chat';
+export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
+
+// FFmpeg quality
+export const FFMPEG_CRF = '18';
+export const FFMPEG_PRESET = 'slow';
+export const FFMPEG_AUDIO_BITRATE = '192k';
+export const VIDEO_WIDTH = 1080;
+export const VIDEO_HEIGHT = 1920;
+
+// Thumbnail
+export const THUMBNAIL_WIDTH = 1280;
+export const THUMBNAIL_HEIGHT = 720;
+
+// Cloudinary
+export const CLOUDINARY_FOLDER = 'ai-slideshow';
+export const CLOUDINARY_EXPIRE_DAYS = 7;
+
+// Image style prefix injected into every slide image_prompt
+export const IMAGE_STYLE_PREFIX =
+  'flat illustration, clean minimal style, dark navy background, no text, muted earthy palette, professional, high quality digital art,';
+
+// Thumbnail style prefix
+export const THUMBNAIL_STYLE_PREFIX =
+  'bold cinematic illustration, dark dramatic background, vibrant accent colors, high contrast, no text, professional,';

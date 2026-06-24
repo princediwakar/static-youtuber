@@ -1,65 +1,217 @@
-import Image from "next/image";
+// Path: app/page.tsx
+import { query } from '@/lib/database';
+import { SlideshowJob } from '@/lib/types';
 
-export default function Home() {
+// ─── Data fetching ────────────────────────────────────────────────────────────
+
+async function getRecentJobs(): Promise<SlideshowJob[]> {
+  try {
+    const result = await query<SlideshowJob>(
+      `SELECT id, account_id, topic, niche, status, youtube_video_id,
+              error_message, created_at, updated_at
+       FROM slideshow_jobs
+       ORDER BY created_at DESC
+       LIMIT 30`,
+    );
+    return result.rows;
+  } catch {
+    return [];
+  }
+}
+
+async function getStats(): Promise<{
+  total: number;
+  uploaded: number;
+  failed: number;
+  inProgress: number;
+}> {
+  try {
+    const result = await query<{
+      total: string;
+      uploaded: string;
+      failed: string;
+      in_progress: string;
+    }>(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE status = 'uploaded')  AS uploaded,
+        COUNT(*) FILTER (WHERE status = 'failed')    AS failed,
+        COUNT(*) FILTER (WHERE status NOT IN ('uploaded','failed')) AS in_progress
+      FROM slideshow_jobs
+    `);
+    const r = result.rows[0];
+    return {
+      total:      parseInt(r.total, 10)      || 0,
+      uploaded:   parseInt(r.uploaded, 10)   || 0,
+      failed:     parseInt(r.failed, 10)     || 0,
+      inProgress: parseInt(r.in_progress, 10)|| 0,
+    };
+  } catch {
+    return { total: 0, uploaded: 0, failed: 0, inProgress: 0 };
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins  = Math.floor(diff / 60_000);
+  const hours = Math.floor(diff / 3_600_000);
+  const days  = Math.floor(diff / 86_400_000);
+  if (mins  < 1)  return 'just now';
+  if (mins  < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  pending:     'Pending',
+  generating:  'Generating',
+  images_done: 'Images ✓',
+  tts_done:    'TTS ✓',
+  assembled:   'Assembled',
+  uploaded:    'Uploaded',
+  failed:      'Failed',
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const label = STATUS_LABEL[status] ?? status;
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <span className={`badge badge-${status}`}>
+      <span className={`badge-dot badge-dot-${status}`} />
+      {label}
+    </span>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export const revalidate = 30; // ISR: refresh every 30 seconds
+
+export default async function DashboardPage() {
+  const [jobs, stats] = await Promise.all([getRecentJobs(), getStats()]);
+
+  const successRate =
+    stats.total > 0 ? Math.round((stats.uploaded / stats.total) * 100) : 0;
+
+  return (
+    <main className="page">
+
+      {/* Header */}
+      <header className="header">
+        <div className="header-icon">🧠</div>
+        <div className="header-text">
+          <h1>AI Slideshow</h1>
+          <p>Psychology Shorts Automation Pipeline</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        {stats.inProgress > 0 && (
+          <div className="header-badge">
+            {stats.inProgress} running
+          </div>
+        )}
+      </header>
+
+      {/* Stats */}
+      <section className="stats-row" aria-label="Pipeline statistics">
+        <div className="stat-card">
+          <div className="stat-label">Total Jobs</div>
+          <div className="stat-value">{stats.total}</div>
+          <div className="stat-sub">all time</div>
         </div>
-      </main>
-    </div>
+        <div className="stat-card">
+          <div className="stat-label">Uploaded</div>
+          <div className="stat-value" style={{ color: 'var(--green)' }}>
+            {stats.uploaded}
+          </div>
+          <div className="stat-sub">live on YouTube</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">In Progress</div>
+          <div className="stat-value" style={{ color: 'var(--amber)' }}>
+            {stats.inProgress}
+          </div>
+          <div className="stat-sub">running now</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Success Rate</div>
+          <div className="stat-value" style={{ color: 'var(--accent-light)' }}>
+            {successRate}%
+          </div>
+          <div className="stat-sub">{stats.failed} failed</div>
+        </div>
+      </section>
+
+      {/* Jobs table */}
+      <p className="section-title">Recent Jobs</p>
+
+      <div className="jobs-table-wrap">
+        {jobs.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">🎬</div>
+            <p className="empty-title">No jobs yet</p>
+            <p className="empty-sub">
+              Trigger the pipeline via <code>POST /api/cron</code> or wait for the
+              scheduled cron-job.org run.
+            </p>
+          </div>
+        ) : (
+          <table className="jobs-table" aria-label="Slideshow jobs">
+            <thead>
+              <tr>
+                <th>Topic</th>
+                <th>Status</th>
+                <th>Account</th>
+                <th>Created</th>
+                <th>YouTube</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((job) => (
+                <tr key={job.id}>
+                  <td>
+                    <span className="job-topic" title={job.topic}>
+                      {job.topic}
+                    </span>
+                    {job.status === 'failed' && job.error_message && (
+                      <div className="error-message" title={job.error_message}>
+                        ⚠ {job.error_message}
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <StatusBadge status={job.status} />
+                  </td>
+                  <td>
+                    <span className="job-time">{job.account_id}</span>
+                  </td>
+                  <td>
+                    <span className="job-time">{formatRelativeTime(job.created_at)}</span>
+                  </td>
+                  <td>
+                    {job.youtube_video_id ? (
+                      <a
+                        id={`yt-link-${job.id}`}
+                        className="job-link"
+                        href={`https://www.youtube.com/watch?v=${job.youtube_video_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Watch ${job.topic} on YouTube`}
+                      >
+                        Watch
+                        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M2 10L10 2M10 2H5M10 2v5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </a>
+                    ) : (
+                      <span className="job-time">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </main>
   );
 }
