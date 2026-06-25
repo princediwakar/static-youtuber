@@ -103,8 +103,8 @@ Slide 5 — CTA (The Payoff & Call to Action):
 IMAGE PROMPT RULES (per slide):
 - Describe only the visual scene — no text in image
 - Be specific: name the civilization, setting, time period, objects
-- Style: cinematic historical illustration, dramatic lighting, period-accurate
-- Slide 5: always "dramatic wide shot of an ancient city at golden hour, silhouette of a lone scholar reading, epic scale, no text"
+- Style: minimal cartoonish illustration, expressive characters, funny situations, simple vector style
+- Slide 5: Describe a funny, minimal cartoonish wide shot related to the core topic, no text
 
 TAGS: include #history #ancienthistory #historyfacts #shorts and 4 specific tags for the topic.`;
 
@@ -181,10 +181,7 @@ export async function generateScript(topic: string): Promise<SlideshowScript> {
     description: `${validated.description}\n\n${MUSIC_ATTRIBUTION}`,
     slides: validated.slides.map((slide, i) => ({
       ...slide,
-      // Slide 5 (index 4) gets the fixed CTA image prompt
-      image_prompt: i === 4
-        ? `${IMAGE_STYLE_PREFIX} dramatic wide shot of an ancient city at golden hour, silhouette of a lone scholar reading a scroll, epic scale, no text`
-        : `${IMAGE_STYLE_PREFIX} ${slide.image_prompt}`,
+      image_prompt: `${IMAGE_STYLE_PREFIX} ${slide.image_prompt}`,
     })),
     thumbnailPrompt: `${THUMBNAIL_STYLE_PREFIX} ${validated.thumbnailPrompt}`,
   };

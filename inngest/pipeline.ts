@@ -17,19 +17,19 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 // Replaces wrapInSSML(). Uses Gemini 3.1 TTS audio tags for expressiveness.
 function buildTTSPrompt(text: string, slideIndex: number): string {
   const audioTags: Record<number, string> = {
-    0: '[urgent, fast]',        // Hook
-    2: '[amazed, rapid]',       // Crazy truth
-    4: '[urgent]',              // CTA
+    0: '[engaged]',        // Hook
+    2: '[curious]',        // Crazy truth
+    4: '[encouraging]',    // CTA
   };
 
-  const tag = audioTags[slideIndex] ?? '[fast, engaged]';
+  const tag = audioTags[slideIndex] ?? '[conversational]';
 
   return `
-# AUDIO PROFILE: The Chronicler
+# AUDIO PROFILE: The Indian Storyteller
 ### DIRECTOR'S NOTES
-Style: Energetic, humorous, and highly engaging storyteller for a viral YouTube Shorts video.
-Pacing: Very fast, energetic, and rapid-fire. Read quickly with no slow pauses to keep viewer retention.
-Accent: Clear, modern Indian English.
+Style: Natural, authentic, and conversational Indian storyteller. Avoid exaggerated or stereotypical accents. Speak clearly with a grounded, relatable, and engaging tone.
+Pacing: Steady and fast enough for YouTube Shorts, but natural and clear.
+Accent: Authentic, modern Indian English, conversational and not overly dramatic.
 ### TRANSCRIPT
 ${tag} ${text}
 <break time="150ms"/>

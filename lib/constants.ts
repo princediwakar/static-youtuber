@@ -14,7 +14,7 @@ export const IMAGE_ASPECT_RATIO = '9:16';
 // Gemini TTS
 // Gemini TTS
 export const TTS_MODEL = 'gemini-3.1-flash-tts-preview';
-export const TTS_VOICE = 'Fenrir'; // deep, authoritative male — perfect for history narration
+export const TTS_VOICE = 'Puck'; // natural, conversational — less exaggerated
 export const TTS_SAMPLE_RATE = 24000; // Gemini TTS outputs 24kHz mono 16-bit PCM
 
 // Music Model
@@ -56,7 +56,7 @@ export const XFADE_TRANSITIONS = [
 ] as const;
 
 // Background music
-export const MUSIC_VOLUME = 0.18; // 18% — audible under voice, not distracting
+export const MUSIC_VOLUME = 0.35; // 35% — increased volume
 export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
 export const MUSIC_FILES = ['focus-01.mp3', 'tension-01.mp3', 'ambient-01.mp3'];
 // CC BY 4.0 — must be included in YouTube video descriptions
@@ -66,7 +66,7 @@ export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — L
 // Captions
 export const CAPTION_FONT_SIZE = 72;
 export const CAPTION_MAX_CHARS_PER_LINE = 22;
-export const CAPTION_Y_POSITION = 0.58; // 58% down the frame (lower-center)
+export const CAPTION_Y_POSITION = 0.85; // 85% down the frame (bottom)
 export const CAPTION_LINE_HEIGHT = 90;
 export const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'Montserrat-Bold.ttf');
 
@@ -78,10 +78,10 @@ export const THUMBNAIL_HEIGHT = 720;
 export const CLOUDINARY_FOLDER = 'ai-slideshow';
 export const CLOUDINARY_EXPIRE_DAYS = 7;
 
-// Image style prefix — cinematic historical illustration
+// Image style prefix — minimal cartoonish illustration
 export const IMAGE_STYLE_PREFIX =
-  'epic cinematic historical illustration, dramatic golden-hour lighting, rich detailed period-accurate scene, painterly style, deep saturated colors, no text, high quality digital art,';
+  'minimal cartoonish illustration, vector art style, flat colors, humorous and expressive characters, simple backgrounds, clean lines, OverSimplified style, Indian characters and motifs, no text, high quality,';
 
 // Thumbnail style prefix
 export const THUMBNAIL_STYLE_PREFIX =
-  'bold dramatic historical illustration, dark cinematic background, intense mood, high contrast, rich colors, no text in image, movie poster quality,';
+  'bold minimal cartoonish illustration, expressive humorous Indian characters, flat colors, vector art style, clean lines, high contrast, no text in image, YouTube thumbnail quality,';
