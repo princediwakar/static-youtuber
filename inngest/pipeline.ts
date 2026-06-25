@@ -29,7 +29,7 @@ function buildTTSPrompt(text: string, slideIndex: number): string {
 ### DIRECTOR'S NOTES
 Style: Energetic, humorous, and highly engaging storyteller for a viral YouTube Shorts video.
 Pacing: Very fast, energetic, and rapid-fire. Read quickly with no slow pauses to keep viewer retention.
-Accent: Clear mid-Atlantic, no regional markers.
+Accent: Clear, modern Indian English.
 ### TRANSCRIPT
 ${tag} ${text}
 <break time="150ms"/>

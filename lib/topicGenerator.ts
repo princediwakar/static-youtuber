@@ -57,9 +57,9 @@ export async function pickUnusedTopic(): Promise<string> {
 }
 
 // ─── System prompt (Hook-Loop-Payoff for history) ─────────────────────────────
-const SYSTEM_PROMPT = `You are a viral scriptwriter for a history YouTube Shorts channel.
+const SYSTEM_PROMPT = `You are a viral scriptwriter for an Indian history YouTube Shorts channel targeting a young Indian audience.
 Your tone is INTERESTING, HUMOROUS, and HIGHLY ACCESSIBLE. 
-CRITICAL: Use simple, everyday language. Avoid difficult vocabulary, academic jargon, or dense historical terms. Explain concepts like you're telling a funny, mind-blowing story to a friend at a bar. Use modern analogies if it helps.
+CRITICAL: Use simple, everyday language. Avoid difficult vocabulary, academic jargon, or dense historical terms. Explain concepts like you're telling a funny, mind-blowing story to a friend. Use modern Indian pop-culture or everyday analogies if it helps.
 
 Output ONLY valid JSON. No markdown. No code fences. No trailing commas. No explanation.
 
