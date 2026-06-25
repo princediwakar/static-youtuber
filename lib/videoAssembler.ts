@@ -20,8 +20,6 @@ import {
   ZOOMPAN_ZOOM_IN_START,
   ZOOMPAN_ZOOM_OUT_START,
   ZOOMPAN_ZOOM_OUT_END,
-  XFADE_DURATION,
-  XFADE_TRANSITIONS,
   MUSIC_DIR,
   MUSIC_FILES,
   MUSIC_VOLUME,
@@ -44,18 +42,6 @@ function runFfmpeg(command: ffmpeg.FfmpegCommand): Promise<void> {
         reject(new Error(`FFmpeg failed: ${err.message}`));
       })
       .run();
-  });
-}
-
-/** Probe a media file and return its duration in seconds */
-function probeDuration(filePath: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    ffmpeg.ffprobe(filePath, (err, metadata) => {
-      if (err) return reject(err);
-      const duration = metadata?.format?.duration;
-      if (!duration) return reject(new Error(`Could not probe duration of ${filePath}`));
-      resolve(duration);
-    });
   });
 }
 
@@ -125,85 +111,36 @@ async function buildSlideClip(
   );
 }
 
-// ─── xfade assembly ───────────────────────────────────────────────────────────
+// ─── Concat assembly ──────────────────────────────────────────────────────────
 
 /**
- * Assemble N clips into a single video using xfade (video) + acrossfade (audio).
- * This produces seamless 0.3s crossfades between every slide — both picture and sound.
- *
- * Algorithm:
- *   1. Probe each clip's duration
- *   2. Calculate xfade offsets: offset_n = sum(durations[0..n-1]) - n * XFADE_DURATION
- *   3. Build filter_complex string chaining [0:v][1:v]xfade... [0:a][1:a]acrossfade...
- *   4. Run single FFmpeg command with all clips as inputs
+ * Assemble N clips into a single video using the FFmpeg concat demuxer.
+ * Memory-efficient and nearly instant because it uses stream copy (-c copy)
+ * without re-encoding. Avoids Vercel memory limits.
  */
-async function assembleWithTransitions(
+async function assembleClips(
   clipPaths: string[],
   outputPath: string
 ): Promise<void> {
   if (clipPaths.length === 1) {
-    // Single clip — just copy it
     await fs.copyFile(clipPaths[0], outputPath);
     return;
   }
 
-  // Step 1: Probe durations
-  console.log(`[Assembler] Probing ${clipPaths.length} clip durations for xfade offsets…`);
-  const durations = await Promise.all(clipPaths.map(p => probeDuration(p)));
+  console.log(`[Assembler] Assembling ${clipPaths.length} clips using concat demuxer (no fades)…`);
 
-  // Step 2: Calculate xfade offsets
-  const offsets: number[] = [];
-  let cumulative = 0;
-  for (let i = 0; i < durations.length - 1; i++) {
-    cumulative += durations[i] - XFADE_DURATION;
-    offsets.push(Math.max(0, cumulative));
-  }
-
-  // Step 3: Build filter_complex for video (xfade) and audio (acrossfade)
-  const n = clipPaths.length;
-  const vFilters: string[] = [];
-  const aFilters: string[] = [];
-
-  // Chain video xfades — cycle through transition types for visual variety
-  let prevVLabel = '[0:v]';
-  for (let i = 0; i < n - 1; i++) {
-    const outLabel = i === n - 2 ? '[vfinal]' : `[v${i}${i + 1}]`;
-    const transition = XFADE_TRANSITIONS[i % XFADE_TRANSITIONS.length];
-    vFilters.push(
-      `${prevVLabel}[${i + 1}:v]xfade=transition=${transition}:duration=${XFADE_DURATION}:offset=${offsets[i].toFixed(3)}${outLabel}`
-    );
-    prevVLabel = outLabel === '[vfinal]' ? '[vfinal]' : outLabel;
-  }
-
-  // Chain audio acrossfades
-  let prevALabel = '[0:a]';
-  for (let i = 0; i < n - 1; i++) {
-    const outLabel = i === n - 2 ? '[afinal]' : `[a${i}${i + 1}]`;
-    aFilters.push(
-      `${prevALabel}[${i + 1}:a]acrossfade=d=${XFADE_DURATION}${outLabel}`
-    );
-    prevALabel = outLabel === '[afinal]' ? '[afinal]' : outLabel;
-  }
-
-  const filterComplex = [...vFilters, ...aFilters].join('; ');
-
-  // Step 4: Build and run the FFmpeg command
-  const cmd = ffmpeg();
-  clipPaths.forEach(p => cmd.input(p));
+  // Create concat.txt file for FFmpeg
+  const concatListPath = path.join(path.dirname(clipPaths[0]), 'concat.txt');
+  const concatContent = clipPaths.map(p => `file '${p}'`).join('\n');
+  await fs.writeFile(concatListPath, concatContent);
 
   await runFfmpeg(
-    cmd
-      .complexFilter(filterComplex)
+    ffmpeg()
+      .input(concatListPath)
+      .inputOptions(['-f', 'concat', '-safe', '0'])
       .outputOptions([
-        '-map [vfinal]',
-        '-map [afinal]',
-        '-c:v libx264',
-        `-crf ${FFMPEG_CRF}`,
-        `-preset ${FFMPEG_PRESET}`,
-        '-pix_fmt yuv420p',
-        '-c:a aac',
-        `-b:a ${FFMPEG_AUDIO_BITRATE}`,
-        '-movflags +faststart',
+        '-c', 'copy',
+        '-movflags', '+faststart',
       ])
       .output(outputPath)
   );
@@ -310,10 +247,9 @@ export async function assembleVideo(
       clipPaths.push(clipPath);
     }
 
-    // Assemble with xfade transitions
+    // Assemble sequentially using concat demuxer
     const assembledPath = path.join(workDir, 'assembled.mp4');
-    console.log(`[Assembler] Assembling ${clipPaths.length} clips with xfade transitions…`);
-    await assembleWithTransitions(clipPaths, assembledPath);
+    await assembleClips(clipPaths, assembledPath);
 
     // Mix in background music
     const finalPath = path.join(workDir, 'final.mp4');
