@@ -91,8 +91,10 @@ function detectPowerWords(word: string): boolean {
   return POWER_WORDS.has(clean);
 }
 
-const HIGHLIGHT_COLOR = '#FFD700'; // Golden yellow
+const HIGHLIGHT_COLOR = '#FFD700'; // Golden yellow (used as stroke on black fill)
 const HIGHLIGHT_FONT_SCALE = 1.30; // MrBeast-style: in-your-face power words
+const TEXT_FILL = '#000000';       // Black fill — readable on white/light cartoon backgrounds
+const TEXT_STROKE = '#FFFFFF';     // White stroke for contrast on any background
 
 /**
  * Composite a caption overlay onto the image buffer with kinetic typography.
@@ -143,12 +145,12 @@ export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Bu
       if (isHighlighted) {
         ctx.save();
         ctx.shadowColor = HIGHLIGHT_COLOR;
-        ctx.shadowBlur = 6;
-        ctx.strokeStyle = 'black';
-        ctx.fillStyle = HIGHLIGHT_COLOR;
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = HIGHLIGHT_COLOR;
+        ctx.fillStyle = TEXT_FILL;
       } else {
-        ctx.strokeStyle = 'black';
-        ctx.fillStyle = 'white';
+        ctx.strokeStyle = TEXT_STROKE;
+        ctx.fillStyle = TEXT_FILL;
       }
 
       ctx.strokeText(word, x, y);
