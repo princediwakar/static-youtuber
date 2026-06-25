@@ -17,25 +17,24 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 // Replaces wrapInSSML(). Uses Gemini 3.1 TTS audio tags for expressiveness.
 function buildTTSPrompt(text: string, slideIndex: number): string {
   const audioTags: Record<number, string> = {
-    0: '[gravely, measured]',   // Hook — open loop lands deliberately
-    2: '[amazed]',              // Twist — dopamine hit slide
-    6: '[gravely]',             // Payoff — closes the loop
-    7: '[warm, conversational]', // Modern connection
-    8: '[warm]',                // CTA
+    0: '[urgent, fast]',        // Hook — open loop lands deliberately
+    2: '[amazed, rapid]',       // Twist — dopamine hit slide
+    6: '[fast, energetic]',     // Payoff — closes the loop
+    7: '[warm, conversational, fast]', // Modern connection
+    8: '[urgent]',              // CTA
   };
 
-  const tag = audioTags[slideIndex] ?? '[serious, engaged]';
+  const tag = audioTags[slideIndex] ?? '[fast, engaged]';
 
   return `
 # AUDIO PROFILE: The Chronicler
 ### DIRECTOR'S NOTES
-Style: Authoritative documentary narrator. Measured gravitas with genuine
-wonder breaking through on key revelations. Clear, commanding delivery.
-Pacing: Deliberate. Let facts land. No rushing.
+Style: Authoritative documentary narrator for a viral YouTube Shorts video.
+Pacing: Very fast, energetic, and rapid-fire. Read quickly with no slow pauses to keep viewer retention.
 Accent: Clear mid-Atlantic, no regional markers.
 ### TRANSCRIPT
 ${tag} ${text}
-<break time="250ms"/>
+<break time="150ms"/>
   `.trim();
 }
 
