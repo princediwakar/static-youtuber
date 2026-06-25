@@ -70,6 +70,8 @@ Schema:
   "thumbnailPrompt": "string"
 }
 
+PACING MANDATE: Slides 1 + 2 combined must take UNDER 8 SECONDS when read aloud. Be ruthlessly concise — every extra word costs viewers.
+
 SLIDE STRUCTURE — follow this EXACTLY, 9 slides, each role is mandatory:
 
 Slide 1 — SCROLL-STOPPER HOOK (role: open_loop):
@@ -80,32 +82,40 @@ Slide 1 — SCROLL-STOPPER HOOK (role: open_loop):
   - "The day [historical event] happened, nobody knew it would [world-changing consequence]."
   Max 18 words. Do NOT start with "Did you know".
 
-Slide 2 — BUILD CONTEXT (role: setup):
-  Set the scene. Who, where, when. Make it visual and grounded.
+Slide 2 — COMPRESSED SETUP (role: setup_compressed):
+  Who, where, when — in ONE punchy line. No filler. No scene-setting poetry.
+  Example: "Çatalhöyük, Turkey, 7500 BC — 8,000 people, zero streets, zero doors."
+  Max 14 words. This slide must be FAST.
+
+Slide 3 — THE TWIST (role: twist):
+  THIS IS THE DOPAMINE HIT. Violate the viewer's expectation immediately after the compressed setup.
+  Deliver the most surprising fact NOW — do not build to it slowly.
+  This must land by second 8–10 of the video. The viewer is deciding whether to stay RIGHT NOW.
   Max 18 words.
 
-Slide 3 — RAISE STAKES (role: tension):
-  Escalate. What was at risk? What made this extraordinary?
+Slide 4 — EXPLAIN THE TWIST (role: depth):
+  Now that you've hooked them with the twist, explain WHY or HOW.
+  Add a specific fact, number, or mechanism that makes the twist feel real and credible.
   Max 18 words.
 
-Slide 4 — THE SURPRISING TWIST (role: twist):
-  Violate the viewer's expectation. This is the dopamine hit.
+Slide 5 — EVIDENCE (role: evidence):
+  Concrete proof. A specific archaeological finding, a named historian, a measurement, a date.
+  This slide builds trust — the viewer now believes the twist wasn't clickbait.
   Max 18 words.
 
-Slide 5 — DEEPER DETAIL (role: depth):
-  Add a specific fact, number, or name that makes this feel real and credible.
+Slide 6 — ESCALATION (role: escalation):
+  Add another surprising dimension — a consequence, a parallel civilization, or a hidden detail.
+  The viewer should think "wait, it gets even crazier?"
   Max 18 words.
 
-Slide 6 — ANOTHER LAYER (role: escalation):
-  Add another surprising dimension — a consequence, a parallel, or a hidden detail.
+Slide 7 — THE PAYOFF (role: payoff):
+  Close the loop opened in slide 1. This is the most satisfying slide.
+  Directly answer the mystery/question from the hook.
   Max 18 words.
 
-Slide 7 — THE PAYOFF (role: revelation):
-  Deliver the core revelation that closes the loop opened in slide 1. Most satisfying slide.
-  Max 18 words.
-
-Slide 8 — MODERN CONNECTION (role: relevance):
-  Connect the historical fact to something modern. Why does this matter today?
+Slide 8 — MODERN CONNECTION (role: modern_parallel):
+  Connect the historical fact to something modern. Why does this matter TODAY?
+  Make the viewer see their own world differently.
   Max 18 words.
 
 Slide 9 — CTA (role: call_to_action):

@@ -1,6 +1,7 @@
 // Path: lib/videoAssembler.ts
 import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from '@ffmpeg-installer/ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+import ffprobePath from '@ffprobe-installer/ffprobe';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
@@ -20,12 +21,16 @@ import {
   ZOOMPAN_ZOOM_OUT_START,
   ZOOMPAN_ZOOM_OUT_END,
   XFADE_DURATION,
+  XFADE_TRANSITIONS,
   MUSIC_DIR,
   MUSIC_FILES,
   MUSIC_VOLUME,
 } from './constants';
 
-ffmpeg.setFfmpegPath(ffmpegPath.path);
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+}
+ffmpeg.setFfprobePath(ffprobePath.path);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -159,12 +164,13 @@ async function assembleWithTransitions(
   const vFilters: string[] = [];
   const aFilters: string[] = [];
 
-  // Chain video xfades
+  // Chain video xfades — cycle through transition types for visual variety
   let prevVLabel = '[0:v]';
   for (let i = 0; i < n - 1; i++) {
     const outLabel = i === n - 2 ? '[vfinal]' : `[v${i}${i + 1}]`;
+    const transition = XFADE_TRANSITIONS[i % XFADE_TRANSITIONS.length];
     vFilters.push(
-      `${prevVLabel}[${i + 1}:v]xfade=transition=fade:duration=${XFADE_DURATION}:offset=${offsets[i].toFixed(3)}${outLabel}`
+      `${prevVLabel}[${i + 1}:v]xfade=transition=${transition}:duration=${XFADE_DURATION}:offset=${offsets[i].toFixed(3)}${outLabel}`
     );
     prevVLabel = outLabel === '[vfinal]' ? '[vfinal]' : outLabel;
   }

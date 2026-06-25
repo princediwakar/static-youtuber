@@ -25,22 +25,32 @@ export const DEEPSEEK_MODEL = 'deepseek-chat';
 export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 
 // FFmpeg quality
-export const FFMPEG_CRF = '18';
-export const FFMPEG_PRESET = 'slow';
-export const FFMPEG_AUDIO_BITRATE = '192k';
+export const FFMPEG_CRF = '23';       // YouTube re-encodes everything — CRF 18 was wasted quality
+export const FFMPEG_PRESET = 'medium'; // 3x faster encode, imperceptible delta after YouTube re-encode
+export const FFMPEG_AUDIO_BITRATE = '128k'; // Mono voice at 24kHz — 128k is transparent
 export const VIDEO_WIDTH = 1080;
 export const VIDEO_HEIGHT = 1920;
-export const VIDEO_FPS = 30;
+export const VIDEO_FPS = 25;           // Ken Burns on stills doesn't benefit from 30fps
 
 // Ken Burns zoom — alternating direction per slide
 export const ZOOMPAN_ZOOM_IN_START = 1.0;
 export const ZOOMPAN_ZOOM_IN_END = 1.06;
 export const ZOOMPAN_ZOOM_OUT_START = 1.06;
 export const ZOOMPAN_ZOOM_OUT_END = 1.0;
-export const ZOOMPAN_SPEED = 0.0003; // zoom delta per frame
+export const ZOOMPAN_SPEED = 0.0006; // zoom delta per frame — doubled for perceptible motion on mobile
 
 // xfade transition
 export const XFADE_DURATION = 0.3; // seconds of crossfade between slides
+
+// Transition variety — cycles through these to prevent visual habituation
+export const XFADE_TRANSITIONS = [
+  'fade',
+  'slideleft',
+  'slideup',
+  'wiperight',
+  'smoothleft',
+  'circlecrop',
+] as const;
 
 // Background music
 export const MUSIC_VOLUME = 0.18; // 18% — audible under voice, not distracting
