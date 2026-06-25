@@ -3,6 +3,7 @@
 // Returns 202 in < 50ms — the actual work happens asynchronously in Inngest.
 import { NextRequest, NextResponse } from 'next/server';
 import { inngest } from '@/inngest/client';
+import { ACCOUNT_ID } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 // Short timeout is fine — we're only firing an Inngest event, not doing real work
@@ -24,8 +25,8 @@ export async function POST(request: NextRequest) {
   }
 
   await inngest.send({
-    name: 'slideshow/generate',
-    data: { accountId: accountId ?? process.env.ACCOUNT_ID ?? 'psychology_shots' },
+    name: 'slideshow/trigger',
+    data: { accountId: accountId ?? ACCOUNT_ID },
   });
 
   return NextResponse.json({ ok: true, message: 'Slideshow pipeline triggered' }, { status: 202 });
