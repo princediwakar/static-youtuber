@@ -131,7 +131,7 @@ export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Bu
           y="${y}"
           text-anchor="middle"
           font-size="${CAPTION_FONT_SIZE}"
-          font-family="${fontName}"
+          font-family="${fontName}, 'Arial Unicode MS', 'Noto Sans Devanagari', 'Mangal', sans-serif"
           font-weight="bold"
           fill="white"
           stroke="black"

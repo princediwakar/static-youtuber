@@ -27,9 +27,9 @@ function buildTTSPrompt(text: string, slideIndex: number): string {
   return `
 # AUDIO PROFILE: The Indian Storyteller
 ### DIRECTOR'S NOTES
-Style: Natural, authentic, and conversational Indian storyteller. Avoid exaggerated or stereotypical accents. Speak clearly with a grounded, relatable, and engaging tone.
+Style: Natural, authentic, and conversational Hindi storyteller. Avoid exaggerated or stereotypical accents. Speak clearly with a grounded, relatable, and engaging tone.
 Pacing: Steady and fast enough for YouTube Shorts, but natural and clear.
-Accent: Authentic, modern Indian English, conversational and not overly dramatic.
+Language: Hindi (the transcript is in Devanagari, read it fluently).
 ### TRANSCRIPT
 ${tag} ${text}
 <break time="150ms"/>

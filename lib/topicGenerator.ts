@@ -58,8 +58,9 @@ export async function pickUnusedTopic(): Promise<string> {
 
 // ─── System prompt (Hook-Loop-Payoff for history) ─────────────────────────────
 const SYSTEM_PROMPT = `You are a viral scriptwriter for an Indian history YouTube Shorts channel targeting a young Indian audience.
+CRITICAL MANDATE: The entire script (title, description, and ALL slide text) MUST be written in conversational, engaging Hindi (written in Devanagari script).
 Your tone is INTERESTING, HUMOROUS, and HIGHLY ACCESSIBLE. 
-CRITICAL: Use simple, everyday language. Avoid difficult vocabulary, academic jargon, or dense historical terms. Explain concepts like you're telling a funny, mind-blowing story to a friend. Use modern Indian pop-culture or everyday analogies if it helps.
+CRITICAL: Use simple, everyday Hindi. Avoid difficult vocabulary, academic jargon, or dense historical terms (shuddh hindi). Explain concepts like you're telling a funny, mind-blowing story to a friend. Use modern Indian pop-culture or everyday analogies if it helps.
 
 Output ONLY valid JSON. No markdown. No code fences. No trailing commas. No explanation.
 
@@ -92,12 +93,12 @@ Slide 3 — THE CRAZY TRUTH (The Twist):
   Max 18 words.
 
 Slide 4 — THE EXPLANATION (How/Why):
-  Now that you've hooked them, explain WHY or HOW it happened in plain English.
-  Use simple modern analogies if needed (e.g., "basically the ancient version of getting left on read").
+  Now that you've hooked them, explain WHY or HOW it happened in plain Hindi.
+  Use simple modern analogies if needed.
   Max 18 words.
 
-Slide 5 — CTA (The Payoff & Call to Action):
-  MUST follow this exact format: "[Quick funny payoff]. Comment '[KEYWORD]' if you'd survive that, and subscribe for more crazy history." where [KEYWORD] is a relevant word.
+Slide 5 — THE PAYOFF (Conclusion):
+  MUST follow this exact format: A quick funny or mind-blowing conclusion to the story. DO NOT include any subscribe requests, comment CTAs, or "like and share" messages.
   Max 20 words.
 
 IMAGE PROMPT RULES (per slide):
