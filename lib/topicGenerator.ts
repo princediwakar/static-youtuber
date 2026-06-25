@@ -122,7 +122,7 @@ Schema:
   "title": "string (max 70 chars, curiosity-driven)",
   "description": "string (2 gripping sentences about the topic + hashtags)",
   "tags": ["string"] (8 tags mixing broad and specific),
-  "slides": [5 objects each with: {"text": "string (narration, max 18 words)", "image_prompt": "string (cinematic visual scene description, no text in image)", "audio_tag": "string (one of: [engaged], [curious], [encouraging], [conversational])"}],
+  "slides": [5 objects each with: {"text": "string (narration, max 18 words)", "image_prompt": "string (cinematic visual scene description, no text in image)", "audio_tag": "string (a descriptive emotional tag for the TTS voice based on the slide's topic, e.g., [mysterious], [excited], [serious], [funny], [sarcastic])"}],
   "thumbnailPrompt": "string"
 }
 
