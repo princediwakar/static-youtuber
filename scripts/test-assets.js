@@ -48,7 +48,10 @@ async function main() {
   // ── 4. DB ─────────────────────────────────────────────────────────────
   console.log('\n4. Database');
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: process.env.DATABASE_URL.replace(
+      /[?&]sslmode=(?:prefer|require|verify-ca)(?=\?|&|$)/,
+      (m) => m.replace(/(prefer|require|verify-ca)/, 'verify-full')
+    ),
     ssl: { rejectUnauthorized: false },
   });
   try {
