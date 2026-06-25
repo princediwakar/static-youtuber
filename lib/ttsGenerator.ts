@@ -2,7 +2,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { Slide, AccountCredentials } from './types';
 import { uploadSlideAudio } from './cloudinary';
-import { TTS_MODEL, TTS_VOICE, TTS_CONCURRENCY } from './constants';
+import { TTS_MODEL, TTS_VOICE, TTS_CONCURRENCY, TTS_RATE_HOOK, TTS_RATE_DEFAULT } from './constants';
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -12,12 +12,24 @@ function getClient(): GoogleGenAI {
 
 export const TTS_SAMPLE_RATE = 24000; // Gemini TTS outputs 24kHz mono 16-bit PCM
 
-async function generateSingleAudio(text: string): Promise<Buffer> {
+/**
+ * Wraps slide text in SSML to control pacing and energy.
+ * - Slide 0 (hook): measured rate — lets the open loop land properly
+ * - All other slides: slightly faster — energetic, keeps attention
+ * A 0.25s break at the end gives the viewer a beat to absorb each fact.
+ */
+function wrapInSSML(text: string, slideIndex: number): string {
+  const rate = slideIndex === 0 ? TTS_RATE_HOOK : TTS_RATE_DEFAULT;
+  return `<speak><prosody rate="${rate}">${text}</prosody><break time="250ms"/></speak>`;
+}
+
+async function generateSingleAudio(text: string, slideIndex: number): Promise<Buffer> {
   const client = getClient();
+  const ssmlText = wrapInSSML(text, slideIndex);
 
   const result = await client.models.generateContent({
     model: TTS_MODEL,
-    contents: [{ role: 'user', parts: [{ text }] }],
+    contents: [{ role: 'user', parts: [{ text: ssmlText }] }],
     config: {
       responseModalities: ['audio'],
       speechConfig: {
@@ -31,7 +43,7 @@ async function generateSingleAudio(text: string): Promise<Buffer> {
   const inlineData = result.candidates?.[0]?.content?.parts?.[0]?.inlineData;
   if (!inlineData?.data) throw new Error('Gemini TTS returned no audio data');
 
-  // Returns raw PCM 16-bit signed LE, 24kHz mono — FFmpeg reads with -f s16le -ar 24000 -ac 1
+  // Raw PCM 16-bit signed LE, 24kHz mono — FFmpeg reads with -f s16le -ar 24000 -ac 1
   return Buffer.from(inlineData.data, 'base64');
 }
 
@@ -63,8 +75,8 @@ export async function generateSlideAudio(
 
   const urls = await withConcurrencyLimit(slides, TTS_CONCURRENCY, async (slide, index) => {
     console.log(`[TTS] Slide ${index + 1}/${slides.length}: "${slide.text.substring(0, 50)}..."`);
-    const wavBuffer = await generateSingleAudio(slide.text);
-    const url = await uploadSlideAudio(wavBuffer, jobId, index, creds);
+    const pcmBuffer = await generateSingleAudio(slide.text, index);
+    const url = await uploadSlideAudio(pcmBuffer, jobId, index, creds);
     console.log(`[TTS] Slide ${index + 1} audio uploaded: ${url}`);
     return url;
   });

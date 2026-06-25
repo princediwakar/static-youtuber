@@ -26,9 +26,9 @@ async function main() {
     console.log('✅ Schema applied');
 
     // Seed topics
-    console.log('🌱 Seeding psychology topics…');
+    console.log('🌱 Seeding history topics…');
     const topics = JSON.parse(
-      fs.readFileSync(path.join(__dirname, 'topics/psychology.json'), 'utf8')
+      fs.readFileSync(path.join(__dirname, 'topics/history.json'), 'utf8')
     );
 
     let inserted = 0;

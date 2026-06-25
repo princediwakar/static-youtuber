@@ -8,11 +8,13 @@ import {
   IMAGE_STYLE_PREFIX,
   THUMBNAIL_STYLE_PREFIX,
   NICHE,
+  MUSIC_ATTRIBUTION,
 } from './constants';
 
-// ─── Zod schema for DeepSeek output validation ───────────────────────────────
+
+// ─── Zod schema ───────────────────────────────────────────────────────────────
 const SlideSchema = z.object({
-  text: z.string().max(150),
+  text: z.string().max(200),
   image_prompt: z.string(),
 });
 
@@ -20,13 +22,12 @@ const SlideshowScriptSchema = z.object({
   title: z.string().max(100),
   description: z.string(),
   tags: z.array(z.string()).min(5).max(12),
-  slides: z.array(SlideSchema).min(7).max(9),
+  slides: z.array(SlideSchema).min(9).max(9),
   thumbnailPrompt: z.string(),
 });
 
 // ─── Topic deduplication ─────────────────────────────────────────────────────
 export async function pickUnusedTopic(): Promise<string> {
-  // Atomically pick and mark a topic as used
   const result = await query<{ topic: string }>(`
     UPDATE slideshow_topics
     SET used = TRUE, used_at = NOW()
@@ -40,39 +41,103 @@ export async function pickUnusedTopic(): Promise<string> {
   `, [NICHE]);
 
   if (result.rows.length === 0) {
-    // All topics used — reset and start again
+    // All topics used — reset pool
     await query('UPDATE slideshow_topics SET used = FALSE, used_at = NULL WHERE niche = $1', [NICHE]);
-    const resetResult = await query<{ topic: string }>(
-      "UPDATE slideshow_topics SET used = TRUE, used_at = NOW() WHERE id = (SELECT id FROM slideshow_topics WHERE niche = $1 ORDER BY RANDOM() LIMIT 1) RETURNING topic",
+    const reset = await query<{ topic: string }>(
+      `UPDATE slideshow_topics SET used = TRUE, used_at = NOW()
+       WHERE id = (SELECT id FROM slideshow_topics WHERE niche = $1 ORDER BY RANDOM() LIMIT 1)
+       RETURNING topic`,
       [NICHE]
     );
-    if (resetResult.rows.length === 0) throw new Error('No topics found in the pool');
-    return resetResult.rows[0].topic;
+    if (reset.rows.length === 0) throw new Error('No topics in pool');
+    return reset.rows[0].topic;
   }
 
   return result.rows[0].topic;
 }
 
-// ─── Script generation ────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are a scriptwriter for a calm, educational YouTube Shorts channel about psychology.
-Output ONLY valid JSON. No markdown. No explanation. No code fences. No trailing commas.
+// ─── System prompt (Hook-Loop-Payoff for history) ─────────────────────────────
+const SYSTEM_PROMPT = `You are a viral scriptwriter for a cinematic history YouTube Shorts channel targeting a global English-speaking audience aged 18–40.
+
+Output ONLY valid JSON. No markdown. No code fences. No trailing commas. No explanation.
 
 Schema:
 {
-  "title": "string (max 60 chars, punchy, curiosity-driven — starts with number, question, or Why/How)",
-  "description": "string (2 engaging sentences + 6 hashtags)",
-  "tags": ["string"] (8 relevant tags mixing broad and specific),
-  "slides": [{ "text": "string", "image_prompt": "string" }] (exactly 8 slides),
+  "title": "string (max 70 chars, curiosity-driven — pattern: 'The [superlative] [thing] in Human History', 'The [Event] That Changed Everything', or 'Why [historical figure] Was Not Who You Think')",
+  "description": "string (2 gripping sentences about the topic + 6 hashtags: #history #ancienthistory #historyfacts #shorts #facts + 1 specific)",
+  "tags": ["string"] (8 tags mixing broad and specific),
+  "slides": [9 objects each with: {"text": "string (narration, max 18 words)", "image_prompt": "string (cinematic visual scene description, no text in image)"}],
   "thumbnailPrompt": "string"
 }
 
-Slide rules:
-- text: ≤ 18 words, factual, conversational, reads naturally when spoken aloud
-- First slide: immediate curiosity hook — do NOT start with "Did you know"
-- image_prompt: describe only the visual scene, no text in image, suitable for a cute minimal cartoon/editorial illustration style with light background
-- thumbnailPrompt: single dramatic scene that represents the video topic
+SLIDE STRUCTURE — follow this EXACTLY, 9 slides, each role is mandatory:
 
-Tags: mix broad (#psychology #mindset) and specific (#cognitivebias #brainfacts)`;
+Slide 1 — SCROLL-STOPPER HOOK (role: open_loop):
+  Create an irresistible open loop. State a shocking consequence or mystery BEFORE the explanation.
+  Use one of these formats:
+  - "A [Roman emperor / Aztec priest / Viking warlord] once did something so [shocking adjective] that historians still debate whether it actually happened."
+  - "For [X years], the most powerful [empire/civilization] on Earth had a secret that no one was supposed to know."
+  - "The day [historical event] happened, nobody knew it would [world-changing consequence]."
+  Max 18 words. Do NOT start with "Did you know".
+
+Slide 2 — BUILD CONTEXT (role: setup):
+  Set the scene. Who, where, when. Make it visual and grounded.
+  Max 18 words.
+
+Slide 3 — RAISE STAKES (role: tension):
+  Escalate. What was at risk? What made this extraordinary?
+  Max 18 words.
+
+Slide 4 — THE SURPRISING TWIST (role: twist):
+  Violate the viewer's expectation. This is the dopamine hit.
+  Max 18 words.
+
+Slide 5 — DEEPER DETAIL (role: depth):
+  Add a specific fact, number, or name that makes this feel real and credible.
+  Max 18 words.
+
+Slide 6 — ANOTHER LAYER (role: escalation):
+  Add another surprising dimension — a consequence, a parallel, or a hidden detail.
+  Max 18 words.
+
+Slide 7 — THE PAYOFF (role: revelation):
+  Deliver the core revelation that closes the loop opened in slide 1. Most satisfying slide.
+  Max 18 words.
+
+Slide 8 — MODERN CONNECTION (role: relevance):
+  Connect the historical fact to something modern. Why does this matter today?
+  Max 18 words.
+
+Slide 9 — CTA (role: call_to_action):
+  MUST follow this exact format: "Comment '[KEYWORD]' if this changed how you see history — and follow for more forgotten stories." where [KEYWORD] is a single relevant word (e.g., ROME, AZTEC, EGYPT).
+  Max 20 words.
+
+IMAGE PROMPT RULES (per slide):
+- Describe only the visual scene — no text in image
+- Be specific: name the civilization, setting, time period, objects
+- Style: cinematic historical illustration, dramatic lighting, period-accurate
+- Slide 9: always "dramatic wide shot of an ancient city at golden hour, silhouette of a lone scholar reading, epic scale, no text"
+
+TAGS: include #history #ancienthistory #historyfacts #shorts and 4 specific tags for the topic.`;
+
+// ─── Script generation ────────────────────────────────────────────────────────
+
+function normalizeFieldNames(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(normalizeFieldNames);
+  if (obj !== null && typeof obj === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      // Map common camelCase variants to snake_case
+      const normalizedKey =
+        key === 'imagePrompt' ? 'image_prompt' :
+        key === 'thumbnailPrompt' ? 'thumbnailPrompt' : // already camelCase in schema
+        key;
+      out[normalizedKey] = normalizeFieldNames(value);
+    }
+    return out;
+  }
+  return obj;
+}
 
 export async function generateScript(topic: string): Promise<SlideshowScript> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
@@ -88,10 +153,10 @@ export async function generateScript(topic: string): Promise<SlideshowScript> {
       model: DEEPSEEK_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: `Topic: ${topic}` },
+        { role: 'user', content: `Write a viral YouTube Shorts script about this history topic: ${topic}` },
       ],
-      temperature: 0.8,
-      max_tokens: 2000,
+      temperature: 0.85,
+      max_tokens: 2500,
       response_format: { type: 'json_object' },
     }),
   });
@@ -112,15 +177,22 @@ export async function generateScript(topic: string): Promise<SlideshowScript> {
     throw new Error(`DeepSeek output is not valid JSON: ${raw.substring(0, 200)}`);
   }
 
+  // Normalize camelCase → snake_case in slide objects (DeepSeek may use either)
+  parsed = normalizeFieldNames(parsed);
+
   const validated = SlideshowScriptSchema.parse(parsed);
 
-  // Prepend style prefix to each image_prompt for consistency
   return {
     ...validated,
-    slides: validated.slides.map(slide => ({
+    description: `${validated.description}\n\n${MUSIC_ATTRIBUTION}`,
+    slides: validated.slides.map((slide, i) => ({
       ...slide,
-      image_prompt: `${IMAGE_STYLE_PREFIX} ${slide.image_prompt}`,
+      // Slide 9 (index 8) gets the fixed CTA image prompt
+      image_prompt: i === 8
+        ? `${IMAGE_STYLE_PREFIX} dramatic wide shot of an ancient city at golden hour, silhouette of a lone scholar reading a scroll, epic scale, no text`
+        : `${IMAGE_STYLE_PREFIX} ${slide.image_prompt}`,
     })),
     thumbnailPrompt: `${THUMBNAIL_STYLE_PREFIX} ${validated.thumbnailPrompt}`,
   };
+
 }
