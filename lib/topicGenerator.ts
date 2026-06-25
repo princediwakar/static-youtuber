@@ -13,7 +13,11 @@ import {
 const SlideSchema = z.object({
   text: z.string().max(200),
   image_prompt: z.string(),
-  audio_tag: z.enum(['[engaged]', '[curious]', '[encouraging]', '[conversational]']),
+  audio_tag: z.string().optional().transform(val => {
+    if (!val) return '[conversational]';
+    const v = val.trim();
+    return v.startsWith('[') && v.endsWith(']') ? v : `[${v}]`;
+  }),
 });
 
 const SlideshowScriptSchema = z.object({
