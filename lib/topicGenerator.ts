@@ -43,6 +43,7 @@ export async function generateTopics(niche: string): Promise<void> {
 
   const prompt = `You are an expert content strategist for a YouTube Shorts channel in the "${niche}" niche.
 Generate 20 completely unique, highly engaging, and viral video topics.
+CRITICAL MANDATE: Only generate stories from the top 10 GDP countries: USA, China, Japan, Germany, India, UK, France, Canada, Russia, Spain. DO NOT generate stories from any other countries.
 DO NOT generate any of these previously used topics (or anything too similar):
 ${pastTopics.length > 0 ? pastTopics.join('\n') : 'No past topics yet.'}
 
