@@ -1,12 +1,10 @@
 // Path: lib/videoAssembler.ts
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
-import ffprobePath from '@ffprobe-installer/ffprobe';
-import { promises as fs } from 'fs';
+import { promises as fs, existsSync, readdirSync, symlinkSync, unlinkSync } from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
-import { existsSync, readdirSync } from 'fs';
 import { downloadAsBuffer } from './cloudinary';
 import { TTS_SAMPLE_RATE } from './constants';
 import {
@@ -28,7 +26,23 @@ import {
 if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic);
 }
-ffmpeg.setFfprobePath(ffprobePath.path);
+
+// Instead of shipping a separate ~75 MB ffprobe binary, symlink ffprobe → ffmpeg.
+// FFmpeg's binary auto-detects argv[0] — if invoked as "ffprobe", it acts as ffprobe.
+let ffprobeReady = false;
+function ensureFfprobe(): void {
+  if (ffprobeReady) return;
+  const linkPath = path.join(tmpdir(), 'ffprobe-slideshow');
+  try {
+    if (existsSync(linkPath)) unlinkSync(linkPath);
+    symlinkSync(ffmpegStatic!, linkPath);
+    ffmpeg.setFfprobePath(linkPath);
+  } catch {
+    console.warn('[Assembler] ffprobe symlink failed — metadata probes may use slower fallback');
+    ffmpeg.setFfprobePath(ffmpegStatic!);  // fallback: try the ffmpeg binary directly
+  }
+  ffprobeReady = true;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -206,6 +220,8 @@ export async function assembleVideo(
   audioUrls: string[],
   jobId: string
 ): Promise<Buffer> {
+  ensureFfprobe();
+
   if (imageUrls.length !== audioUrls.length) {
     throw new Error(`Mismatch: ${imageUrls.length} images vs ${audioUrls.length} audio clips`);
   }
