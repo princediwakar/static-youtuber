@@ -22,3 +22,26 @@ export async function query<T extends QueryResultRow = any>(text: string, params
     throw error;
   }
 }
+
+export const db = {
+  createJob: async (data: { account_id: string, topic: string, script: any, status: string }) => {
+    const res = await query(
+      `INSERT INTO slideshow_jobs (account_id, topic, script, status) 
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [data.account_id, data.topic, data.script, data.status]
+    );
+    return res.rows[0].id;
+  },
+  updateJob: async (id: string, updates: Record<string, any>) => {
+    const keys = Object.keys(updates);
+    if (keys.length === 0) return;
+    
+    const setClause = keys.map((k, i) => `"${k}" = $${i + 2}`).join(', ');
+    const values = keys.map(k => updates[k]);
+    
+    await query(
+      `UPDATE slideshow_jobs SET ${setClause}, updated_at = NOW() WHERE id = $1`,
+      [id, ...values]
+    );
+  }
+};

@@ -104,3 +104,17 @@ export async function downloadAsBuffer(url: string): Promise<Buffer> {
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
+
+export async function uploadMusicTrack(
+  buffer: Buffer,
+  jobId: string,
+  creds: AccountCredentials
+): Promise<string> {
+  initCloudinary(creds);
+  return uploadFromBuffer(
+    buffer,
+    `${CLOUDINARY_FOLDER}/${jobId}`,
+    'music',
+    'video'
+  );
+}

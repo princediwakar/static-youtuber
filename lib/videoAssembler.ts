@@ -8,7 +8,7 @@ import { tmpdir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { existsSync, readdirSync } from 'fs';
 import { downloadAsBuffer } from './cloudinary';
-import { TTS_SAMPLE_RATE } from './ttsGenerator';
+import { TTS_SAMPLE_RATE } from './constants';
 import {
   FFMPEG_CRF,
   FFMPEG_PRESET,

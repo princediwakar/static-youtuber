@@ -1,7 +1,7 @@
 // Path: lib/thumbnailGenerator.ts
 import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
-import { IMAGEN_MODEL, THUMBNAIL_STYLE_PREFIX, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT } from './constants';
+import { IMAGE_MODEL, THUMBNAIL_STYLE_PREFIX, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT } from './constants';
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -91,7 +91,7 @@ export async function generateThumbnail(title: string, thumbnailPrompt: string):
   const fullPrompt = `${THUMBNAIL_STYLE_PREFIX} ${thumbnailPrompt}`;
 
   const response = await client.models.generateImages({
-    model: IMAGEN_MODEL,
+    model: 'imagen-4.0-fast-generate-001',
     prompt: fullPrompt,
     config: {
       aspectRatio: '16:9',

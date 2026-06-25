@@ -166,7 +166,7 @@ export async function generateScript(topic: string): Promise<SlideshowScript> {
         { role: 'user', content: `Write a viral YouTube Shorts script about this history topic: ${topic}` },
       ],
       temperature: 0.85,
-      max_tokens: 2500,
+      max_tokens: 8000,
       response_format: { type: 'json_object' },
     }),
   });
@@ -182,9 +182,15 @@ export async function generateScript(topic: string): Promise<SlideshowScript> {
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error(`DeepSeek output is not valid JSON: ${raw.substring(0, 200)}`);
+    let cleanRaw = raw.trim();
+    if (cleanRaw.startsWith('```json')) {
+      cleanRaw = cleanRaw.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+    } else if (cleanRaw.startsWith('```')) {
+      cleanRaw = cleanRaw.replace(/^```\n?/, '').replace(/\n?```$/, '');
+    }
+    parsed = JSON.parse(cleanRaw);
+  } catch (err: any) {
+    throw new Error(`DeepSeek output is not valid JSON. Parse Error: ${err.message}. Raw: ${raw.substring(0, 200)}`);
   }
 
   // Normalize camelCase → snake_case in slide objects (DeepSeek may use either)

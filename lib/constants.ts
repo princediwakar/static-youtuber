@@ -7,18 +7,21 @@ export const NICHE = 'history';
 
 export const SLIDE_COUNT = 9; // always exactly 9: 8 content slides + 1 CTA
 
-// Gemini Imagen 3
-export const IMAGEN_MODEL = 'imagen-4.0-generate-001';
-export const IMAGEN_ASPECT_RATIO = '9:16';
-export const IMAGE_CONCURRENCY = 3;
+// Gemini Image Model
+export const IMAGE_MODEL = 'gemini-2.5-flash-image';
+export const IMAGE_ASPECT_RATIO = '9:16';
 
+// Gemini TTS
 // Gemini TTS
 export const TTS_MODEL = 'gemini-3.1-flash-tts-preview';
 export const TTS_VOICE = 'Fenrir'; // deep, authoritative male — perfect for history narration
-export const TTS_CONCURRENCY = 4;
-// SSML speech rates — hook slide lands slower, rest is energetic
-export const TTS_RATE_HOOK = '1.0';   // slide 0: measured, lands the open loop
-export const TTS_RATE_DEFAULT = '1.1'; // slides 1-8: slightly fast, keeps energy up
+export const TTS_SAMPLE_RATE = 24000; // Gemini TTS outputs 24kHz mono 16-bit PCM
+
+// Music Model
+export const MUSIC_MODEL = 'lyria-3-clip-preview';
+
+// Modal Rendering
+export const MODAL_RENDER_URL = process.env.MODAL_RENDER_URL || 'https://example-modal-url.com/render';
 
 // DeepSeek
 export const DEEPSEEK_MODEL = 'deepseek-chat';

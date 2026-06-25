@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS slideshow_jobs (
   status TEXT NOT NULL DEFAULT 'pending',
   -- pending | generating | images_done | tts_done | assembled | uploaded | failed
   inngest_run_id TEXT,
+  "imageBatchName" TEXT,
+  "audioBatchName" TEXT,
   script JSONB,             -- Full DeepSeek SlideshowScript output
   slide_image_urls JSONB,   -- Array of Cloudinary URLs for slide images
   slide_audio_urls JSONB,   -- Array of Cloudinary URLs for TTS WAV clips

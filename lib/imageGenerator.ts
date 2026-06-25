@@ -5,9 +5,8 @@ import { existsSync } from 'fs';
 import { Slide, AccountCredentials } from './types';
 import { uploadSlideImage } from './cloudinary';
 import {
-  IMAGEN_MODEL,
-  IMAGEN_ASPECT_RATIO,
-  IMAGE_CONCURRENCY,
+  IMAGE_MODEL,
+  IMAGE_ASPECT_RATIO,
   VIDEO_WIDTH,
   VIDEO_HEIGHT,
   CAPTION_FONT_SIZE,
@@ -90,7 +89,7 @@ const HIGHLIGHT_FONT_SCALE = 1.15; // 15% larger than surrounding text
  * Power words (numbers, superlatives, emotional words, ALL CAPS) are highlighted
  * in golden yellow with a glow effect. Other words remain white with black stroke.
  */
-async function burnCaption(imageBuffer: Buffer, text: string): Promise<Buffer> {
+export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Buffer> {
   const lines = wrapText(text, CAPTION_MAX_CHARS_PER_LINE);
   const totalTextHeight = lines.length * CAPTION_LINE_HEIGHT;
   const centerY = Math.round(VIDEO_HEIGHT * CAPTION_Y_POSITION);
@@ -117,7 +116,7 @@ async function burnCaption(imageBuffer: Buffer, text: string): Promise<Buffer> {
         .map((word, wi) => {
           const escaped = escapeXml(word);
           const isHighlighted = detectPowerWords(word);
-          const space = wi === 0 ? '' : ' ';
+          const space = wi === 0 ? '' : '&#160;';
 
           if (isHighlighted) {
             return `<tspan fill="${HIGHLIGHT_COLOR}" font-size="${highlightFontSize}" filter="url(#glow)">${space}${escaped}</tspan>`;
@@ -161,6 +160,7 @@ async function burnCaption(imageBuffer: Buffer, text: string): Promise<Buffer> {
     </svg>`;
 
   return sharp(imageBuffer)
+    .resize(VIDEO_WIDTH, VIDEO_HEIGHT, { fit: 'cover', position: 'centre' })
     .composite([{ input: Buffer.from(svg), blend: 'over' }])
     .png({ quality: 100, compressionLevel: 1 })
     .toBuffer();
@@ -172,10 +172,10 @@ async function generateSingleImage(prompt: string): Promise<Buffer> {
   const client = getClient();
 
   const response = await client.models.generateImages({
-    model: IMAGEN_MODEL,
+    model: IMAGE_MODEL,
     prompt,
     config: {
-      aspectRatio: IMAGEN_ASPECT_RATIO,
+      aspectRatio: IMAGE_ASPECT_RATIO,
       numberOfImages: 1,
     },
   });
@@ -214,28 +214,3 @@ async function withConcurrencyLimit<T>(
   return results;
 }
 
-export async function generateSlideImages(
-  slides: Slide[],
-  jobId: string,
-  creds: AccountCredentials
-): Promise<string[]> {
-  console.log(`[ImageGen] Generating ${slides.length} images for job ${jobId}`);
-
-  const urls = await withConcurrencyLimit(slides, IMAGE_CONCURRENCY, async (slide, index) => {
-    console.log(`[ImageGen] Slide ${index + 1}/${slides.length}: "${slide.image_prompt.substring(0, 60)}..."`);
-
-    // 1. Generate raw image
-    const rawBuffer = await generateSingleImage(slide.image_prompt);
-
-    // 2. Burn caption onto the image
-    const captionedBuffer = await burnCaption(rawBuffer, slide.text);
-
-    // 3. Upload to Cloudinary
-    const url = await uploadSlideImage(captionedBuffer, jobId, index, creds);
-    console.log(`[ImageGen] Slide ${index + 1} uploaded: ${url}`);
-    return url;
-  });
-
-  console.log(`[ImageGen] All ${slides.length} images generated and uploaded`);
-  return urls;
-}
