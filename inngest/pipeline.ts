@@ -5,7 +5,7 @@ import { pickUnusedTopic, generateScript } from '@/lib/topicGenerator';
 import { burnCaption } from '@/lib/imageGenerator';
 import { uploadSlideImage, uploadSlideAudio, uploadMusicTrack, uploadVideo, uploadThumbnail } from '@/lib/cloudinary';
 import { db, query } from '@/lib/database';
-import { IMAGE_MODEL, TTS_MODEL, TTS_VOICE, TTS_SAMPLE_RATE, MUSIC_MODEL, MODAL_RENDER_URL, ACCOUNT_ID } from '@/lib/constants';
+import { IMAGE_MODEL, TTS_MODEL, TTS_VOICE, TTS_SAMPLE_RATE, MUSIC_MODEL, MODAL_RENDER_URL, ACCOUNT_ID, NICHES, FORMATS } from '@/lib/constants';
 import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
 import { generateThumbnail } from '@/lib/thumbnailGenerator';
@@ -14,15 +14,9 @@ import { assembleVideo } from '@/lib/videoAssembler';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 // ── TTS Prompt Builder ────────────────────────────────────────────────────────
-// Replaces wrapInSSML(). Uses Gemini 3.1 TTS audio tags for expressiveness.
-function buildTTSPrompt(text: string, slideIndex: number): string {
-  const audioTags: Record<number, string> = {
-    0: '[engaged]',        // Hook
-    2: '[curious]',        // Crazy truth
-    4: '[encouraging]',    // CTA
-  };
-
-  const tag = audioTags[slideIndex] ?? '[conversational]';
+// Uses the dynamic audio_tag from the generated script
+function buildTTSPrompt(text: string, audioTag?: string): string {
+  const tag = audioTag ?? '[conversational]';
 
   return `
 # AUDIO PROFILE: The Indian Storyteller
@@ -47,11 +41,14 @@ export const generateHistoryShort = inngest.createFunction(
   },
   async ({ step }) => {
     // ── Step 1: Generate Script ──────────────────────────────────────────────
-    const { script, jobId } = await step.run('generate-script', async () => {
-      const topic = await pickUnusedTopic();
-      const script = await generateScript(topic);
-      const jobId = await db.createJob({ account_id: ACCOUNT_ID, topic, status: 'script_ready', script });
-      return { script, jobId };
+    const { script, jobId, format, niche } = await step.run('generate-script', async () => {
+      const niche = NICHES[Math.floor(Math.random() * NICHES.length)];
+      const format = FORMATS[Math.floor(Math.random() * FORMATS.length)];
+
+      const topic = await pickUnusedTopic(niche);
+      const script = await generateScript(topic, format, niche);
+      const jobId = await db.createJob({ account_id: ACCOUNT_ID, topic, niche, format, status: 'script_ready', script });
+      return { script, jobId, format, niche };
     });
 
     // ── Step 2: Submit Batch Job ─────────────────────────────────────────────
@@ -68,7 +65,7 @@ export const generateHistoryShort = inngest.createFunction(
           key: `audio-${i}`,
           contents: [{
             role: 'user',
-            parts: [{ text: buildTTSPrompt(slide.text, i) }],
+            parts: [{ text: buildTTSPrompt(slide.text, slide.audio_tag) }],
           }],
           config: {
             responseModalities: ['AUDIO'],
@@ -189,7 +186,7 @@ export const generateHistoryShort = inngest.createFunction(
         const imageUrl = await uploadSlideImage(captionedBuffer, jobId, i, creds);
         imageUrls.push(imageUrl);
 
-        const audioPrompt = buildTTSPrompt(script.slides[i].text, i);
+        const audioPrompt = buildTTSPrompt(script.slides[i].text, script.slides[i].audio_tag);
         const audioRespObj = audioResponses.find((r: any) => r.request?.contents?.[0]?.parts?.[0]?.text === audioPrompt) || audioResponses[i];
         const audioResponse = audioRespObj?.response;
         const audioPart = audioResponse?.candidates?.[0]?.content?.parts

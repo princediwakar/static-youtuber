@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS slideshow_jobs (
   account_id TEXT NOT NULL,
   topic TEXT NOT NULL,
   niche TEXT NOT NULL DEFAULT 'psychology',
+  format TEXT NOT NULL DEFAULT 'story',
   status TEXT NOT NULL DEFAULT 'pending',
   -- pending | generating | images_done | tts_done | assembled | uploaded | failed
   inngest_run_id TEXT,

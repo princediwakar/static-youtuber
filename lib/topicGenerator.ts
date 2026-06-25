@@ -7,15 +7,13 @@ import {
   DEEPSEEK_BASE_URL,
   IMAGE_STYLE_PREFIX,
   THUMBNAIL_STYLE_PREFIX,
-  NICHE,
   MUSIC_ATTRIBUTION,
 } from './constants';
-
-
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 const SlideSchema = z.object({
   text: z.string().max(200),
   image_prompt: z.string(),
+  audio_tag: z.enum(['[engaged]', '[curious]', '[encouraging]', '[conversational]']),
 });
 
 const SlideshowScriptSchema = z.object({
@@ -27,8 +25,52 @@ const SlideshowScriptSchema = z.object({
 });
 
 // ─── Topic deduplication ─────────────────────────────────────────────────────
-export async function pickUnusedTopic(): Promise<string> {
-  const result = await query<{ topic: string }>(`
+
+export async function generateTopics(niche: string): Promise<void> {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) throw new Error('DEEPSEEK_API_KEY is not set');
+
+  const pastTopicsRes = await query<{ topic: string }>(
+    `SELECT topic FROM slideshow_topics WHERE niche = $1 ORDER BY used_at DESC NULLS LAST LIMIT 50`,
+    [niche]
+  );
+  const pastTopics = pastTopicsRes.rows.map(r => r.topic);
+
+  const prompt = `You are an expert content strategist for a YouTube Shorts channel in the "${niche}" niche.
+Generate 20 completely unique, highly engaging, and viral video topics.
+DO NOT generate any of these previously used topics (or anything too similar):
+${pastTopics.length > 0 ? pastTopics.join('\n') : 'No past topics yet.'}
+
+Output ONLY valid JSON in this format:
+{ "topics": ["topic 1", "topic 2", ...] }`;
+
+  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: DEEPSEEK_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.9,
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  const data = await response.json();
+  const raw = data.choices[0]?.message?.content;
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch(e) {
+    throw new Error('Failed to parse topic generation response');
+  }
+
+  for (const topic of parsed.topics || []) {
+    await query(`INSERT INTO slideshow_topics (topic, niche) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [topic, niche]);
+  }
+}
+
+export async function pickUnusedTopic(niche: string): Promise<string> {
+  let result = await query<{ topic: string }>(`
     UPDATE slideshow_topics
     SET used = TRUE, used_at = NOW()
     WHERE id = (
@@ -38,76 +80,84 @@ export async function pickUnusedTopic(): Promise<string> {
       LIMIT 1
     )
     RETURNING topic
-  `, [NICHE]);
+  `, [niche]);
 
   if (result.rows.length === 0) {
-    // All topics used — reset pool
-    await query('UPDATE slideshow_topics SET used = FALSE, used_at = NULL WHERE niche = $1', [NICHE]);
-    const reset = await query<{ topic: string }>(
-      `UPDATE slideshow_topics SET used = TRUE, used_at = NOW()
-       WHERE id = (SELECT id FROM slideshow_topics WHERE niche = $1 ORDER BY RANDOM() LIMIT 1)
-       RETURNING topic`,
-      [NICHE]
-    );
-    if (reset.rows.length === 0) throw new Error('No topics in pool');
-    return reset.rows[0].topic;
+    console.log(`[TopicGenerator] No unused topics for ${niche}, generating more...`);
+    await generateTopics(niche);
+    
+    result = await query<{ topic: string }>(`
+      UPDATE slideshow_topics
+      SET used = TRUE, used_at = NOW()
+      WHERE id = (
+        SELECT id FROM slideshow_topics
+        WHERE niche = $1 AND used = FALSE
+        ORDER BY RANDOM()
+        LIMIT 1
+      )
+      RETURNING topic
+    `, [niche]);
+    
+    if (result.rows.length === 0) throw new Error(`Failed to generate new topics for ${niche}`);
   }
 
   return result.rows[0].topic;
 }
 
-// ─── System prompt (Hook-Loop-Payoff for history) ─────────────────────────────
-const SYSTEM_PROMPT = `You are a viral scriptwriter for an Indian history YouTube Shorts channel targeting a young Indian audience.
+// ─── System prompt factory ─────────────────────────────────────────────────────
+function getSystemPrompt(niche: string, format: string): string {
+  const base = `You are a viral scriptwriter for an Indian YouTube Shorts channel targeting a young Indian audience.
 CRITICAL MANDATE: The entire script (title, description, and ALL slide text) MUST be written in conversational, engaging Hindi (written in Devanagari script).
 Your tone is INTERESTING, HUMOROUS, and HIGHLY ACCESSIBLE. 
-CRITICAL: Use simple, everyday Hindi. Avoid difficult vocabulary, academic jargon, or dense historical terms (shuddh hindi). Explain concepts like you're telling a funny, mind-blowing story to a friend. Use modern Indian pop-culture or everyday analogies if it helps.
+CRITICAL: Use simple, everyday Hindi. Avoid difficult vocabulary or dense academic jargon (shuddh hindi). Explain concepts like you're telling a funny, mind-blowing story to a friend. Use modern Indian pop-culture or everyday analogies if it helps.
 
 Output ONLY valid JSON. No markdown. No code fences. No trailing commas. No explanation.
 
 Schema:
 {
-  "title": "string (max 70 chars, curiosity-driven — pattern: 'The time [person] did [crazy thing]', 'Why [Historical Event] is actually hilarious')",
-  "description": "string (2 gripping sentences about the topic + 6 hashtags: #history #historyfacts #shorts #facts + 2 specific)",
+  "title": "string (max 70 chars, curiosity-driven)",
+  "description": "string (2 gripping sentences about the topic + hashtags)",
   "tags": ["string"] (8 tags mixing broad and specific),
-  "slides": [5 objects each with: {"text": "string (narration, max 18 words)", "image_prompt": "string (cinematic visual scene description, no text in image)"}],
+  "slides": [5 objects each with: {"text": "string (narration, max 18 words)", "image_prompt": "string (cinematic visual scene description, no text in image)", "audio_tag": "string (one of: [engaged], [curious], [encouraging], [conversational])"}],
   "thumbnailPrompt": "string"
 }
 
-PACING MANDATE: Slides 1 + 2 combined must take UNDER 8 SECONDS when read aloud. Be ruthlessly concise — every extra word costs viewers.
-
-SLIDE STRUCTURE — follow this EXACTLY, 5 slides, each role is mandatory:
-
-Slide 1 — THE HOOK (Curiosity + Humor):
-  Create an irresistible open loop. Make it funny or absurd right away.
-  Example: "A Viking warlord once did something so ridiculous that historians still laugh about it."
-  Max 15 words. Keep the language incredibly simple. Do NOT start with "Did you know".
-
-Slide 2 — THE SETUP (Punchy Context):
-  Who, where, when — in ONE punchy line. No filler, no academic words.
-  Example: "It was 1066, and apparently, nobody knew how to lock a gate."
-  Max 14 words. This slide must be FAST.
-
-Slide 3 — THE CRAZY TRUTH (The Twist):
-  THIS IS THE DOPAMINE HIT. Deliver the most surprising, mind-blowing fact NOW.
-  Treat it like the punchline of a joke or a crazy plot twist.
-  Max 18 words.
-
-Slide 4 — THE EXPLANATION (How/Why):
-  Now that you've hooked them, explain WHY or HOW it happened in plain Hindi.
-  Use simple modern analogies if needed.
-  Max 18 words.
-
-Slide 5 — THE PAYOFF (Conclusion):
-  MUST follow this exact format: A quick funny or mind-blowing conclusion to the story. DO NOT include any subscribe requests, comment CTAs, or "like and share" messages.
-  Max 20 words.
+PACING MANDATE: Slides 1 + 2 combined must take UNDER 8 SECONDS when read aloud. Be ruthlessly concise.
 
 IMAGE PROMPT RULES (per slide):
 - Describe only the visual scene — no text in image
-- Be specific: name the civilization, setting, time period, objects
+- Be specific: name the setting, objects, characters
 - Style: minimal cartoonish illustration, expressive characters, funny situations, simple vector style
 - Slide 5: Describe a funny, minimal cartoonish wide shot related to the core topic, no text
+- TAGS: include #shorts and 4 specific tags for the topic.`;
 
-TAGS: include #history #ancienthistory #historyfacts #shorts and 4 specific tags for the topic.`;
+  let formatRules = '';
+  if (format === 'quiz') {
+    formatRules = `SLIDE STRUCTURE FOR MCQ QUIZ (5 slides):
+Slide 1 — THE HOOK: "Can you guess this ${niche} fact/person?" (Make it engaging)
+Slide 2 — CLUE 1: Give a slightly obscure but interesting hint.
+Slide 3 — CLUE 2: Give a more obvious hint. Build tension.
+Slide 4 — THE TIMER/TENSION: "You have 3 seconds... 3, 2, 1!" (Or something similar, very short)
+Slide 5 — THE REVEAL: "It is [Answer]! [One funny detail about them/it]."`;
+  } else if (format === 'facts') {
+    formatRules = `SLIDE STRUCTURE FOR TOP FACTS (5 slides):
+Slide 1 — THE HOOK: "Top 3 craziest facts about [Topic] that will blow your mind!"
+Slide 2 — FACT 3: The least crazy but still interesting fact.
+Slide 3 — FACT 2: A weirder fact.
+Slide 4 — FACT 1: The absolute most mind-blowing fact.
+Slide 5 — THE CONCLUSION: A quick funny wrap-up. No subscribe CTA.`;
+  } else {
+    // story format (default)
+    formatRules = `SLIDE STRUCTURE FOR STORY (5 slides):
+Slide 1 — THE HOOK (Curiosity + Humor): Irresistible open loop.
+Slide 2 — THE SETUP (Punchy Context): Who, where, when.
+Slide 3 — THE CRAZY TRUTH (The Twist): The dopamine hit, most surprising fact.
+Slide 4 — THE EXPLANATION (How/Why): Explain why/how in plain Hindi.
+Slide 5 — THE PAYOFF (Conclusion): Quick funny conclusion. No subscribe CTA.`;
+  }
+
+  return base + '\n\n' + formatRules;
+}
 
 // ─── Script generation ────────────────────────────────────────────────────────
 
@@ -128,7 +178,7 @@ function normalizeFieldNames(obj: unknown): unknown {
   return obj;
 }
 
-export async function generateScript(topic: string): Promise<SlideshowScript> {
+export async function generateScript(topic: string, format: string, niche: string): Promise<SlideshowScript> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY is not set');
 
@@ -141,8 +191,8 @@ export async function generateScript(topic: string): Promise<SlideshowScript> {
     body: JSON.stringify({
       model: DEEPSEEK_MODEL,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: `Write a viral YouTube Shorts script about this history topic: ${topic}` },
+        { role: 'system', content: getSystemPrompt(niche, format) },
+        { role: 'user', content: `Write a viral YouTube Shorts script about this ${niche} topic: ${topic}` },
       ],
       temperature: 0.85,
       max_tokens: 8000,
@@ -179,6 +229,7 @@ export async function generateScript(topic: string): Promise<SlideshowScript> {
 
   return {
     ...validated,
+    format,
     description: `${validated.description}\n\n${MUSIC_ATTRIBUTION}`,
     slides: validated.slides.map((slide, i) => ({
       ...slide,

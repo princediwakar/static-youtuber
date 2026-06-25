@@ -3,7 +3,8 @@ import path from 'path';
 
 export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'english_shots';
 
-export const NICHE = 'history';
+export const NICHES = ['history', 'geography', 'science', 'mythology', 'english', 'physics', 'engineering'];
+export const FORMATS = ['story', 'quiz', 'facts'];
 
 export const SLIDE_COUNT = 5; // always exactly 5: 4 content slides + 1 CTA
 

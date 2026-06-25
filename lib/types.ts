@@ -3,6 +3,7 @@
 export interface Slide {
   text: string;         // Sentence read aloud & displayed
   image_prompt: string; // Sent to Gemini Imagen 3
+  audio_tag?: string;   // Dynamic audio tone/tag for TTS
   imageUrl?: string;    // Cloudinary URL after generation
   audioUrl?: string;    // Cloudinary URL of TTS clip for this slide
 }
@@ -11,6 +12,7 @@ export interface SlideshowScript {
   title: string;
   description: string;
   tags: string[];
+  format: string;
   slides: Slide[];
   thumbnailPrompt: string;
 }
@@ -20,6 +22,7 @@ export interface SlideshowJob {
   account_id: string;
   topic: string;
   niche: string;
+  format: string;
   status:
     | 'pending'
     | 'generating'
