@@ -211,7 +211,7 @@ async function mixBackgroundMusic(
  * Full pipeline:
  *   1. Download all slide images + audio from Cloudinary
  *   2. Build per-slide clips with alternating Ken Burns zoompan
- *   3. Assemble with xfade/acrossfade transitions
+ *   3. Assemble with hard cuts (concat demuxer, no crossfade — MrBeast-style zero dead air)
  *   4. Mix in background music
  *   5. Return final MP4 buffer
  */

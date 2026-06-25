@@ -74,6 +74,10 @@ const POWER_WORDS = new Set([
   'unstoppable', 'legendary', 'forgotten', 'ruthless', 'brutal',
   // Negation / contrast
   'nobody', 'nothing', 'everywhere', 'everyone', 'always',
+  // MrBeast-style urgency & action words
+  'insane', 'crazy', 'mind-blowing', 'suddenly', 'boom', 'wait', 'watch',
+  'unbelievable', 'insanity', 'warning', 'stop', 'go', 'now',
+  'again', 'dark', 'truth', 'exposed', 'revealed', 'untold',
 ]);
 
 /** Detect which words in a line should be highlighted */
@@ -88,7 +92,7 @@ function detectPowerWords(word: string): boolean {
 }
 
 const HIGHLIGHT_COLOR = '#FFD700'; // Golden yellow
-const HIGHLIGHT_FONT_SCALE = 1.15;
+const HIGHLIGHT_FONT_SCALE = 1.30; // MrBeast-style: in-your-face power words
 
 /**
  * Composite a caption overlay onto the image buffer with kinetic typography.

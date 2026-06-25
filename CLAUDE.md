@@ -1,5 +1,7 @@
 # AI SLIDESHOW: ENGINEERING STANDARD
 
+We are in June 2026. So, any web search should be up to date to the minute. So we do not need to specify the date in any prompt for a web search.
+
 **MANDATE:** World-class, server-first Next.js application. Technical perfection without sacrificing UX fluidity. Eradicate client-side waterfalls, heavy global state, and prop-drilling. Prioritize server components, URL-driven state, and optimistic UIs. **Do not generate code for new features unless explicitly requested.**
 
 ---

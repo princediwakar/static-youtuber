@@ -20,9 +20,12 @@ CREATE TABLE IF NOT EXISTS slideshow_jobs (
   thumbnail_url TEXT,       -- Cloudinary URL for YouTube thumbnail
   youtube_video_id TEXT,    -- Set after successful YouTube upload
   error_message TEXT,
+  variant VARCHAR(10),       -- A/B testing tag: e.g. 'A', 'B', 'control'
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE slideshow_jobs ADD COLUMN IF NOT EXISTS variant VARCHAR(10);
 
 CREATE INDEX IF NOT EXISTS slideshow_jobs_status_idx ON slideshow_jobs(status);
 CREATE INDEX IF NOT EXISTS slideshow_jobs_account_idx ON slideshow_jobs(account_id);
@@ -47,8 +50,11 @@ CREATE TABLE IF NOT EXISTS slideshow_uploads (
   title TEXT NOT NULL,
   description TEXT,
   tags JSONB,
+  variant VARCHAR(10),       -- A/B testing tag for analytics
   uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE slideshow_uploads ADD COLUMN IF NOT EXISTS variant VARCHAR(10);
 
 -- Auto-update updated_at on slideshow_jobs
 CREATE OR REPLACE FUNCTION update_slideshow_jobs_updated_at()

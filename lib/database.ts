@@ -24,11 +24,11 @@ export async function query<T extends QueryResultRow = any>(text: string, params
 }
 
 export const db = {
-  createJob: async (data: { account_id: string, topic: string, niche: string, format: string, script: any, status: string }) => {
+  createJob: async (data: { account_id: string, topic: string, niche: string, format: string, script: any, status: string, variant?: string }) => {
     const res = await query(
-      `INSERT INTO slideshow_jobs (account_id, topic, niche, format, script, status) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [data.account_id, data.topic, data.niche, data.format, data.script, data.status]
+      `INSERT INTO slideshow_jobs (account_id, topic, niche, format, script, status, variant)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [data.account_id, data.topic, data.niche, data.format, data.script, data.status, data.variant || null]
     );
     return res.rows[0].id;
   },

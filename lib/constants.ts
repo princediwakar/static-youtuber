@@ -37,14 +37,15 @@ export const VIDEO_HEIGHT = 1920;
 export const VIDEO_FPS = 25;           // Ken Burns on stills doesn't benefit from 30fps
 
 // Ken Burns zoom — alternating direction per slide
+// MrBeast-style: aggressive movement keeps the frame alive. 3x faster zoom.
 export const ZOOMPAN_ZOOM_IN_START = 1.0;
-export const ZOOMPAN_ZOOM_IN_END = 1.06;
-export const ZOOMPAN_ZOOM_OUT_START = 1.06;
+export const ZOOMPAN_ZOOM_IN_END = 1.10;   // wider range for faster zoom travel
+export const ZOOMPAN_ZOOM_OUT_START = 1.10; // wider range for faster zoom travel
 export const ZOOMPAN_ZOOM_OUT_END = 1.0;
-export const ZOOMPAN_SPEED = 0.0006; // zoom delta per frame — doubled for perceptible motion on mobile
+export const ZOOMPAN_SPEED = 0.0020; // 3x faster — dynamic motion per MrBeast retention principles
 
-// xfade transition
-export const XFADE_DURATION = 0.3; // seconds of crossfade between slides
+// Hard cuts between slides — no crossfade. MrBeast-style: zero dead air.
+export const XFADE_DURATION = 0;
 
 // Transition variety — cycles through these to prevent visual habituation
 export const XFADE_TRANSITIONS = [
@@ -65,7 +66,7 @@ export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — L
 
 
 // Captions
-export const CAPTION_FONT_SIZE = 86;
+export const CAPTION_FONT_SIZE = 92; // larger text for more aggressive screen presence
 export const CAPTION_MAX_CHARS_PER_LINE = 18;
 export const CAPTION_Y_POSITION = 0.80; // 80% down the frame (bottom, but safe from clipping)
 export const CAPTION_LINE_HEIGHT = 110;

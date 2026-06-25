@@ -42,14 +42,15 @@ export const generateHistoryShort = inngest.createFunction(
   },
   async ({ step }) => {
     // ── Step 1: Generate Script ──────────────────────────────────────────────
-    const { script, jobId, format, niche } = await step.run('generate-script', async () => {
+    const { script, jobId, format, niche, variant } = await step.run('generate-script', async () => {
       const niche = NICHES[Math.floor(Math.random() * NICHES.length)];
       const format = FORMATS[Math.floor(Math.random() * FORMATS.length)];
+      const variant = Math.random() < 0.5 ? 'A' : 'B'; // A/B testing for retention
 
       const topic = await pickUnusedTopic(niche);
       const script = await generateScript(topic, format, niche);
-      const jobId = await db.createJob({ account_id: ACCOUNT_ID, topic, niche, format, status: 'script_ready', script });
-      return { script, jobId, format, niche };
+      const jobId = await db.createJob({ account_id: ACCOUNT_ID, topic, niche, format, status: 'script_ready', script, variant });
+      return { script, jobId, format, niche, variant };
     });
 
     // ── Step 2: Submit Batch Job ─────────────────────────────────────────────
@@ -292,9 +293,9 @@ export const generateHistoryShort = inngest.createFunction(
       const result = await uploadToYouTube(videoUrl, thumbBuffer, script, creds);
 
       await query(
-        `INSERT INTO slideshow_uploads (job_id, youtube_video_id, title, description, tags)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [jobId, result.youtubeVideoId, result.title, result.description, JSON.stringify(script.tags)]
+        `INSERT INTO slideshow_uploads (job_id, youtube_video_id, title, description, tags, variant)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [jobId, result.youtubeVideoId, result.title, result.description, JSON.stringify(script.tags), variant]
       );
 
       await db.updateJob(jobId, { status: 'published', video_url: videoUrl, youtube_video_id: result.youtubeVideoId });
