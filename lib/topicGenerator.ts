@@ -21,6 +21,7 @@ const SlideSchema = z.object({
 });
 
 const SlideshowScriptSchema = z.object({
+  fact_check_and_sources: z.string(),
   title: z.string().max(100),
   description: z.string(),
   tags: z.array(z.string()).min(5).max(12),
@@ -112,21 +113,31 @@ export async function pickUnusedTopic(niche: string): Promise<string> {
 function getSystemPrompt(niche: string, format: string): string {
   const base = `You are a viral scriptwriter for an Indian YouTube Shorts channel targeting a young Indian audience.
 CRITICAL MANDATE: The entire script (title, description, and ALL slide text) MUST be written in conversational, engaging Hindi (written in Devanagari script).
-Your tone is INTERESTING, HUMOROUS, and HIGHLY ACCESSIBLE. 
+Your tone is INTERESTING, HUMOROUS, and HIGHLY ACCESSIBLE.
 CRITICAL: Use simple, everyday Hindi. Avoid difficult vocabulary or dense academic jargon (shuddh hindi). Explain concepts like you're telling a funny, mind-blowing story to a friend. Use modern Indian pop-culture or everyday analogies if it helps.
+
+FACT VERIFICATION MANDATE (CRITICAL):
+- Before writing the script, you MUST verify every factual claim you make. DO NOT fabricate, guess, or invent facts.
+- In the "fact_check_and_sources" field, list the verified historical/scientific sources for the claims you are about to make. If a claim is widely documented in reputable sources (encyclopedias, academic papers, government records), cite them. If you cannot verify a claim, DO NOT include it.
+- If a fact is a popular myth or urban legend, present it as a myth being busted rather than as a true fact. Use phrasing like "Myth hai ki..." or "Aapne suna hoga..., lekin sach ye hai..."
+- Never present fabricated stories, fake quotes, or made-up events as real. The audience trusts you — do not betray that trust.
 
 Output ONLY valid JSON. No markdown. No code fences. No trailing commas. No explanation.
 
 Schema:
 {
-  "title": "string (max 70 chars, curiosity-driven)",
+  "fact_check_and_sources": "string (verified sources for claims in the script, e.g., 'Source: NCERT Class 12 History textbook, Chapter 3; Encyclopedia Britannica entry on...')",
+  "title": "string (max 70 chars, curiosity-driven, aggressive hook)",
   "description": "string (2 gripping sentences about the topic + hashtags)",
   "tags": ["string"] (8 tags mixing broad and specific),
   "slides": [5 objects each with: {"text": "string (narration, max 18 words)", "image_prompt": "string (cinematic visual scene description, no text in image)", "audio_tag": "string (a descriptive emotional tag for the TTS voice based on the slide's topic, e.g., [mysterious], [excited], [serious], [funny], [sarcastic])"}],
   "thumbnailPrompt": "string"
 }
 
-PACING MANDATE: Slides 1 + 2 combined must take UNDER 8 SECONDS when read aloud. Be ruthlessly concise.
+VIRAL PACING MANDATE:
+- Slide 1 must be an aggressive, curiosity-driven pattern interrupt. The first 1.5 seconds are undefended — make the viewer NEED to know more. Use a bold statement, a shocking question, or a counterintuitive fact.
+- Slides 1 + 2 combined must take UNDER 8 SECONDS when read aloud. Be ruthlessly concise.
+- Slide 5 must NOT have a traditional conclusion. End mid-thought or with a cliffhanger that seamlessly loops back to the beginning of Slide 1 to drive rewatch rates.
 
 IMAGE PROMPT RULES (per slide):
 - Describe only the visual scene — no text in image
@@ -138,26 +149,26 @@ IMAGE PROMPT RULES (per slide):
   let formatRules = '';
   if (format === 'quiz') {
     formatRules = `SLIDE STRUCTURE FOR MCQ QUIZ (5 slides):
-Slide 1 — THE HOOK: "Can you guess this ${niche} fact/person?" (Make it engaging)
+Slide 1 — THE HOOK: Aggressive, curiosity-driven pattern interrupt. Use a bold, provocative statement or a mind-blowing question about a ${niche} fact/person that makes the viewer NEED to know the answer. First 1.5s are critical — shock them or tease them.
 Slide 2 — CLUE 1: Give a slightly obscure but interesting hint.
 Slide 3 — CLUE 2: Give a more obvious hint. Build tension.
 Slide 4 — THE TIMER/TENSION: "You have 3 seconds... 3, 2, 1!" (Or something similar, very short)
-Slide 5 — THE REVEAL: "It is [Answer]! [One funny detail about them/it]."`;
+Slide 5 — THE REVEAL + CLIFFHANGER: "It is [Answer]! [One funny detail about them/it]." Then end mid-thought with an unresolved question or teaser that makes the viewer want to rewatch. Must seamlessly loop back to Slide 1 to drive rewatch rates.`;
   } else if (format === 'facts') {
     formatRules = `SLIDE STRUCTURE FOR TOP FACTS (5 slides):
-Slide 1 — THE HOOK: "Top 3 craziest facts about [Topic] that will blow your mind!"
+Slide 1 — THE HOOK: Aggressive, curiosity-driven pattern interrupt. "Top 3 craziest facts about [Topic] that will blow your mind!" Must shock or intrigue in the first 1.5 seconds.
 Slide 2 — FACT 3: The least crazy but still interesting fact.
 Slide 3 — FACT 2: A weirder fact.
 Slide 4 — FACT 1: The absolute most mind-blowing fact.
-Slide 5 — THE CONCLUSION: A quick funny wrap-up. No subscribe CTA.`;
+Slide 5 — THE CLIFFHANGER: Must NOT have a traditional conclusion. End mid-thought with an unresolved question or a shocking reveal that seamlessly loops back to the exact beginning of Slide 1 to drive rewatch rates. No subscribe CTA.`;
   } else {
     // story format (default)
     formatRules = `SLIDE STRUCTURE FOR STORY (5 slides):
-Slide 1 — THE HOOK (Curiosity + Humor): Irresistible open loop.
+Slide 1 — THE HOOK (Curiosity + Humor): Aggressive, curiosity-driven pattern interrupt. Must grab attention in the first 1.5 seconds. Use a bold statement, shocking question, or counterintuitive fact as an irresistible open loop. Make the viewer NEED to know what happens next.
 Slide 2 — THE SETUP (Punchy Context): Who, where, when.
 Slide 3 — THE CRAZY TRUTH (The Twist): The dopamine hit, most surprising fact.
 Slide 4 — THE EXPLANATION (How/Why): Explain why/how in plain Hindi.
-Slide 5 — THE PAYOFF (Conclusion): Quick funny conclusion. No subscribe CTA.`;
+Slide 5 — THE CLIFFHANGER: Must NOT have a traditional conclusion. End mid-thought or with a cliffhanger phrase that seamlessly loops back to the exact beginning of Slide 1 to drive rewatch rates. Do not resolve everything — leave the viewer wanting more. No subscribe CTA.`;
   }
 
   return base + '\n\n' + formatRules;

@@ -21,12 +21,13 @@ function buildTTSPrompt(text: string, audioTag?: string): string {
   return `
 # AUDIO PROFILE: The Indian Storyteller
 ### DIRECTOR'S NOTES
-Style: Natural, authentic, and conversational Hindi storyteller. Avoid exaggerated or stereotypical accents. Speak clearly with a grounded, relatable, and engaging tone.
-Pacing: Steady and fast enough for YouTube Shorts, but natural and clear.
-Language: Hindi (the transcript is in Devanagari, read it fluently).
+Style: Speak like a friend telling something mind-blowing over chai — not like a news anchor or a schoolteacher. Use casual, conversational Hindi with natural pitch variation and emotional expressiveness. Your voice should rise with excitement on surprising facts and drop to a lower, intimate tone for mysterious or dramatic moments. Avoid monotone, robotic delivery at all costs. Sound like a real human, not a narrator reading a script.
+Pacing: Brisk and energetic for YouTube Shorts, but never rushed. Emphasize key words naturally — stress the most shocking or funny word in each sentence. Slow down slightly for the punchline or reveal.
+Breathing: Pause for breath naturally between sentences. Take a slightly longer breath before important revelations. Do not rush through — let the listener absorb each fact.
+Language: Hindi (the transcript is in Devanagari, read it fluently with a warm, relatable Indian accent). Use everyday pronunciation, not formal or shuddh Hindi. The delivery should feel like a viral explainer, not a documentary.
 ### TRANSCRIPT
 ${tag} ${text}
-<break time="150ms"/>
+<break time="200ms"/>
   `.trim();
 }
 

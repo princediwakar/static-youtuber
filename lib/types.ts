@@ -9,6 +9,7 @@ export interface Slide {
 }
 
 export interface SlideshowScript {
+  fact_check_and_sources: string;
   title: string;
   description: string;
   tags: string[];
