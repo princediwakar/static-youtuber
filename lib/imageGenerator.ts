@@ -100,10 +100,10 @@ export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Bu
     : 'sans-serif';
 
   const fontFaceDecl = existsSync(FONT_PATH)
-    ? `@font-face { font-family: 'Montserrat'; src: ${fontFamily}; font-weight: bold; }`
+    ? `@font-face { font-family: 'Noto Sans Devanagari'; src: ${fontFamily}; font-weight: bold; }`
     : '';
 
-  const fontName = existsSync(FONT_PATH) ? 'Montserrat' : 'sans-serif';
+  const fontName = existsSync(FONT_PATH) ? 'Noto Sans Devanagari' : 'sans-serif';
   const highlightFontSize = Math.round(CAPTION_FONT_SIZE * HIGHLIGHT_FONT_SCALE);
 
   const textElements = lines
@@ -131,7 +131,7 @@ export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Bu
           y="${y}"
           text-anchor="middle"
           font-size="${CAPTION_FONT_SIZE}"
-          font-family="${fontName}, 'Arial Unicode MS', 'Noto Sans Devanagari', 'Mangal', sans-serif"
+          font-family="'${fontName}', sans-serif"
           font-weight="bold"
           fill="white"
           stroke="black"
