@@ -19,12 +19,12 @@ function buildTTSPrompt(text: string, audioTag?: string): string {
   const tag = audioTag ?? '[conversational]';
 
   return `
-# AUDIO PROFILE: The Indian Storyteller
+# AUDIO PROFILE: The Global Storyteller (MrBeast Style, Female)
 ### DIRECTOR'S NOTES
-Style: Speak like a friend telling something mind-blowing over chai — not like a news anchor or a schoolteacher. Use casual, conversational Hindi with natural pitch variation and emotional expressiveness. Your voice should rise with excitement on surprising facts and drop to a lower, intimate tone for mysterious or dramatic moments. Avoid monotone, robotic delivery at all costs. Sound like a real human, not a narrator reading a script.
-Pacing: Brisk and energetic for YouTube Shorts, but never rushed. Emphasize key words naturally — stress the most shocking or funny word in each sentence. Slow down slightly for the punchline or reveal.
-Breathing: Pause for breath naturally between sentences. Take a slightly longer breath before important revelations. Do not rush through — let the listener absorb each fact.
-Language: Hindi (the transcript is in Devanagari, read it fluently with a warm, relatable Indian accent). Use everyday pronunciation, not formal or shuddh Hindi. The delivery should feel like a viral explainer, not a documentary.
+Style: Speak like an extremely energetic, enthusiastic female storyteller revealing mind-blowing facts. Use highly engaging, fast-paced English with extreme pitch variation and emotional expressiveness. Follow the Navarasa emotional transitions: Shift from hushed, gripping tension (Bhayanaka) to explosive, awe-struck excitement (Adbhuta). Avoid monotone, robotic delivery at all costs. Sound like a viral YouTuber with 100M subscribers.
+Pacing: Relentlessly brisk and energetic for YouTube Shorts, keeping the viewer hooked every single second. Emphasize key words naturally — stress the most shocking or exact specific numbers in each sentence. Keep the energy turned up to 11.
+Breathing: Quick, natural breaths. Do not pause too long — maintain intense forward momentum so the viewer can't swipe away.
+Language: English. Speak with a clear, dynamic, and hyper-engaging American accent (or universally relatable accent). The delivery should feel like a massive viral explainer.
 ### TRANSCRIPT
 ${tag} ${text}
 <break time="200ms"/>

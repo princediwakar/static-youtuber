@@ -15,7 +15,7 @@ export const IMAGE_ASPECT_RATIO = '9:16';
 // Gemini TTS
 // Gemini TTS
 export const TTS_MODEL = 'gemini-3.1-flash-tts-preview';
-export const TTS_VOICE = 'Puck'; // natural, conversational — less exaggerated
+export const TTS_VOICE = 'Aoede'; // vibrant, female conversational voice
 export const TTS_SAMPLE_RATE = 24000; // Gemini TTS outputs 24kHz mono 16-bit PCM
 
 // Music Model

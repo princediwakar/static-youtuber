@@ -111,10 +111,23 @@ export async function pickUnusedTopic(niche: string): Promise<string> {
 
 // ─── System prompt factory ─────────────────────────────────────────────────────
 function getSystemPrompt(niche: string, format: string): string {
-  const base = `You are a viral scriptwriter for an Indian YouTube Shorts channel targeting a young Indian audience.
-CRITICAL MANDATE: The entire script (title, description, and ALL slide text) MUST be written in conversational, engaging Hindi (written in Devanagari script).
-Your tone is INTERESTING, HUMOROUS, and HIGHLY ACCESSIBLE.
-CRITICAL: Use simple, everyday Hindi. Avoid difficult vocabulary or dense academic jargon (shuddh hindi). Explain concepts like you're telling a funny, mind-blowing story to a friend. Use modern Indian pop-culture or everyday analogies if it helps.
+  const base = `You are a viral scriptwriter for a Global YouTube Shorts channel targeting a massive international audience, strictly following the MrBeast retention style.
+CRITICAL MANDATE: The entire script (title, description, and ALL slide text) MUST be written in highly energetic, conversational English.
+Your tone is INTERESTING, FAST-PACED, and HIGHLY ACCESSIBLE.
+CRITICAL: Use simple, everyday English. Avoid difficult vocabulary or dense academic jargon. Explain concepts like you're telling a mind-blowing story to a friend. Use universal pop-culture or relatable analogies. Always prioritize a strong curiosity gap.
+
+ADVANCED STORYTELLING MECHANICS:
+1. NAVARASA (Emotional Arc):
+   - Adbhuta (Wonder/Awe): Use this for the opening hook and the final reveal. Emphasize the impossible scale.
+   - Bhayanaka (Tension/Terror): Use this in the middle (Slide 3/4) to raise the stakes dramatically (e.g., "If this failed, millions would die").
+2. FIGURES OF SPEECH:
+   - Vivid Metaphor: "The vault was a giant steel trap."
+   - Powerful Imagery: "They vanished like smoke in the wind."
+   - BANNED CLICHÉS: You MUST completely avoid cliché contrast patterns like "It wasn't just X, it was Y", "He didn't bring X, he brought Y", or "Not X, but Y". State facts directly and powerfully without using these negative comparisons.
+   - SIMPLE ENGLISH MANDATE: Use extremely simple, 6th-grade reading level English. DO NOT use complex, flowery, or difficult words (like "labyrinth", "clandestine", or "audacious"). Use short, punchy words that anyone in the world can easily understand.
+3. EXTREME SPECIFICITY (The MrBeast Rule):
+   - NEVER use vague words like "many", "a long time", or "a lot of money".
+   - ALWAYS use exact numbers: "47 tons of physical gold", "29 years", "800 meters away". Specificity builds immediate credibility and awe.
 
 FACT VERIFICATION MANDATE (CRITICAL):
 - Before writing the script, you MUST verify every factual claim you make. DO NOT fabricate, guess, or invent facts.
@@ -153,22 +166,22 @@ Slide 1 — THE HOOK: Aggressive, curiosity-driven pattern interrupt. Use a bold
 Slide 2 — CLUE 1: Give a slightly obscure but interesting hint.
 Slide 3 — CLUE 2: Give a more obvious hint. Build tension.
 Slide 4 — THE TIMER/TENSION: "You have 3 seconds... 3, 2, 1!" (Or something similar, very short)
-Slide 5 — THE REVEAL + CLIFFHANGER: "It is [Answer]! [One funny detail about them/it]." Then end mid-thought with an unresolved question or teaser that makes the viewer want to rewatch. Must seamlessly loop back to Slide 1 to drive rewatch rates.`;
+Slide 5 — THE REVEAL & LOOP: "It is [Answer]! [One funny detail about them/it]." Reveal the full answer. Then end with a phrase that smoothly loops back to the exact beginning of Slide 1. DO NOT leave the viewer hanging without the answer.`;
   } else if (format === 'facts') {
     formatRules = `SLIDE STRUCTURE FOR TOP FACTS (5 slides):
 Slide 1 — THE HOOK: Aggressive, curiosity-driven pattern interrupt. "Top 3 craziest facts about [Topic] that will blow your mind!" Must shock or intrigue in the first 1.5 seconds.
 Slide 2 — FACT 3: The least crazy but still interesting fact.
 Slide 3 — FACT 2: A weirder fact.
 Slide 4 — FACT 1: The absolute most mind-blowing fact.
-Slide 5 — THE CLIFFHANGER: Must NOT have a traditional conclusion. End mid-thought with an unresolved question or a shocking reveal that seamlessly loops back to the exact beginning of Slide 1 to drive rewatch rates. No subscribe CTA.`;
+Slide 5 — THE FINAL TWIST & LOOP: Deliver the final mind-blowing payoff. Do NOT leave the core story unresolved. Then, end the video with a clever transition phrase that seamlessly loops back to the exact beginning of Slide 1. No subscribe CTA.`;
   } else {
     // story format (default)
     formatRules = `SLIDE STRUCTURE FOR STORY (5 slides):
-Slide 1 — THE HOOK (Curiosity + Humor): Aggressive, curiosity-driven pattern interrupt. Must grab attention in the first 1.5 seconds. Use a bold statement, shocking question, or counterintuitive fact as an irresistible open loop. Make the viewer NEED to know what happens next.
-Slide 2 — THE SETUP (Punchy Context): Who, where, when.
-Slide 3 — THE CRAZY TRUTH (The Twist): The dopamine hit, most surprising fact.
-Slide 4 — THE EXPLANATION (How/Why): Explain why/how in plain Hindi.
-Slide 5 — THE CLIFFHANGER: Must NOT have a traditional conclusion. End mid-thought or with a cliffhanger phrase that seamlessly loops back to the exact beginning of Slide 1 to drive rewatch rates. Do not resolve everything — leave the viewer wanting more. No subscribe CTA.`;
+Slide 1 — THE HOOK (Adbhuta/Wonder): Extreme curiosity gap + specific numbers. Must grab attention in the first 1.5 seconds. Make the viewer NEED to know what happens next.
+Slide 2 — THE SETUP (Specificity): The exact stakes, numbers, dates, and names.
+Slide 3 — THE CRAZY TRUTH (Bhayanaka/Tension): The moment things go completely wrong or the insane twist happens.
+Slide 4 — THE EXPLANATION (Figures of Speech): Explain why/how in plain, punchy English using vivid metaphors or antithesis.
+Slide 5 — THE COMPLETE PAYOFF & LOOP (Adbhuta/Wonder): You MUST reveal the complete, final, and satisfying outcome of the story. Absolutely NO cliffhangers, NO "But wait, there's more", and NO unresolved teases. The story MUST be 100% finished. Then, simply write a final sentence that grammatically connects directly to the first sentence of Slide 1 to create an infinite loop. No subscribe CTA.`;
   }
 
   return base + '\n\n' + formatRules;
