@@ -118,3 +118,21 @@ export async function uploadMusicTrack(
     'video'
   );
 }
+
+export async function cleanupJobArtifacts(
+  jobId: string,
+  creds: AccountCredentials
+): Promise<void> {
+  initCloudinary(creds);
+  const folder = `${CLOUDINARY_FOLDER}/${jobId}`;
+  
+  try {
+    await cloudinary.api.delete_resources_by_prefix(folder, { resource_type: 'image' });
+    await cloudinary.api.delete_resources_by_prefix(folder, { resource_type: 'video' });
+    await cloudinary.api.delete_resources_by_prefix(folder, { resource_type: 'raw' });
+    await cloudinary.api.delete_folder(folder);
+    console.log(`[Cloudinary] Successfully cleaned up artifacts for job ${jobId}`);
+  } catch (error) {
+    console.warn(`[Cloudinary] Failed to cleanup artifacts for job ${jobId}:`, error);
+  }
+}

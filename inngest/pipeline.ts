@@ -3,7 +3,7 @@ import { inngest } from './client';
 import { GoogleGenAI } from '@google/genai';
 import { pickUnusedTopic, generateScript } from '@/lib/topicGenerator';
 import { burnCaption } from '@/lib/imageGenerator';
-import { uploadSlideImage, uploadSlideAudio, uploadMusicTrack, uploadVideo, uploadThumbnail } from '@/lib/cloudinary';
+import { uploadSlideImage, uploadSlideAudio, uploadMusicTrack, uploadVideo, uploadThumbnail, cleanupJobArtifacts } from '@/lib/cloudinary';
 import { db, query } from '@/lib/database';
 import { IMAGE_MODEL, TTS_MODEL, TTS_VOICE, TTS_SAMPLE_RATE, MUSIC_MODEL, MODAL_RENDER_URL, ACCOUNT_ID, NICHES, FORMATS } from '@/lib/constants';
 import { getAccountCredentials } from '@/lib/accountService';
@@ -38,7 +38,14 @@ export const generateHistoryShort = inngest.createFunction(
     triggers: [
       { cron: '0 2 * * *' },
       { event: 'slideshow/trigger' },
-    ]
+    ],
+    onFailure: async ({ error, event }) => {
+      // Inngest cloud automatically sends an email to the workspace owner when functions fail.
+      // We log loudly to ensure the error is properly surfaced in the Neon/Vercel logs.
+      console.error(`[CRITICAL] generate-history-short pipeline failed or timed out!`);
+      console.error(`Event: ${JSON.stringify(event)}`);
+      console.error(`Error: ${error.message}`);
+    }
   },
   async ({ step }) => {
     // ── Step 1: Generate Script ──────────────────────────────────────────────
@@ -101,20 +108,12 @@ export const generateHistoryShort = inngest.createFunction(
       return { imageBatchName: imageBatch.name, audioBatchName: audioBatch.name };
     });
 
-    // ── Step 3: Poll batches with escalating intervals ──────────────────────
-    // Each attempt is a separately-named step so Inngest doesn't memoize stale state.
-    // step.sleep() lives at the function level between step.run() calls.
-    const POLL_INTERVALS = ['2m', '4m', '10m', '20m', '20m', '20m'];
-    const TERMINAL_STATES = new Set([
-      'JOB_STATE_SUCCEEDED',
-      'JOB_STATE_FAILED',
-      'JOB_STATE_CANCELLED',
-      'JOB_STATE_EXPIRED',
-    ]);
-
+    // ── Step 3: Poll batches with linear high-frequency intervals ───────────
+    // Polling every 1 minute eliminates the massive artificial spikes of exponential backoff
     let bothDone = false;
+    const MAX_POLLS = 45; // 45 minutes hard limit
 
-    for (let attempt = 0; attempt < POLL_INTERVALS.length; attempt++) {
+    for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
       const isDone = await step.run(`poll-batch-${attempt}`, async () => {
         const [imageJob, audioJob] = await Promise.all([
           ai.batches.get({ name: batchJobName.imageBatchName as string }),
@@ -139,13 +138,11 @@ export const generateHistoryShort = inngest.createFunction(
         break;
       }
 
-      if (attempt < POLL_INTERVALS.length - 1) {
-        await step.sleep(`wait-batch-${attempt}`, POLL_INTERVALS[attempt]);
-      }
+      await step.sleep(`wait-batch-${attempt}`, '1m');
     }
 
     if (!bothDone) {
-      throw new Error('Batch polling exhausted all attempts without completion');
+      throw new Error('Batch polling exhausted 45 attempts (45m hard timeout limit) without completion');
     }
 
     // ── Step 4: Harvest + Caption + Upload ──────────────────────────────────
@@ -218,6 +215,7 @@ export const generateHistoryShort = inngest.createFunction(
         audioUrls.push(audioUrl);
       }
 
+      await db.updateJob(jobId, { status: 'assets_ready' });
       return { imageUrls, audioUrls };
     });
 
@@ -299,6 +297,9 @@ export const generateHistoryShort = inngest.createFunction(
       );
 
       await db.updateJob(jobId, { status: 'published', video_url: videoUrl, youtube_video_id: result.youtubeVideoId });
+      
+      // Cleanup Cloudinary artifacts to save storage
+      await cleanupJobArtifacts(jobId, creds);
     });
   }
 );
