@@ -2,6 +2,7 @@
 import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
 import { existsSync } from 'fs';
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import { Slide, AccountCredentials } from './types';
 import { uploadSlideImage } from './cloudinary';
 import {
@@ -15,6 +16,21 @@ import {
   CAPTION_LINE_HEIGHT,
   FONT_PATH,
 } from './constants';
+
+// Register Devanagari font at module load so canvas can render Hindi text.
+// librsvg (sharp's SVG renderer) does not support @font-face, so we bypass it
+// entirely by rendering text via Skia canvas and compositing the result.
+const FONT_FAMILY = (() => {
+  if (existsSync(FONT_PATH)) {
+    try {
+      GlobalFonts.registerFromPath(FONT_PATH, 'Noto Sans Devanagari');
+      return 'Noto Sans Devanagari';
+    } catch {
+      console.warn('[burnCaption] Font registration failed, falling back to sans-serif');
+    }
+  }
+  return 'sans-serif';
+})();
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -41,16 +57,6 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
   }
   if (current) lines.push(current);
   return lines;
-}
-
-/** Escape XML special characters for safe embedding in SVG */
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }
 
 // ─── Kinetic typography — power word detection ────────────────────────────────
@@ -81,87 +87,82 @@ function detectPowerWords(word: string): boolean {
   return POWER_WORDS.has(clean);
 }
 
-const HIGHLIGHT_COLOR = '#FFD700'; // Golden yellow — matches "golden-hour" image style
-const HIGHLIGHT_FONT_SCALE = 1.15; // 15% larger than surrounding text
+const HIGHLIGHT_COLOR = '#FFD700'; // Golden yellow
+const HIGHLIGHT_FONT_SCALE = 1.15;
 
 /**
  * Composite a caption overlay onto the image buffer with kinetic typography.
- * Power words (numbers, superlatives, emotional words, ALL CAPS) are highlighted
- * in golden yellow with a glow effect. Other words remain white with black stroke.
+ * Renders text via Skia canvas (bypassing librsvg's lack of @font-face support),
+ * then composites the rendered text layer onto the image with sharp.
  */
 export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Buffer> {
   const lines = wrapText(text, CAPTION_MAX_CHARS_PER_LINE);
   const totalTextHeight = lines.length * CAPTION_LINE_HEIGHT;
   const centerY = Math.round(VIDEO_HEIGHT * CAPTION_Y_POSITION);
   const startY = centerY - Math.round(totalTextHeight / 2) + CAPTION_FONT_SIZE;
-
-  const fontFamily = existsSync(FONT_PATH)
-    ? `url('${FONT_PATH}')`
-    : 'sans-serif';
-
-  const fontFaceDecl = existsSync(FONT_PATH)
-    ? `@font-face { font-family: 'Noto Sans Devanagari'; src: ${fontFamily}; font-weight: bold; }`
-    : '';
-
-  const fontName = existsSync(FONT_PATH) ? 'Noto Sans Devanagari' : 'sans-serif';
   const highlightFontSize = Math.round(CAPTION_FONT_SIZE * HIGHLIGHT_FONT_SCALE);
 
-  const textElements = lines
-    .map((line, i) => {
-      const y = startY + i * CAPTION_LINE_HEIGHT;
-      const words = line.split(' ');
+  const canvas = createCanvas(VIDEO_WIDTH, VIDEO_HEIGHT);
+  const ctx = canvas.getContext('2d');
 
-      // Build tspan elements per word — highlighted words get golden fill + glow
-      const tspans = words
-        .map((word, wi) => {
-          const escaped = escapeXml(word);
-          const isHighlighted = detectPowerWords(word);
-          const space = wi === 0 ? '' : '&#160;';
+  const normalFont = `bold ${CAPTION_FONT_SIZE}px "${FONT_FAMILY}", sans-serif`;
+  ctx.font = normalFont;
+  const spaceWidth = ctx.measureText(' ').width;
 
-          if (isHighlighted) {
-            return `<tspan fill="${HIGHLIGHT_COLOR}" font-size="${highlightFontSize}" filter="url(#glow)">${space}${escaped}</tspan>`;
-          }
-          return `<tspan>${space}${escaped}</tspan>`;
-        })
-        .join('');
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx];
+    const y = startY + lineIdx * CAPTION_LINE_HEIGHT;
+    const words = line.split(' ');
 
-      return `
-        <text
-          x="${VIDEO_WIDTH / 2}"
-          y="${y}"
-          text-anchor="middle"
-          font-size="${CAPTION_FONT_SIZE}"
-          font-family="'${fontName}', sans-serif"
-          font-weight="bold"
-          fill="white"
-          stroke="black"
-          stroke-width="4"
-          stroke-linejoin="round"
-          paint-order="stroke fill"
-        >${tspans}</text>`;
-    })
-    .join('\n');
+    // Measure all words to compute centered starting X
+    const wordWidths: number[] = [];
+    let totalWordWidth = 0;
+    for (const word of words) {
+      const isHighlighted = detectPowerWords(word);
+      ctx.font = `bold ${isHighlighted ? highlightFontSize : CAPTION_FONT_SIZE}px "${FONT_FAMILY}", sans-serif`;
+      const w = ctx.measureText(word).width;
+      wordWidths.push(w);
+      totalWordWidth += w;
+    }
 
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${VIDEO_WIDTH}" height="${VIDEO_HEIGHT}">
-      <defs>
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="3" result="blur"/>
-          <feFlood flood-color="${HIGHLIGHT_COLOR}" flood-opacity="0.6" result="color"/>
-          <feComposite in="color" in2="blur" operator="in" result="shadow"/>
-          <feMerge>
-            <feMergeNode in="shadow"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-      <style>${fontFaceDecl}</style>
-      ${textElements}
-    </svg>`;
+    const totalLineWidth = totalWordWidth + spaceWidth * (words.length - 1);
+    let x = Math.round((VIDEO_WIDTH - totalLineWidth) / 2);
+
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+
+    for (let wi = 0; wi < words.length; wi++) {
+      const word = words[wi];
+      const isHighlighted = detectPowerWords(word);
+      ctx.font = `bold ${isHighlighted ? highlightFontSize : CAPTION_FONT_SIZE}px "${FONT_FAMILY}", sans-serif`;
+
+      if (isHighlighted) {
+        ctx.save();
+        ctx.shadowColor = HIGHLIGHT_COLOR;
+        ctx.shadowBlur = 6;
+        ctx.strokeStyle = 'black';
+        ctx.fillStyle = HIGHLIGHT_COLOR;
+      } else {
+        ctx.strokeStyle = 'black';
+        ctx.fillStyle = 'white';
+      }
+
+      ctx.strokeText(word, x, y);
+      ctx.fillText(word, x, y);
+
+      if (isHighlighted) {
+        ctx.restore();
+      }
+
+      x += wordWidths[wi] + spaceWidth;
+    }
+  }
+
+  const textOverlay = canvas.toBuffer('image/png');
 
   return sharp(imageBuffer)
     .resize(VIDEO_WIDTH, VIDEO_HEIGHT, { fit: 'cover', position: 'centre' })
-    .composite([{ input: Buffer.from(svg), blend: 'over' }])
+    .composite([{ input: textOverlay, blend: 'over' }])
     .png({ quality: 100, compressionLevel: 1 })
     .toBuffer();
 }

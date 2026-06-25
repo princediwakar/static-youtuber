@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   // Next.js 16: moved from experimental.serverComponentsExternalPackages
   serverExternalPackages: [
     'sharp',
+    '@napi-rs/canvas',
     'fluent-ffmpeg',
     '@ffmpeg-installer/ffmpeg',
     '@ffprobe-installer/ffprobe',

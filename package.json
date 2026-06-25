@@ -14,6 +14,7 @@
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",
     "@google/genai": "^2.10.0",
+    "@napi-rs/canvas": "^1.0.1",
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/pg": "^8.20.0",
     "@types/uuid": "^10.0.0",
