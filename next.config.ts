@@ -6,7 +6,6 @@ const nextConfig: NextConfig = {
     'sharp',
     '@napi-rs/canvas',
     'fluent-ffmpeg',
-    '@ffmpeg-installer/ffmpeg',
     '@ffprobe-installer/ffprobe',
     'ffmpeg-static',
     'googleapis',

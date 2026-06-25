@@ -11,7 +11,6 @@
     "trigger:prod": "bash -c 'export $(grep \"^CRON_SECRET=\" .env.local | sed \"s/ #.*//\" | xargs); curl -s -X POST \"https://staticyoutuber.vercel.app/api/cron\" -H \"Authorization: Bearer $CRON_SECRET\" -H \"Content-Type: application/json\" -d \"{}\"'"
   },
   "dependencies": {
-    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",
     "@google/genai": "^2.10.0",
     "@napi-rs/canvas": "^1.0.1",
