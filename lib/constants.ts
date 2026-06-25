@@ -6,7 +6,7 @@ export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'english_shots';
 export const NICHES = ['Modern Indian History', 'Geography'];
 export const FORMATS = ['story', 'quiz', 'facts'];
 
-export const SLIDE_COUNT = 5; // always exactly 5: 4 content slides + 1 CTA
+export const SLIDE_COUNT = 6; // always exactly 6: 5 content slides + 1 CTA
 
 // Gemini Image Model
 export const IMAGE_MODEL = 'gemini-2.5-flash-image';
@@ -80,10 +80,9 @@ export const THUMBNAIL_HEIGHT = 720;
 export const CLOUDINARY_FOLDER = 'ai-slideshow';
 export const CLOUDINARY_EXPIRE_DAYS = 7;
 
-// Image style prefix — minimal cartoonish illustration
-export const IMAGE_STYLE_PREFIX =
-  'minimal cartoonish illustration, vector art style, flat colors, humorous and expressive characters, simple backgrounds, clean lines, OverSimplified style, Indian characters and motifs, no text, high quality,';
+// Image style prefix — left intentionally blank to allow the LLM to generate Visual Whiplash
+export const IMAGE_STYLE_PREFIX = '';
 
-// Thumbnail style prefix
+// Thumbnail style prefix — "Anti-best" clickbait
 export const THUMBNAIL_STYLE_PREFIX =
-  'bold minimal cartoonish illustration, expressive humorous Indian characters, flat colors, vector art style, clean lines, high contrast, no text in image, YouTube thumbnail quality,';
+  'deep-fried meme style, aggressively over-saturated, glowing red eyes, low resolution, chaotic cursed image, YouTube thumbnail quality, no text in image,';

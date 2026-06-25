@@ -25,7 +25,7 @@ const SlideshowScriptSchema = z.object({
   title: z.string().max(100),
   description: z.string(),
   tags: z.array(z.string()).min(5).max(12),
-  slides: z.array(SlideSchema).min(5).max(5),
+  slides: z.array(SlideSchema).min(6).max(6),
   thumbnailPrompt: z.string(),
 });
 
@@ -144,45 +144,50 @@ Schema:
   "title": "string (max 70 chars, curiosity-driven, aggressive hook)",
   "description": "string (2 gripping sentences about the topic + hashtags)",
   "tags": ["string"] (8 tags mixing broad and specific),
-  "slides": [5 objects each with: {"text": "string (narration, max 18 words)", "image_prompt": "string (cinematic visual scene description, no text in image)", "audio_tag": "string (a descriptive emotional tag for the TTS voice based on the slide's topic, e.g., [mysterious], [excited], [serious], [funny], [sarcastic])"}],
+  "slides": [6 objects each with: {"text": "string (narration, max 18 words)", "image_prompt": "string (cinematic visual scene description, no text in image)", "audio_tag": "string (a descriptive emotional tag for the TTS voice based on the slide's topic, e.g., [mysterious], [excited], [serious], [funny], [sarcastic])"}],
   "thumbnailPrompt": "string"
 }
 
 VIRAL PACING MANDATE:
-- Slide 1 must be an aggressive, curiosity-driven pattern interrupt. The first 1.5 seconds are undefended — make the viewer NEED to know more. Use a bold statement, a shocking question, or a counterintuitive fact.
+- Slide 1 must be an aggressive, hostile, or anti-marketing hook. Tell them to scroll away, tell them they've been lied to, or forbid them from watching. Use reverse psychology to make them NEED to know more.
 - Slides 1 + 2 combined must take UNDER 8 SECONDS when read aloud. Be ruthlessly concise.
-- Slide 5 must NOT have a traditional conclusion. End mid-thought or with a cliffhanger that seamlessly loops back to the beginning of Slide 1 to drive rewatch rates.
+- Slide 6 must NOT have a traditional conclusion. End mid-thought or with a cliffhanger that seamlessly loops back to the beginning of Slide 1 to drive rewatch rates.
 
 IMAGE PROMPT RULES (per slide):
 - Describe only the visual scene — no text in image
 - Be specific: name the setting, objects, characters
-- Style: minimal cartoonish illustration, expressive characters, funny situations, simple vector style
-- Slide 5: Describe a funny, minimal cartoonish wide shot related to the core topic, no text
+- VISUAL WHIPLASH MANDATE: You MUST use a completely different, aggressively clashing art style for every single slide. For example, Slide 1 could be a 1980s polaroid photograph, Slide 2 a crude MS Paint drawing, Slide 4 a low-poly PS1 game render, and Slide 5 a Renaissance oil painting. Explicitly state the bizarre art style at the beginning of each image_prompt. The jarring lack of visual consistency is the goal.
+- Slide 2 (Cunningham's Law): You MUST intentionally include exactly ONE glaring anachronism or historically inaccurate object (like a modern smartphone, a Starbucks cup, or modern sneakers in an ancient setting). This forces viewers to comment on the "mistake".
+- Slide 3: For the sensory deprivation effect, the image prompt MUST be EXACTLY: "Pitch black screen, absolute darkness." No characters, no background.
+- Slide 6: Describe a wide shot related to the core topic in the most unhinged art style yet, no text
 - TAGS: include #shorts and 4 specific tags for the topic.`;
 
   let formatRules = '';
   if (format === 'quiz') {
-    formatRules = `SLIDE STRUCTURE FOR MCQ QUIZ (5 slides):
-Slide 1 — THE HOOK: Aggressive, curiosity-driven pattern interrupt. Use a bold, provocative statement or a mind-blowing question about a ${niche} fact/person that makes the viewer NEED to know the answer. First 1.5s are critical — shock them or tease them.
+    formatRules = `SLIDE STRUCTURE FOR MCQ QUIZ (6 slides):
+Slide 1 — THE HOOK: Aggressive, hostile, or anti-marketing pattern interrupt. Use reverse psychology (e.g. "Scroll away if you don't know...").
 Slide 2 — CLUE 1: Give a slightly obscure but interesting hint.
-Slide 3 — CLUE 2: Give a more obvious hint. Build tension.
-Slide 4 — THE TIMER/TENSION: "You have 3 seconds... 3, 2, 1!" (Or something similar, very short)
-Slide 5 — THE REVEAL & LOOP: "It is [Answer]! [One funny detail about them/it]." Reveal the full answer. Then end with a phrase that smoothly loops back to the exact beginning of Slide 1. DO NOT leave the viewer hanging without the answer.`;
+Slide 3 — SENSORY DEPRIVATION: Image prompt MUST be "Pitch black screen, absolute darkness." Narrator gives CLUE 2 very quietly.
+Slide 4 — CLUE 3: Give a more obvious hint. Build tension.
+Slide 5 — THE TIMER/TENSION: "You have 3 seconds... 3, 2, 1!" (Or something similar, very short)
+Slide 6 — THE REVEAL & LOOP: "It is [Answer]! [One funny detail about them/it]." Reveal the full answer. Then end with a phrase that smoothly loops back to the exact beginning of Slide 1. DO NOT leave the viewer hanging without the answer.`;
   } else if (format === 'facts') {
-    formatRules = `SLIDE STRUCTURE FOR TOP FACTS (5 slides):
-Slide 1 — THE HOOK: Aggressive, curiosity-driven pattern interrupt. "Top 3 craziest facts about [Topic] that will blow your mind!" Must shock or intrigue in the first 1.5 seconds.
+    formatRules = `SLIDE STRUCTURE FOR TOP FACTS (6 slides):
+Slide 1 — THE HOOK: Aggressive, hostile, or anti-marketing pattern interrupt. "You've been lied to about [Topic]" or "Keep scrolling, you can't handle this fact."
 Slide 2 — FACT 3: The least crazy but still interesting fact.
-Slide 3 — FACT 2: A weirder fact.
-Slide 4 — FACT 1: The absolute most mind-blowing fact.
-Slide 5 — THE FINAL TWIST & LOOP: Deliver the final mind-blowing payoff. Do NOT leave the core story unresolved. Then, end the video with a clever transition phrase that seamlessly loops back to the exact beginning of Slide 1. No subscribe CTA.`;
+Slide 3 — SENSORY DEPRIVATION: Image prompt MUST be "Pitch black screen, absolute darkness." Narrator whispers a secret or dark detail about Fact 2.
+Slide 4 — FACT 2: A weirder fact.
+Slide 5 — FACT 1: The absolute most mind-blowing fact.
+Slide 6 — THE FINAL TWIST & LOOP: Deliver the final mind-blowing payoff. Do NOT leave the core story unresolved. Then, end the video with a clever transition phrase that seamlessly loops back to the exact beginning of Slide 1. No subscribe CTA.`;
   } else {
     // story format (default)
-    formatRules = `SLIDE STRUCTURE FOR STORY (5 slides):
-Slide 1 — THE HOOK (Adbhuta/Wonder): Extreme curiosity gap + specific numbers. Must grab attention in the first 1.5 seconds. Make the viewer NEED to know what happens next.
+    formatRules = `SLIDE STRUCTURE FOR STORY (6 slides):
+Slide 1 — THE HOOK (Adbhuta/Wonder): Extreme curiosity gap using a hostile or anti-marketing hook. Tell them to scroll away or that they aren't ready for this truth.
 Slide 2 — THE SETUP (Specificity): The exact stakes, numbers, dates, and names.
-Slide 3 — THE CRAZY TRUTH (Bhayanaka/Tension): The moment things go completely wrong or the insane twist happens.
-Slide 4 — THE EXPLANATION (Figures of Speech): Explain why/how in plain, punchy English using vivid metaphors or antithesis.
-Slide 5 — THE COMPLETE PAYOFF & LOOP (Adbhuta/Wonder): You MUST reveal the complete, final, and satisfying outcome of the story. Absolutely NO cliffhangers, NO "But wait, there's more", and NO unresolved teases. The story MUST be 100% finished. Then, simply write a final sentence that grammatically connects directly to the first sentence of Slide 1 to create an infinite loop. No subscribe CTA.`;
+Slide 3 — SENSORY DEPRIVATION: Image prompt MUST be "Pitch black screen, absolute darkness." The moment things go completely wrong or a dark secret is revealed.
+Slide 4 — THE CRAZY TRUTH (Bhayanaka/Tension): The insane twist happens visually and audibly.
+Slide 5 — THE EXPLANATION (Figures of Speech): Explain why/how in plain, punchy English using vivid metaphors or antithesis.
+Slide 6 — THE COMPLETE PAYOFF & LOOP (Adbhuta/Wonder): You MUST reveal the complete, final, and satisfying outcome of the story. Absolutely NO cliffhangers, NO "But wait, there's more", and NO unresolved teases. The story MUST be 100% finished. Then, simply write a final sentence that grammatically connects directly to the first sentence of Slide 1 to create an infinite loop. No subscribe CTA.`;
   }
 
   return base + '\n\n' + formatRules;
