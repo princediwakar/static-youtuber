@@ -107,8 +107,7 @@ export async function uploadToYouTube(
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildDescription(script: SlideshowScript): string {
-  const hashtags = '#psychology #psychologyfacts #mindset #mentalhealthawareness #brainfacts #Shorts';
   const cta =
-    '\n\n🔔 Subscribe for daily psychology facts!\n💬 Comment which fact surprised you most!\n🔁 Share with someone who needs to see this!';
-  return `${script.description}\n\n${cta}\n\n${hashtags}`.substring(0, 5000);
+    '\n\n🔔 Subscribe for daily history stories!\n💬 Comment which fact surprised you most!\n🔁 Share with someone who needs to see this!';
+  return `${script.description}\n\n${cta}`.substring(0, 5000);
 }

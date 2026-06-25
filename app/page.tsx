@@ -99,10 +99,10 @@ export default async function DashboardPage() {
 
       {/* Header */}
       <header className="header">
-        <div className="header-icon">🧠</div>
+        <div className="header-icon">🏛️</div>
         <div className="header-text">
           <h1>AI Slideshow</h1>
-          <p>Psychology Shorts Automation Pipeline</p>
+          <p>History Shorts Automation Pipeline</p>
         </div>
         {stats.inProgress > 0 && (
           <div className="header-badge">
