@@ -15,13 +15,14 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 // ── TTS Prompt Builder ────────────────────────────────────────────────────────
 // Uses the dynamic audio_tag from the generated script
-function buildTTSPrompt(text: string, audioTag?: string): string {
+function buildTTSPrompt(text: string, audioTag?: string, format?: string, niche?: string): string {
   const tag = audioTag ?? '[conversational]';
+  const role = format === 'quiz' ? 'an energetic, suspenseful game show host' : 'an extremely energetic, enthusiastic female storyteller';
 
   return `
 # AUDIO PROFILE: The Global Storyteller (MrBeast Style, Female)
 ### DIRECTOR'S NOTES
-Style: Speak like an extremely energetic, enthusiastic female storyteller revealing mind-blowing facts. Use highly engaging, fast-paced English with extreme pitch variation and emotional expressiveness. Follow the Navarasa emotional transitions: Shift from hushed, gripping tension (Bhayanaka) to explosive, awe-struck excitement (Adbhuta). Avoid monotone, robotic delivery at all costs. Sound like a viral YouTuber with 100M subscribers.
+Style: Speak like ${role} revealing mind-blowing facts about ${niche || 'history'}. Use highly engaging, fast-paced English with extreme pitch variation and emotional expressiveness. Follow the Navarasa emotional transitions: Shift from hushed, gripping tension (Bhayanaka) to explosive, awe-struck excitement (Adbhuta). Avoid monotone, robotic delivery at all costs. Sound like a viral YouTuber with 100M subscribers.
 Pacing: Relentlessly brisk and energetic for YouTube Shorts, keeping the viewer hooked every single second. Emphasize key words naturally — stress the most shocking or exact specific numbers in each sentence. Keep the energy turned up to 11.
 Breathing: Quick, natural breaths. Do not pause too long — maintain intense forward momentum so the viewer can't swipe away.
 Language: English. Speak with a clear, dynamic, and hyper-engaging American accent (or universally relatable accent). The delivery should feel like a massive viral explainer.
@@ -74,7 +75,7 @@ export const generateHistoryShort = inngest.createFunction(
           key: `audio-${i}`,
           contents: [{
             role: 'user',
-            parts: [{ text: buildTTSPrompt(slide.text, slide.audio_tag) }],
+            parts: [{ text: buildTTSPrompt(slide.text, slide.audio_tag, format, niche) }],
           }],
           config: {
             responseModalities: ['AUDIO'],
@@ -222,7 +223,7 @@ export const generateHistoryShort = inngest.createFunction(
     // ── Step 5: Generate Background Music ───────────────────────────────────
     const musicUrl = await step.run('generate-music', async () => {
       const creds = await getAccountCredentials(ACCOUNT_ID);
-      const prompt = `Cinematic historical documentary underscore for a video about: ${script.title}. Tense orchestral, no lyrics, dramatic pacing, period-appropriate instrumentation.`;
+      const prompt = `Cinematic ${niche} underscore for a ${format} video about: ${script.title}. Tense, engaging, no lyrics, dramatic pacing, appropriate instrumentation.`;
 
       const response = await ai.models.generateContent({
         model: MUSIC_MODEL,
