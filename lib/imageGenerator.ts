@@ -17,14 +17,14 @@ import {
   FONT_PATH,
 } from './constants';
 
-// Register Devanagari font at module load so canvas can render Hindi text.
+// Register custom font at module load so canvas can render text.
 // librsvg (sharp's SVG renderer) does not support @font-face, so we bypass it
 // entirely by rendering text via Skia canvas and compositing the result.
 const FONT_FAMILY = (() => {
   if (existsSync(FONT_PATH)) {
     try {
-      GlobalFonts.registerFromPath(FONT_PATH, 'Noto Sans Devanagari');
-      return 'Noto Sans Devanagari';
+      GlobalFonts.registerFromPath(FONT_PATH, 'Montserrat');
+      return 'Montserrat';
     } catch {
       console.warn('[burnCaption] Font registration failed, falling back to sans-serif');
     }

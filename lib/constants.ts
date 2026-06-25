@@ -70,7 +70,7 @@ export const CAPTION_FONT_SIZE = 92; // larger text for more aggressive screen p
 export const CAPTION_MAX_CHARS_PER_LINE = 18;
 export const CAPTION_Y_POSITION = 0.80; // 80% down the frame (bottom, but safe from clipping)
 export const CAPTION_LINE_HEIGHT = 110;
-export const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'NotoSansDevanagari-Bold.ttf');
+export const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'Montserrat-Bold.ttf');
 
 // Thumbnail
 export const THUMBNAIL_WIDTH = 1280;
