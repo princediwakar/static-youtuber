@@ -5,7 +5,7 @@ export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'english_shots';
 
 export const NICHE = 'history';
 
-export const SLIDE_COUNT = 9; // always exactly 9: 8 content slides + 1 CTA
+export const SLIDE_COUNT = 5; // always exactly 5: 4 content slides + 1 CTA
 
 // Gemini Image Model
 export const IMAGE_MODEL = 'gemini-2.5-flash-image';

@@ -17,11 +17,9 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 // Replaces wrapInSSML(). Uses Gemini 3.1 TTS audio tags for expressiveness.
 function buildTTSPrompt(text: string, slideIndex: number): string {
   const audioTags: Record<number, string> = {
-    0: '[urgent, fast]',        // Hook — open loop lands deliberately
-    2: '[amazed, rapid]',       // Twist — dopamine hit slide
-    6: '[fast, energetic]',     // Payoff — closes the loop
-    7: '[warm, conversational, fast]', // Modern connection
-    8: '[urgent]',              // CTA
+    0: '[urgent, fast]',        // Hook
+    2: '[amazed, rapid]',       // Crazy truth
+    4: '[urgent]',              // CTA
   };
 
   const tag = audioTags[slideIndex] ?? '[fast, engaged]';
@@ -29,7 +27,7 @@ function buildTTSPrompt(text: string, slideIndex: number): string {
   return `
 # AUDIO PROFILE: The Chronicler
 ### DIRECTOR'S NOTES
-Style: Authoritative documentary narrator for a viral YouTube Shorts video.
+Style: Energetic, humorous, and highly engaging storyteller for a viral YouTube Shorts video.
 Pacing: Very fast, energetic, and rapid-fire. Read quickly with no slow pauses to keep viewer retention.
 Accent: Clear mid-Atlantic, no regional markers.
 ### TRANSCRIPT
@@ -164,7 +162,7 @@ export const generateHistoryShort = inngest.createFunction(
       const imageResponses = imageJob.dest?.inlinedResponses || [];
       const audioResponses = audioJob.dest?.inlinedResponses || [];
 
-      for (let i = 0; i < 9; i++) {
+      for (let i = 0; i < script.slides.length; i++) {
         const imgPrompt = script.slides[i].image_prompt;
         const imgRespObj = imageResponses.find((r: any) => r.request?.contents?.[0]?.parts?.[0]?.text === imgPrompt) || imageResponses[i];
         const imgResponse = imgRespObj?.response;

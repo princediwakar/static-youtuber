@@ -25,6 +25,11 @@ async function main() {
     await client.query(schema);
     console.log('✅ Schema applied');
 
+    // Clear old topics for the niche
+    console.log('🧹 Clearing old history topics…');
+    await client.query("DELETE FROM slideshow_topics WHERE niche = 'history'");
+    console.log('✅ Old topics cleared');
+
     // Seed topics
     console.log('🌱 Seeding history topics…');
     const topics = JSON.parse(
