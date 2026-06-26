@@ -5,7 +5,7 @@ import { pickUnusedTopic, generateScript } from '@/lib/topicGenerator';
 import { burnCaption } from '@/lib/imageGenerator';
 import { uploadSlideImage, uploadSlideAudio, uploadMusicTrack, uploadVideo, uploadThumbnail, cleanupJobArtifacts } from '@/lib/cloudinary';
 import { db, query } from '@/lib/database';
-import { IMAGE_MODEL, TTS_MODEL, TTS_VOICE, TTS_SAMPLE_RATE, MUSIC_MODEL, MODAL_RENDER_URL, ACCOUNT_ID, NICHES, FORMATS } from '@/lib/constants';
+import { IMAGE_MODEL, TTS_MODEL, TTS_VOICE_PROFILES, DEFAULT_TTS_VOICE_PROFILE, MUSIC_MODEL, MODAL_RENDER_URL, ACCOUNT_ID, NICHES, FORMATS } from '@/lib/constants';
 import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
 import { generateThumbnail } from '@/lib/thumbnailGenerator';
@@ -15,22 +15,20 @@ import { syncAnalytics } from '@/lib/analyticsSync';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 // ── TTS Prompt Builder ────────────────────────────────────────────────────────
-// Uses the dynamic audio_tag from the generated script
-function buildTTSPrompt(text: string, audioTag?: string, format?: string, niche?: string): string {
+// Uses per-niche voice profiles (Sadaltager for Geography, Orus for History)
+// with the dynamic audio_tag from the generated script
+function buildTTSPrompt(text: string, niche: string, audioTag?: string): string {
   const tag = audioTag ?? '[conversational]';
-  const role = format === 'quiz' ? 'an energetic, suspenseful game show host' : 'an extremely energetic, enthusiastic female storyteller';
+  const profile = TTS_VOICE_PROFILES[niche] ?? DEFAULT_TTS_VOICE_PROFILE;
 
-  return `
-# AUDIO PROFILE: The Global Storyteller (MrBeast Style, Female)
-### DIRECTOR'S NOTES
-Style: Speak like ${role} revealing mind-blowing facts about ${niche || 'history'}. Use highly engaging, fast-paced English with extreme pitch variation and emotional expressiveness. Follow the Navarasa emotional transitions: Shift from hushed, gripping tension (Bhayanaka) to explosive, awe-struck excitement (Adbhuta). Avoid monotone, robotic delivery at all costs. Sound like a viral YouTuber with 100M subscribers.
-Pacing: Relentlessly brisk and energetic for YouTube Shorts, keeping the viewer hooked every single second. Emphasize key words naturally — stress the most shocking or exact specific numbers in each sentence. Keep the energy turned up to 11.
-Breathing: Quick, natural breaths. Do not pause too long — maintain intense forward momentum so the viewer can't swipe away.
-Language: English. Speak with a clear, dynamic, and hyper-engaging American accent (or universally relatable accent). The delivery should feel like a massive viral explainer.
+  return `${profile.directorNotes}
+
 ### TRANSCRIPT
-${tag} ${text}
-<break time="200ms"/>
-  `.trim();
+${tag} ${text}`;
+}
+
+function getVoiceForNiche(niche: string): string {
+  return (TTS_VOICE_PROFILES[niche] ?? DEFAULT_TTS_VOICE_PROFILE).voice;
 }
 
 export const generateHistoryShort = inngest.createFunction(
@@ -78,13 +76,13 @@ export const generateHistoryShort = inngest.createFunction(
           key: `audio-${i}`,
           contents: [{
             role: 'user',
-            parts: [{ text: buildTTSPrompt(slide.text, slide.audio_tag, format, niche) }],
+            parts: [{ text: buildTTSPrompt(slide.text, niche, slide.audio_tag) }],
           }],
           config: {
             responseModalities: ['AUDIO'],
             speechConfig: {
               voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: TTS_VOICE },
+                prebuiltVoiceConfig: { voiceName: getVoiceForNiche(niche) },
               },
             },
           },
@@ -189,7 +187,7 @@ export const generateHistoryShort = inngest.createFunction(
         const imageUrl = await uploadSlideImage(captionedBuffer, jobId, i, creds);
         imageUrls.push(imageUrl);
 
-        const audioPrompt = buildTTSPrompt(script.slides[i].text, script.slides[i].audio_tag);
+        const audioPrompt = buildTTSPrompt(script.slides[i].text, niche, script.slides[i].audio_tag);
         const audioRespObj = audioResponses.find((r: any) => r.request?.contents?.[0]?.parts?.[0]?.text === audioPrompt) || audioResponses[i];
         const audioResponse = audioRespObj?.response;
         const audioPart = audioResponse?.candidates?.[0]?.content?.parts
@@ -206,7 +204,7 @@ export const generateHistoryShort = inngest.createFunction(
             config: {
               responseModalities: ['AUDIO'],
               speechConfig: {
-                voiceConfig: { prebuiltVoiceConfig: { voiceName: TTS_VOICE } },
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: getVoiceForNiche(niche) } },
               },
             },
           });
@@ -246,7 +244,7 @@ export const generateHistoryShort = inngest.createFunction(
     const videoUrl = await step.run('render-video', async () => {
       const creds = await getAccountCredentials(ACCOUNT_ID);
 
-      const thumbBuffer = await generateThumbnail(script.title, script.thumbnailPrompt);
+      const thumbBuffer = await generateThumbnail(script.title, script.thumbnailPrompt, niche);
       const thumbnailUrl = await uploadThumbnail(thumbBuffer, jobId, creds);
       await db.updateJob(jobId, { thumbnail_url: thumbnailUrl });
 
