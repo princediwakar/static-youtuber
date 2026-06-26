@@ -16,6 +16,7 @@ import {
   VIDEO_FPS,
   ZOOMPAN_SPEED,
   ZOOMPAN_ZOOM_IN_START,
+  ZOOMPAN_ZOOM_IN_END,
   ZOOMPAN_ZOOM_OUT_START,
   ZOOMPAN_ZOOM_OUT_END,
   MUSIC_DIR,
@@ -87,13 +88,13 @@ async function buildSlideClip(
   slideIndex: number
 ): Promise<void> {
   // Zoom direction alternates per slide
-  // Even: 1.0 → 1.06 (zoom in)  Odd: 1.06 → 1.0 (zoom out)
+  // Even: 1.0 → 1.12 (zoom in)  Odd: 1.12 → 1.0 (zoom out)
   const zoomStart = slideIndex % 2 === 0 ? ZOOMPAN_ZOOM_IN_START : ZOOMPAN_ZOOM_OUT_START;
   const zoomDirection = slideIndex % 2 === 0 ? '+' : '-';
   // zoompan expressions: 'on' = output frame number
   const zoomExpr = slideIndex % 2 === 0
-    ? `min(${zoomStart}+${ZOOMPAN_SPEED}*on, ${ZOOMPAN_ZOOM_OUT_START})`  // cap at 1.06
-    : `max(${ZOOMPAN_ZOOM_OUT_END}, ${ZOOMPAN_ZOOM_OUT_START}-${ZOOMPAN_SPEED}*on)`;  // floor at 1.0
+    ? `min(${zoomStart}+${ZOOMPAN_SPEED}*on, ${ZOOMPAN_ZOOM_IN_END})`
+    : `max(${ZOOMPAN_ZOOM_OUT_END}, ${ZOOMPAN_ZOOM_OUT_START}-${ZOOMPAN_SPEED}*on)`;
 
   const zoompanFilter = [
     `zoompan=z='${zoomExpr}'`,
@@ -141,7 +142,7 @@ async function assembleClips(
     return;
   }
 
-  console.log(`[Assembler] Assembling ${clipPaths.length} clips using concat demuxer (no fades)…`);
+  console.log(`[Assembler] Assembling ${clipPaths.length} clips using concat demuxer (no fades, audio re-encode)…`);
 
   // Create concat.txt file for FFmpeg
   const concatListPath = path.join(path.dirname(clipPaths[0]), 'concat.txt');
@@ -153,7 +154,9 @@ async function assembleClips(
       .input(concatListPath)
       .inputOptions(['-f', 'concat', '-safe', '0'])
       .outputOptions([
-        '-c', 'copy',
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        `-b:a ${FFMPEG_AUDIO_BITRATE}`,
         '-movflags', '+faststart',
       ])
       .output(outputPath)

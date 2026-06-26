@@ -22,7 +22,7 @@ function getTextClient(): GoogleGenAI {
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 const SlideSchema = z.object({
-  text: z.string().max(220), // raised from 200 — some facts need 22+ words
+  text: z.string().max(130), // ~16 words max, keeps captions to 2–3 lines
   image_prompt: z.string(),
   audio_tag: z.string().optional().transform(val => {
     if (!val) return '[serious]';
@@ -209,7 +209,7 @@ Schema:
   "tags": ["string"],
   "slides": [
     {
-      "text": "string (narration, max 22 words)",
+      "text": "string (narration, max 16 words)",
       "image_prompt": "string (visual scene description — no text in image, consistent with visual_world)",
       "audio_tag": "string (e.g. [serious], [curious], [amazed])"
     }
@@ -217,7 +217,7 @@ Schema:
   "thumbnailPrompt": "string"
 }
 
-VIRAL PACING: Slides 1+2 combined must read aloud in under 8 seconds. Be ruthless.
+VIRAL PACING: Slides 1+2 combined must read aloud in under 6 seconds. Each slide reads in 3–4 seconds. Be ruthless with word count. No slide over 16 words.
 
 IMAGE PROMPT RULES:
 - Describe only the visual scene. No text in image, ever.

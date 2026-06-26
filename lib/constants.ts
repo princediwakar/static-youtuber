@@ -43,8 +43,8 @@ Geographic documentary narrator who has just discovered something genuinely
 strange. Build tension through facts and pacing, NOT through theatrical emphasis.
 Conversational but with gravitas. Never sensational.
 
-Pacing: Measured. Slight natural pause before key facts to let them land.
-Never rushed. Never slow enough to feel ponderous.
+Pacing: Brisk but measured. Slight natural pause before key facts to let them land.
+Each slide reads in 3–4 seconds. Never slow enough to feel ponderous.
 
 Accent: Clear, neutral international English.`,
   },
@@ -63,8 +63,9 @@ Style: Grave and authoritative — like a respected historian narrating a
 pivotal documentary. The events matter. Speak with the gravitas they deserve.
 Tension comes from the facts, not from vocal performance.
 
-Pacing: Deliberate. Key names, dates, and figures get a brief natural beat
-before them. The listener should feel informed, not entertained.
+Pacing: Brisk but deliberate. Key names, dates, and figures get a brief natural
+beat before them. Each slide reads in 3–4 seconds. The listener should feel
+informed, not entertained.
 
 Accent: Clear, neutral international English.`,
   },
@@ -75,7 +76,7 @@ export const DEFAULT_TTS_VOICE_PROFILE: TTSVoiceProfile = {
   directorNotes: `
 ### DIRECTOR'S NOTES
 Style: Calm, authoritative documentary narrator. Tension from facts, not voice.
-Pacing: Measured, natural. Brief pause before key facts.
+Pacing: Brisk but measured. Brief pause before key facts. Each slide reads in 3–4 seconds.
 Accent: Clear, neutral international English.`,
 };
 
@@ -95,10 +96,10 @@ export const VIDEO_HEIGHT = 1920;
 export const VIDEO_FPS = 25;
 
 export const ZOOMPAN_ZOOM_IN_START = 1.0;
-export const ZOOMPAN_ZOOM_IN_END = 1.10;
-export const ZOOMPAN_ZOOM_OUT_START = 1.10;
+export const ZOOMPAN_ZOOM_IN_END = 1.12;
+export const ZOOMPAN_ZOOM_OUT_START = 1.12;
 export const ZOOMPAN_ZOOM_OUT_END = 1.0;
-export const ZOOMPAN_SPEED = 0.0007;
+export const ZOOMPAN_SPEED = 0.0012;
 
 export const XFADE_DURATION = 0;
 export const XFADE_TRANSITIONS = [
@@ -110,10 +111,10 @@ export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
 export const MUSIC_FILES = ['focus-01.mp3', 'tension-01.mp3', 'ambient-01.mp3'];
 export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/';
 
-export const CAPTION_FONT_SIZE = 80;
-export const CAPTION_MAX_CHARS_PER_LINE = 18;
-export const CAPTION_Y_POSITION = 0.80;
-export const CAPTION_LINE_HEIGHT = 96;
+export const CAPTION_FONT_SIZE = 72;
+export const CAPTION_MAX_CHARS_PER_LINE = 15;
+export const CAPTION_Y_POSITION = 0.72;
+export const CAPTION_LINE_HEIGHT = 84;
 export const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'Montserrat-Bold.ttf');
 
 export const THUMBNAIL_WIDTH = 1280;

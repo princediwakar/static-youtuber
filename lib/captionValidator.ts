@@ -64,16 +64,18 @@ export function validateSlideCaption(slide: Slide): CaptionValidationResult {
   }
 
   // ── Check total word count (too long = unreadable in ~10 seconds) ─────────
-  if (words.length > 24) {
-    warnings.push(`Slide ${slide.index}: ${words.length} words — may be too long for a Short. Target ≤22.`);
+  if (words.length > 18) {
+    errors.push(`Slide ${slide.index}: ${words.length} words — too long. Max is 16.`);
+  } else if (words.length > 16) {
+    warnings.push(`Slide ${slide.index}: ${words.length} words — target ≤16.`);
   }
 
   // ── Check rendered line count ─────────────────────────────────────────────
   const lines = simulateWordWrap(slide.text, CAPTION_MAX_CHARS_PER_LINE);
-  if (lines.length > 4) {
-    errors.push(`Slide ${slide.index}: wraps to ${lines.length} caption lines — max is 4.`);
-  } else if (lines.length === 4) {
-    warnings.push(`Slide ${slide.index}: wraps to 4 caption lines — consider shortening.`);
+  if (lines.length > 3) {
+    errors.push(`Slide ${slide.index}: wraps to ${lines.length} caption lines — max is 3.`);
+  } else if (lines.length === 3) {
+    warnings.push(`Slide ${slide.index}: wraps to 3 caption lines — consider shortening.`);
   }
 
   // ── Check for problematic punctuation that might confuse TTS ─────────────
