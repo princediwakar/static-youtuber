@@ -179,9 +179,8 @@ STORYTELLING MECHANICS:
    - Tension: Middle slides — raise the stakes through FACTS, not adjectives
 3. EXTREME SPECIFICITY: NEVER use vague words like "many" or "a long time".
    ALWAYS use exact numbers ("47 tons", "800 meters", "1962").
-4. THE LOOP (facts and quiz formats only): The final sentence of Slide 6 must be a
-   grammatical fragment that connects directly to the first word of Slide 1.
-   For STORY format: end with a clean, satisfying payoff. NO cliffhangers. NO loop required.
+4. CLEAN ENDING: Every slide 6 must end with a complete, satisfying sentence.
+   No sentence fragments. No cliffhangers. The viewer must feel the video is finished.
 
 VISUAL WORLD MANDATE (critical for image continuity):
 Before writing any slide, define a one-sentence "visual world" that describes the unified
@@ -239,8 +238,8 @@ Slide 2 — CLUE 1: An interesting, slightly obscure hint. Audio: [curious].
 Slide 3 — CLUE 2: Second hint. Build quiet tension.
 Slide 4 — CLUE 3: More obvious hint. Maintain calm.
 Slide 5 — TENSION: One sentence that raises the stakes through facts.
-Slide 6 — REVEAL + LOOP: Reveal the answer fully. One stunning context fact.
-           End with a fragment that grammatically leads into the first word of Slide 1.`;
+Slide 6 — REVEAL: Reveal the answer fully. One stunning context fact.
+           End with a complete, satisfying sentence. No fragments.`;
 
   } else if (format === 'facts') {
     formatRules = `
@@ -250,8 +249,8 @@ Slide 2 — FACT 3: Interesting but not the wildest. Zoom in on a specific detai
 Slide 3 — SECRET: A dark or hidden layer of Fact 3. Narrator is quiet, not dramatic.
 Slide 4 — FACT 2: Weirder fact. Let the specificity do the work.
 Slide 5 — FACT 1: The most surprising fact. One sentence. Let it land.
-Slide 6 — PAYOFF + LOOP: Final resolution. Full payoff — no unresolved threads.
-           End with a fragment that grammatically leads into the first word of Slide 1.`;
+Slide 6 — PAYOFF: Final resolution. Full payoff — no unresolved threads.
+           End with a complete, satisfying sentence. No fragments.`;
 
   } else {
     // story — NO mandatory loop, clean ending required
