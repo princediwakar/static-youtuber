@@ -1,6 +1,6 @@
 // Path: lib/topicGenerator.ts
 import { z } from 'zod';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { query } from './database';
 import { SlideshowScript } from './types';
 import { validateAllCaptions } from './captionValidator';
@@ -57,6 +57,41 @@ const QualityScoreSchema = z.object({
   issues: z.array(z.string()),
   approved: z.boolean(),
 });
+
+const GeminiScriptSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    fact_check_and_sources: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          claim: { type: Type.STRING },
+          source: { type: Type.STRING },
+        },
+        required: ['claim', 'source'],
+      },
+    },
+    visual_world: { type: Type.STRING },
+    title: { type: Type.STRING },
+    description: { type: Type.STRING },
+    tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+    slides: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          text: { type: Type.STRING },
+          image_prompt: { type: Type.STRING },
+          audio_tag: { type: Type.STRING },
+        },
+        required: ['text', 'image_prompt', 'audio_tag'],
+      },
+    },
+    thumbnailPrompt: { type: Type.STRING },
+  },
+  required: ['fact_check_and_sources', 'visual_world', 'title', 'description', 'tags', 'slides', 'thumbnailPrompt'],
+};
 
 type QualityScore = z.infer<typeof QualityScoreSchema>;
 
@@ -312,7 +347,8 @@ export async function generateScript(
       config: {
         systemInstruction: systemPrompt,
         responseMimeType: 'application/json',
-        temperature: attempt === 0 ? 0.85 : 0.75, 
+        responseSchema: GeminiScriptSchema,
+        temperature: attempt === 0 ? 0.85 : 0.75,
       },
     });
 
@@ -322,8 +358,11 @@ export async function generateScript(
     let parsed: unknown;
     try {
       let cleanRaw = raw.trim();
-      if (cleanRaw.startsWith('```json')) cleanRaw = cleanRaw.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-      else if (cleanRaw.startsWith('```')) cleanRaw = cleanRaw.replace(/^```\n?/, '').replace(/\n?```$/, '');
+      if (cleanRaw.startsWith('```')) {
+        cleanRaw = cleanRaw.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+      }
+      const bracketMatch = cleanRaw.match(/\{[\s\S]*\}/);
+      if (bracketMatch) cleanRaw = bracketMatch[0];
       parsed = JSON.parse(cleanRaw);
     } catch (err: any) {
       throw new Error(`Parse Error: ${err.message}.`);
