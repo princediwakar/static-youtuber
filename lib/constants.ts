@@ -113,7 +113,7 @@ export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — L
 
 export const CAPTION_FONT_SIZE = 72;
 export const CAPTION_MAX_CHARS_PER_LINE = 15;
-export const CAPTION_MAX_CHARS = 55; // 3 lines × ~18 effective chars after word-wrap slack
+export const CAPTION_MAX_CHARS = 80; // first-pass filter; line-count check is the binding constraint
 export const CAPTION_Y_POSITION = 0.72;
 export const CAPTION_LINE_HEIGHT = 84;
 export const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'Montserrat-Bold.ttf');

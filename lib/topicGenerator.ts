@@ -408,7 +408,22 @@ ${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
     }
 
     parsed = normalizeFieldNames(parsed);
-    const validated = SlideshowScriptSchema.parse(parsed);
+
+    let validated: z.infer<typeof SlideshowScriptSchema>;
+    try {
+      validated = SlideshowScriptSchema.parse(parsed);
+    } catch (zodErr) {
+      if (zodErr instanceof z.ZodError) {
+        const issues = zodErr.issues.map(i => `${i.path.join('.')}: ${i.message}`);
+        if (attempt < QUALITY_GATE_MAX_RETRIES) {
+          console.warn(`[TopicGenerator] Zod validation failed (attempt ${attempt + 1}), retrying with feedback:`, issues);
+          lastScore = { issues, approved: false } as QualityScore;
+          continue;
+        }
+        throw new Error(`Script validation failed after all retries:\n${issues.join('\n')}`);
+      }
+      throw zodErr;
+    }
 
     // ── Quality gate ──────────────────────────────────────────────────────────
     try {
