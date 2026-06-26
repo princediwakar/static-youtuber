@@ -1,17 +1,28 @@
 // Path: lib/topicGenerator.ts
 import { z } from 'zod';
+import { GoogleGenAI } from '@google/genai';
 import { query } from './database';
 import { SlideshowScript } from './types';
 import {
-  DEEPSEEK_MODEL,
-  DEEPSEEK_BASE_URL,
+  GEMINI_TEXT_MODEL,
+  GEMINI_QUALITY_GATE_MODEL,
   MUSIC_ATTRIBUTION,
   AESTHETICS,
+  NICHE_PROFILES,
+  DEFAULT_NICHE_PROFILE,
+  QUALITY_GATE_MAX_RETRIES,
 } from './constants';
+
+// ─── Gemini client ─────────────────────────────────────────────────────────────
+function getTextClient(): GoogleGenAI {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+  return new GoogleGenAI({ apiKey });
+}
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 const SlideSchema = z.object({
-  text: z.string().max(200),
+  text: z.string().max(220), // raised from 200 — some facts need 22+ words
   image_prompt: z.string(),
   audio_tag: z.string().optional().transform(val => {
     if (!val) return '[serious]';
@@ -21,7 +32,11 @@ const SlideSchema = z.object({
 });
 
 const SlideshowScriptSchema = z.object({
-  fact_check_and_sources: z.string(),
+  fact_check_and_sources: z.array(z.object({
+    claim: z.string(),
+    source: z.string(),
+  })).min(1), // structured array instead of a single string — easier to verify
+  visual_world: z.string(), // new: one-sentence visual continuity anchor
   title: z.string().max(100),
   description: z.string(),
   tags: z.array(z.string()).min(5).max(12),
@@ -29,11 +44,22 @@ const SlideshowScriptSchema = z.object({
   thumbnailPrompt: z.string(),
 });
 
+const QualityScoreSchema = z.object({
+  hook_strength: z.number().min(0).max(10),
+  factual_specificity: z.number().min(0).max(10),
+  pacing: z.number().min(0).max(10),
+  tone_calibration: z.number().min(0).max(10), // new: penalise melodrama
+  overall: z.number().min(0).max(10),
+  issues: z.array(z.string()),
+  approved: z.boolean(),
+});
+
+type QualityScore = z.infer<typeof QualityScoreSchema>;
+
 // ─── Topic deduplication ─────────────────────────────────────────────────────
 
 export async function generateTopics(niche: string): Promise<void> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) throw new Error('DEEPSEEK_API_KEY is not set');
+  const client = getTextClient();
 
   const pastTopicsRes = await query<{ topic: string }>(
     `SELECT topic FROM slideshow_topics WHERE niche = $1 ORDER BY used_at DESC NULLS LAST LIMIT 50`,
@@ -41,37 +67,48 @@ export async function generateTopics(niche: string): Promise<void> {
   );
   const pastTopics = pastTopicsRes.rows.map(r => r.topic);
 
+  // Removed the "top 10 GDP countries only" restriction — replaced with a
+  // quality/relevance filter that doesn't artificially cap geography content.
   const prompt = `You are an expert content strategist for a YouTube Shorts channel in the "${niche}" niche.
 Generate 20 completely unique, highly engaging, and viral video topics.
-CRITICAL MANDATE: Only generate stories from the top 10 GDP countries: USA, China, Japan, Germany, India, UK, France, Canada, Russia, Spain. DO NOT generate stories from any other countries.
+
+TOPIC QUALITY CRITERIA (use these instead of geographic restrictions):
+- The story has genuine global interest — someone from any country would find it fascinating
+- It can be explained clearly in 60 seconds without specialist knowledge  
+- It involves a real, verifiable, surprising fact or event
+- It has strong visual potential (can be shown, not just told)
+- For Geography: obscure borders, bizarre territories, geographical anomalies, and small or unusual countries are EXCELLENT — don't restrict to large countries
+
 DO NOT generate any of these previously used topics (or anything too similar):
 ${pastTopics.length > 0 ? pastTopics.join('\n') : 'No past topics yet.'}
 
-Output ONLY valid JSON in this format:
+Output ONLY valid JSON in this format, no markdown:
 { "topics": ["topic 1", "topic 2", ...] }`;
 
-  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
-      messages: [{ role: 'user', content: prompt }],
+  const response = await client.models.generateContent({
+    model: GEMINI_TEXT_MODEL,
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    config: {
+      responseMimeType: 'application/json',
       temperature: 0.9,
-      response_format: { type: 'json_object' },
-    }),
+    },
   });
 
-  const data = await response.json();
-  const raw = data.choices[0]?.message?.content;
+  const raw = response.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!raw) throw new Error('Gemini returned empty content for topic generation');
+
   let parsed: any;
   try {
     parsed = JSON.parse(raw);
-  } catch(e) {
+  } catch (e) {
     throw new Error('Failed to parse topic generation response');
   }
 
   for (const topic of parsed.topics || []) {
-    await query(`INSERT INTO slideshow_topics (topic, niche) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [topic, niche]);
+    await query(
+      `INSERT INTO slideshow_topics (topic, niche) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [topic, niche]
+    );
   }
 }
 
@@ -91,7 +128,7 @@ export async function pickUnusedTopic(niche: string): Promise<string> {
   if (result.rows.length === 0) {
     console.log(`[TopicGenerator] No unused topics for ${niche}, generating more...`);
     await generateTopics(niche);
-    
+
     result = await query<{ topic: string }>(`
       UPDATE slideshow_topics
       SET used = TRUE, used_at = NOW()
@@ -103,89 +140,137 @@ export async function pickUnusedTopic(niche: string): Promise<string> {
       )
       RETURNING topic
     `, [niche]);
-    
+
     if (result.rows.length === 0) throw new Error(`Failed to generate new topics for ${niche}`);
   }
 
   return result.rows[0].topic;
 }
 
+// ─── Format-weighted selection ────────────────────────────────────────────────
+
+export function pickWeightedFormat(niche: string): string {
+  const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
+  const weights = profile.formatWeights;
+  const rand = Math.random();
+  if (rand < weights.facts) return 'facts';
+  if (rand < weights.facts + weights.story) return 'story';
+  return 'quiz';
+}
+
 // ─── System prompt factory ─────────────────────────────────────────────────────
-function getSystemPrompt(niche: string, format: string, aestheticInstruction: string): string {
-  const base = `You are a viral scriptwriter for a Global YouTube Shorts channel targeting a massive international audience, creating premium micro-documentaries.
-CRITICAL MANDATE: The entire script (title, description, and ALL slide text) MUST be written in highly energetic, conversational English.
-Your tone is OMINOUS, INTENSE, and HIGHLY ACCESSIBLE. Speak like you are declassifying a secret.
-CRITICAL: Use simple, everyday English. Avoid dense academic jargon. 
 
-ADVANCED STORYTELLING MECHANICS:
-1. COGNITIVE DISSONANCE HOOK: Slide 1 must break the viewer's brain by presenting two facts that cannot logically exist together, but do. State it as a bizarre anomaly. Do not ask a question.
-2. NAVARASA (Emotional Arc):
-   - Adbhuta (Wonder/Awe): Use this for the opening hook and the final reveal. Emphasize the impossible scale.
-   - Bhayanaka (Tension/Terror): Raise the stakes dramatically in the middle.
-3. EXTREME SPECIFICITY:
-   - NEVER use vague words like "many" or "a long time". ALWAYS use exact numbers ("47 tons", "800 meters").
-4. THE SEAMLESS LOOP:
-   - The final spoken sentence of Slide 6 MUST be a fragmented clause that acts as a grammatical bridge, leading perfectly into the first word of Slide 1.
+function getSystemPrompt(
+  niche: string,
+  format: string,
+  aestheticInstruction: string,
+  toneInstruction: string,
+): string {
+  const base = `You are a viral scriptwriter for a YouTube Shorts channel in the "${niche}" niche.
 
-FACT VERIFICATION MANDATE (CRITICAL):
-- You MUST verify every factual claim you make. Do not guess. In the "fact_check_and_sources" field, list the verified sources.
-- Never present fabricated stories as real.
+TONE MANDATE (critical — this overrides everything else about delivery):
+${toneInstruction}
 
-Output ONLY valid JSON. No markdown. No code fences. No trailing commas. No explanation.
+STORYTELLING MECHANICS:
+1. COGNITIVE DISSONANCE HOOK: Slide 1 must present two facts that cannot logically coexist but do.
+   State it as a bizarre anomaly. Do NOT ask a question. Do NOT use the words "mind-blowing" or "insane".
+2. EMOTIONAL ARC:
+   - Wonder/Awe: Opening hook and final reveal
+   - Tension: Middle slides — raise the stakes through FACTS, not adjectives
+3. EXTREME SPECIFICITY: NEVER use vague words like "many" or "a long time".
+   ALWAYS use exact numbers ("47 tons", "800 meters", "1962").
+4. THE LOOP (facts and quiz formats only): The final sentence of Slide 6 must be a
+   grammatical fragment that connects directly to the first word of Slide 1.
+   For STORY format: end with a clean, satisfying payoff. NO cliffhangers. NO loop required.
+
+VISUAL WORLD MANDATE (critical for image continuity):
+Before writing any slide, define a one-sentence "visual world" that describes the unified
+aesthetic, lighting, and color palette that ALL six images must share. Then write every
+image_prompt as if it's a shot from inside that world. Include this in the "visual_world" field.
+
+FACT VERIFICATION MANDATE:
+Every factual claim must be verifiable. Output sources as a structured array in
+"fact_check_and_sources" — each entry has a "claim" field and a "source" field.
+Never present fabricated stories as real events.
+
+AUDIO TAGS: Use these sparingly from the slide's audio_tag field:
+[serious], [curious], [amazed], [whispers], [intense]
+The tag sets the delivery for the entire slide. Default is [serious].
+Do NOT stack multiple tags or overuse [intense] — most slides should be [serious] or [curious].
+
+Output ONLY valid JSON. No markdown. No code fences. No trailing commas.
 
 Schema:
 {
-  "fact_check_and_sources": "string",
-  "title": "string",
+  "fact_check_and_sources": [{"claim": "string", "source": "string"}],
+  "visual_world": "string (one sentence describing the unified visual aesthetic for all 6 slides)",
+  "title": "string (max 100 chars)",
   "description": "string",
   "tags": ["string"],
-  "slides": [6 objects each with: {"text": "string (narration, max 18 words)", "image_prompt": "string (visual scene description, no text in image)", "audio_tag": "string (e.g., [serious], [mysterious], [intense])"}],
+  "slides": [
+    {
+      "text": "string (narration, max 22 words)",
+      "image_prompt": "string (visual scene description — no text in image, consistent with visual_world)",
+      "audio_tag": "string (e.g. [serious], [curious], [amazed])"
+    }
+  ],
   "thumbnailPrompt": "string"
 }
 
-VIRAL PACING MANDATE:
-- Slides 1 + 2 combined must take UNDER 8 SECONDS when read aloud. Be ruthlessly concise.
+VIRAL PACING: Slides 1+2 combined must read aloud in under 8 seconds. Be ruthless.
 
-IMAGE PROMPT RULES (per slide):
-- Describe only the visual scene — no text in image.
-- Be hyper-specific: name the exact lighting, weather, textures, and details.
-- CONSISTENT AESTHETIC MANDATE: ${aestheticInstruction}
-- Slide 1: A wide, recognizable macro-shot establishing the subject.
-- Slide 2 (Escalating Visual Proof): Zoom in on a specific, rarely seen historical detail, document, or mechanism.
-- Slide 6: A wide, breathtaking shot that resolves the visual story.
-- TAGS: include #shorts and 4 specific tags.`;
+IMAGE PROMPT RULES:
+- Describe only the visual scene. No text in image, ever.
+- Hyper-specific: exact lighting, weather, textures, camera angle.
+- CONSISTENT AESTHETIC: ${aestheticInstruction}
+- NEGATIVE: avoid text, watermarks, logos, cluttered compositions.
+- Slide 1: Wide establishing shot of the subject.
+- Slide 2: Zoom into a rare, specific historical detail or mechanism.
+- Slide 6: Wide, breathtaking resolution shot.
+- TAGS: include #shorts and 4 specific niche tags.`;
 
   let formatRules = '';
+
   if (format === 'quiz') {
-    formatRules = `SLIDE STRUCTURE FOR MCQ QUIZ (6 slides):
-Slide 1 — THE HOOK: Cognitive Dissonance hook. Drop cheap parlor tricks.
-Slide 2 — CLUE 1: Give a slightly obscure but interesting hint. Focus visually on an intense detail.
-Slide 3 — CLUE 2: Give a second hint. Narrator speaks quietly to build tension.
-Slide 4 — CLUE 3: Give a more obvious hint. Escalate visual tension.
-Slide 5 — THE TENSION: Build tension through script pacing and visual escalation.
-Slide 6 — THE REVEAL & LOOP: Reveal the full answer immediately. Give one mind-blowing context clue. Then, write a transitional half-sentence that grammatically connects directly to the first word of Slide 1 to create an infinite loop.`;
+    formatRules = `
+SLIDE STRUCTURE — MCQ QUIZ (6 slides):
+Slide 1 — HOOK: Cognitive dissonance hook. No question mark. Present the anomaly.
+Slide 2 — CLUE 1: An interesting, slightly obscure hint. Audio: [curious].
+Slide 3 — CLUE 2: Second hint. Build quiet tension.
+Slide 4 — CLUE 3: More obvious hint. Maintain calm.
+Slide 5 — TENSION: One sentence that raises the stakes through facts.
+Slide 6 — REVEAL + LOOP: Reveal the answer fully. One stunning context fact.
+           End with a fragment that grammatically leads into the first word of Slide 1.`;
+
   } else if (format === 'facts') {
-    formatRules = `SLIDE STRUCTURE FOR TOP FACTS (6 slides):
-Slide 1 — THE HOOK: Cognitive Dissonance hook. Start directly with friction.
-Slide 2 — FACT 3: The least crazy but still interesting fact. Focus visually on an intense detail.
-Slide 3 — THE SECRET: Narrator whispers a dark or hidden detail about Fact 3.
-Slide 4 — FACT 2: A weirder fact.
-Slide 5 — FACT 1: The absolute most mind-blowing fact. Escalate the tension naturally.
-Slide 6 — THE FINAL TWIST & LOOP: Deliver the final payoff. Do NOT leave the core story unresolved. Then, append a fragmented clause that forces the sentence to finish by wrapping back to the first word of Slide 1.`;
+    formatRules = `
+SLIDE STRUCTURE — TOP FACTS (6 slides):
+Slide 1 — HOOK: Cognitive dissonance hook. No question mark.
+Slide 2 — FACT 3: Interesting but not the wildest. Zoom in on a specific detail. Audio: [curious].
+Slide 3 — SECRET: A dark or hidden layer of Fact 3. Narrator is quiet, not dramatic.
+Slide 4 — FACT 2: Weirder fact. Let the specificity do the work.
+Slide 5 — FACT 1: The most surprising fact. One sentence. Let it land.
+Slide 6 — PAYOFF + LOOP: Final resolution. Full payoff — no unresolved threads.
+           End with a fragment that grammatically leads into the first word of Slide 1.`;
+
   } else {
-    formatRules = `SLIDE STRUCTURE FOR STORY (6 slides):
-Slide 1 — THE HOOK: Cognitive Dissonance hook. Extreme curiosity gap. Never tell them to scroll away.
-Slide 2 — THE SETUP (Escalating Proof): The exact stakes, numbers, dates, and names. Visual must zoom into a rare detail.
-Slide 3 — THE TURNING POINT: The moment things go completely wrong or a secret is revealed.
-Slide 4 — THE CRAZY TRUTH: The insane twist happens visually and audibly.
-Slide 5 — THE EXPLANATION: Explain why/how in plain, punchy English.
-Slide 6 — THE COMPLETE PAYOFF & LOOP: You MUST reveal the complete, final, and satisfying outcome of the story. Absolutely NO cliffhangers. The story MUST be 100% finished. Then, end with a fragmented sentence that acts as a grammatical bridge, leading perfectly into the first word of Slide 1.`;
+    // story — NO mandatory loop, clean ending required
+    formatRules = `
+SLIDE STRUCTURE — STORY (6 slides):
+Slide 1 — HOOK: Cognitive dissonance hook. Extreme curiosity gap. No question mark.
+Slide 2 — SETUP: Exact stakes, numbers, dates, names. Zoom into a rare detail. Audio: [curious].
+Slide 3 — TURNING POINT: The moment things go wrong or a secret is revealed.
+Slide 4 — THE TRUTH: The twist happens visually and narratively.
+Slide 5 — EXPLANATION: Why/how — plain, punchy English. No jargon.
+Slide 6 — COMPLETE PAYOFF: The full, final, satisfying outcome of the story.
+           ABSOLUTELY NO cliffhangers. The story must be 100% resolved.
+           Do NOT add a loop fragment — end cleanly.`;
   }
 
   return base + '\n\n' + formatRules;
 }
 
-// ─── Script generation ────────────────────────────────────────────────────────
+// ─── Normalise LLM field names ─────────────────────────────────────────────────
 
 function normalizeFieldNames(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(normalizeFieldNames);
@@ -194,7 +279,7 @@ function normalizeFieldNames(obj: unknown): unknown {
     for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
       const normalizedKey =
         key === 'imagePrompt' ? 'image_prompt' :
-        key === 'thumbnailPrompt' ? 'thumbnailPrompt' : 
+        key === 'thumbnailPrompt' ? 'thumbnailPrompt' :
         key;
       out[normalizedKey] = normalizeFieldNames(value);
     }
@@ -203,66 +288,156 @@ function normalizeFieldNames(obj: unknown): unknown {
   return obj;
 }
 
-export async function generateScript(topic: string, format: string, niche: string): Promise<SlideshowScript> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) throw new Error('DEEPSEEK_API_KEY is not set');
+// ─── Script quality gate ──────────────────────────────────────────────────────
 
-  // Randomly select one of the aesthetics for this generation
-  const aesthetic = AESTHETICS[Math.floor(Math.random() * AESTHETICS.length)];
-  console.log(`[TopicGenerator] Selected Aesthetic for "${topic}": ${aesthetic.id}`);
+async function scoreScript(
+  script: z.infer<typeof SlideshowScriptSchema>,
+  niche: string,
+  minScore: number,
+): Promise<QualityScore> {
+  const client = getTextClient();
 
-  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
-      messages: [
-        { role: 'system', content: getSystemPrompt(niche, format, aesthetic.instruction) },
-        { role: 'user', content: `Write a viral YouTube Shorts script about this ${niche} topic: ${topic}` },
-      ],
-      temperature: 0.85,
-      max_tokens: 8000,
-      response_format: { type: 'json_object' },
-    }),
+  const prompt = `You are a quality controller for a ${niche} YouTube Shorts channel.
+Score this script on 4 dimensions (0–10 each) and decide if it should be approved.
+
+SCRIPT TO EVALUATE:
+${JSON.stringify({ title: script.title, slides: script.slides.map(s => s.text) }, null, 2)}
+
+SCORING RUBRIC:
+- hook_strength (0-10): Does Slide 1 create genuine cognitive dissonance without being melodramatic?
+- factual_specificity (0-10): Are exact numbers, dates, and names used? Zero vague words like "many"?
+- pacing (0-10): Do slides 1+2 feel fast? Does each slide flow naturally to the next?
+- tone_calibration (0-10): Is the language calm and authoritative (10) or theatrical/sensationalist (0)?
+  Penalise: "mind-blowing", "insane", "you won't believe", excessive drama, cliffhanger on story format.
+
+- overall: average of the four scores (calculated by you)
+- issues: list specific problems as strings (empty array if none)
+- approved: true if overall >= ${minScore}, false otherwise
+
+Output ONLY valid JSON, no markdown:
+{
+  "hook_strength": number,
+  "factual_specificity": number,
+  "pacing": number,
+  "tone_calibration": number,
+  "overall": number,
+  "issues": ["string"],
+  "approved": boolean
+}`;
+
+  const response = await client.models.generateContent({
+    model: GEMINI_QUALITY_GATE_MODEL,
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    config: { responseMimeType: 'application/json', temperature: 0.2 },
   });
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`DeepSeek API error ${response.status}: ${err}`);
-  }
+  const raw = response.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!raw) throw new Error('Quality gate returned empty response');
 
-  const data = await response.json();
-  const raw = data.choices[0]?.message?.content;
-  if (!raw) throw new Error('DeepSeek returned empty content');
+  const parsed = JSON.parse(raw);
+  return QualityScoreSchema.parse(parsed);
+}
 
-  let parsed: unknown;
-  try {
-    let cleanRaw = raw.trim();
-    if (cleanRaw.startsWith('```json')) {
-      cleanRaw = cleanRaw.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    } else if (cleanRaw.startsWith('```')) {
-      cleanRaw = cleanRaw.replace(/^```\n?/, '').replace(/\n?```$/, '');
+// ─── Script generation (with quality gate + retry) ────────────────────────────
+
+export async function generateScript(
+  topic: string,
+  format: string,
+  niche: string,
+): Promise<SlideshowScript> {
+  const client = getTextClient();
+
+  // Resolve niche profile → locked aesthetic + tone + quality threshold
+  const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
+  const aesthetic = AESTHETICS[profile.aestheticId] ?? Object.values(AESTHETICS)[0];
+  const toneInstruction = profile.toneInstruction;
+  const minQualityScore = profile.minQualityScore;
+
+  console.log(`[TopicGenerator] Niche: "${niche}" → Aesthetic: ${aesthetic.id}`);
+
+  const systemPrompt = getSystemPrompt(niche, format, aesthetic.instruction, toneInstruction);
+
+  let lastScore: QualityScore | null = null;
+
+  for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      console.log(`[TopicGenerator] Retry ${attempt}/${QUALITY_GATE_MAX_RETRIES} — issues: ${lastScore?.issues.join(', ')}`);
     }
-    parsed = JSON.parse(cleanRaw);
-  } catch (err: any) {
-    throw new Error(`DeepSeek output is not valid JSON. Parse Error: ${err.message}. Raw: ${raw.substring(0, 200)}`);
+
+    // Build user prompt — on retries, include the issues from the last attempt
+    const userContent = attempt === 0
+      ? `Write a viral YouTube Shorts script about this ${niche} topic: ${topic}`
+      : `Write a viral YouTube Shorts script about this ${niche} topic: ${topic}
+
+CRITICAL — Fix these issues from the previous attempt:
+${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
+
+    const response = await client.models.generateContent({
+      model: GEMINI_TEXT_MODEL,
+      contents: [{ role: 'user', parts: [{ text: userContent }] }],
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: 'application/json',
+        temperature: attempt === 0 ? 0.85 : 0.75, // slightly lower temp on retries
+      },
+    });
+
+    if (!response.candidates?.[0]) throw new Error('Gemini returned no candidates');
+
+    const raw = response.candidates[0].content?.parts?.[0]?.text;
+    if (!raw) throw new Error('Gemini returned empty content for script');
+
+    let parsed: unknown;
+    try {
+      let cleanRaw = raw.trim();
+      if (cleanRaw.startsWith('```json')) {
+        cleanRaw = cleanRaw.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+      } else if (cleanRaw.startsWith('```')) {
+        cleanRaw = cleanRaw.replace(/^```\n?/, '').replace(/\n?```$/, '');
+      }
+      parsed = JSON.parse(cleanRaw);
+    } catch (err: any) {
+      throw new Error(`Gemini output is not valid JSON. Parse Error: ${err.message}. Raw: ${raw.substring(0, 200)}`);
+    }
+
+    parsed = normalizeFieldNames(parsed);
+    const validated = SlideshowScriptSchema.parse(parsed);
+
+    // ── Quality gate ──────────────────────────────────────────────────────────
+    try {
+      const score = await scoreScript(validated, niche, minQualityScore);
+      console.log(`[QualityGate] Attempt ${attempt + 1}: overall=${score.overall.toFixed(1)}, approved=${score.approved}`);
+
+      if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
+        if (!score.approved) {
+          console.warn(`[QualityGate] Max retries reached — publishing best effort (score: ${score.overall.toFixed(1)})`);
+        }
+
+        // ── Assemble final script ─────────────────────────────────────────────
+        return {
+          ...validated,
+          // Flatten fact_check_and_sources back to a readable string for storage
+          fact_check_and_sources: validated.fact_check_and_sources
+            .map(f => `${f.claim} → ${f.source}`)
+            .join('\n'),
+          format,
+          description: `${validated.description}\n\n[Aesthetic: ${aesthetic.id}]\n\n${MUSIC_ATTRIBUTION}`,
+          slides: validated.slides.map(slide => ({
+            ...slide,
+            // Visual world prefix anchors continuity; aesthetic prefix sets style
+            image_prompt: `${aesthetic.imagePrefix}${slide.image_prompt} | Visual world: ${validated.visual_world} | Avoid: ${aesthetic.imageNegative}`,
+          })),
+          thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt} | Avoid: ${aesthetic.imageNegative}`,
+        };
+      }
+
+      lastScore = score;
+    } catch (gateErr) {
+      // If the quality gate itself fails, don't block publishing
+      console.warn(`[QualityGate] Scoring failed (attempt ${attempt + 1}):`, gateErr);
+      break;
+    }
   }
 
-  parsed = normalizeFieldNames(parsed);
-
-  const validated = SlideshowScriptSchema.parse(parsed);
-
-  return {
-    ...validated,
-    format,
-    description: `${validated.description}\n\n[Aesthetic: ${aesthetic.id}]\n\n${MUSIC_ATTRIBUTION}`,
-    slides: validated.slides.map((slide) => ({
-      ...slide,
-      image_prompt: `${aesthetic.imagePrefix}${slide.image_prompt}`,
-    })),
-    thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt}`,
-  };
+  throw new Error('Script generation failed after all retries');
 }

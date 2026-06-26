@@ -10,6 +10,7 @@ import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
 import { generateThumbnail } from '@/lib/thumbnailGenerator';
 import { assembleVideo } from '@/lib/videoAssembler';
+import { syncAnalytics } from '@/lib/analyticsSync';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
@@ -37,7 +38,9 @@ export const generateHistoryShort = inngest.createFunction(
     id: 'generate-history-short',
     retries: 3,
     triggers: [
-      { cron: '0 2 * * *' },
+      { cron: '0 3 * * *' },   // India: 8:30 AM IST (morning scroll)
+      { cron: '0 16 * * *' },  // UK: 5:00 PM BST (after-work)
+      { cron: '0 18 * * *' },  // US: 2:00 PM EST / 11:00 AM PST (lunch + morning)
       { event: 'slideshow/trigger' },
     ],
     onFailure: async ({ error, event }) => {
@@ -298,9 +301,26 @@ export const generateHistoryShort = inngest.createFunction(
       );
 
       await db.updateJob(jobId, { status: 'published', video_url: videoUrl, youtube_video_id: result.youtubeVideoId });
-      
+
       // Cleanup Cloudinary artifacts to save storage
       await cleanupJobArtifacts(jobId, creds);
     });
+  }
+);
+
+// ── Analytics Sync ─────────────────────────────────────────────────────────────
+// Runs daily at 5am UTC — after the 2am generation pipeline — polling YouTube
+// for view counts on published videos so niche performance reports stay fresh.
+export const syncAnalyticsCron = inngest.createFunction(
+  {
+    id: 'sync-analytics',
+    retries: 2,
+    triggers: [{ cron: '0 5 * * *' }],
+    onFailure: async ({ error }) => {
+      console.error(`[CRITICAL] Analytics sync failed: ${error.message}`);
+    },
+  },
+  async () => {
+    await syncAnalytics();
   }
 );
