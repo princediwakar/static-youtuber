@@ -13,7 +13,7 @@
  * Called after script generation but before any API spending on images/TTS.
  */
 
-import { CAPTION_MAX_CHARS_PER_LINE } from './constants';
+import { CAPTION_MAX_CHARS_PER_LINE, CAPTION_MAX_CHARS } from './constants';
 
 export type CaptionValidationResult = {
   valid: boolean;
@@ -64,8 +64,8 @@ export function validateSlideCaption(slide: Slide): CaptionValidationResult {
   }
 
   // ── Check total character count ────────────────────────────────────────────
-  if (slide.text.length > 130) {
-    errors.push(`Slide ${slide.index}: ${slide.text.length} chars — exceeds 130 char limit.`);
+  if (slide.text.length > CAPTION_MAX_CHARS) {
+    errors.push(`Slide ${slide.index}: ${slide.text.length} chars — exceeds ${CAPTION_MAX_CHARS} char limit.`);
   }
 
   // ── Check sentence-ending punctuation (catches LLM fragments) ──────────────
@@ -73,11 +73,11 @@ export function validateSlideCaption(slide: Slide): CaptionValidationResult {
     errors.push(`Slide ${slide.index}: does not end with sentence-ending punctuation (. ! ?) — likely a truncated fragment.`);
   }
 
-  // ── Check total word count (too long = unreadable in ~10 seconds) ─────────
-  if (words.length > 18) {
-    errors.push(`Slide ${slide.index}: ${words.length} words — too long. Max is 16.`);
-  } else if (words.length > 16) {
-    warnings.push(`Slide ${slide.index}: ${words.length} words — target ≤16.`);
+  // ── Check total word count (must fit 3 lines at ~15 chars/line) ────────────
+  if (words.length > 14) {
+    errors.push(`Slide ${slide.index}: ${words.length} words — too long. Max is 10.`);
+  } else if (words.length > 12) {
+    warnings.push(`Slide ${slide.index}: ${words.length} words — target ≤10.`);
   }
 
   // ── Check rendered line count ─────────────────────────────────────────────

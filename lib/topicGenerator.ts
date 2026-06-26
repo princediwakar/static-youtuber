@@ -11,6 +11,8 @@ import {
   NICHE_PROFILES,
   DEFAULT_NICHE_PROFILE,
   QUALITY_GATE_MAX_RETRIES,
+  CAPTION_MAX_CHARS,
+  CAPTION_MAX_CHARS_PER_LINE,
 } from './constants';
 
 // ─── Gemini client ─────────────────────────────────────────────────────────────
@@ -23,8 +25,8 @@ function getTextClient(): GoogleGenAI {
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 const SlideSchema = z.object({
   text: z.string().refine(
-    val => val.length <= 130 && /[.!?]$/.test(val.trimEnd()),
-    { message: 'Slide text must be ≤130 chars and end with punctuation (. ! ?)' },
+    val => val.length <= CAPTION_MAX_CHARS && /[.!?]$/.test(val.trimEnd()),
+    { message: `Slide text must be ≤${CAPTION_MAX_CHARS} chars and end with punctuation (. ! ?)` },
   ),
   image_prompt: z.string(),
   audio_tag: z.string().optional().transform(val => {
@@ -211,7 +213,7 @@ Schema:
   "tags": ["string"],
   "slides": [
     {
-      "text": "string (narration, max 16 words)",
+      "text": "string (narration, max 10 words)",
       "image_prompt": "string (visual scene description — no text in image, consistent with visual_world)",
       "audio_tag": "string (e.g. [serious], [curious], [amazed])"
     }
@@ -219,7 +221,7 @@ Schema:
   "thumbnailPrompt": "string"
 }
 
-VIRAL PACING: Slides 1+2 combined must read aloud in under 6 seconds. Each slide reads in 3–4 seconds. Be ruthless with word count. No slide over 16 words.
+CAPTION CONSTRAINT (HARD LIMIT): Each slide text must fit in 3 lines at ${CAPTION_MAX_CHARS_PER_LINE} characters per line — roughly ${CAPTION_MAX_CHARS} characters total. Text longer than ${CAPTION_MAX_CHARS} characters will be rejected. Be ruthless with word count. No slide over 10 words. Each slide reads in 2–3 seconds. Slides 1+2 combined must read aloud in under 6 seconds.
 
 IMAGE PROMPT RULES:
 - Describe only the visual scene. No text in image, ever.
