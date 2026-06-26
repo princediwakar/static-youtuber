@@ -8,15 +8,16 @@ export interface Slide {
   audioUrl?: string;    // Cloudinary URL of TTS clip for this slide
 }
 
-export interface SlideshowScript {
-  fact_check_and_sources: string;
+export type SlideshowScript = {
   title: string;
   description: string;
-  tags: string[];
   format: string;
+  visual_world: string; // <-- THIS IS THE MISSING PIECE
+  fact_check_and_sources: string;
+  tags: string[];
   slides: Slide[];
   thumbnailPrompt: string;
-}
+};
 
 export interface SlideshowJob {
   id: string;
