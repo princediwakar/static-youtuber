@@ -6,83 +6,66 @@ export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'english_shots';
 export const NICHES = ['Modern Indian History', 'Geography'];
 export const FORMATS = ['story', 'quiz', 'facts'];
 
-export const SLIDE_COUNT = 6; // always exactly 6: 5 content slides + 1 CTA
+export const SLIDE_COUNT = 6; 
 
-// Gemini Image Model
 export const IMAGE_MODEL = 'gemini-2.5-flash-image';
 export const IMAGE_ASPECT_RATIO = '9:16';
 
-// Gemini TTS
-// Gemini TTS
 export const TTS_MODEL = 'gemini-3.1-flash-tts-preview';
-export const TTS_VOICE = 'Aoede'; // vibrant, female conversational voice
-export const TTS_SAMPLE_RATE = 24000; // Gemini TTS outputs 24kHz mono 16-bit PCM
+export const TTS_VOICE = 'Charon'; 
+export const TTS_SAMPLE_RATE = 24000; 
 
-// Music Model
 export const MUSIC_MODEL = 'lyria-3-clip-preview';
-
-// Modal Rendering
 export const MODAL_RENDER_URL = process.env.MODAL_RENDER_URL || 'https://example-modal-url.com/render';
-
-// DeepSeek
 export const DEEPSEEK_MODEL = 'deepseek-chat';
 export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 
-// FFmpeg quality
-export const FFMPEG_CRF = '23';       // YouTube re-encodes everything — CRF 18 was wasted quality
-export const FFMPEG_PRESET = 'medium'; // 3x faster encode, imperceptible delta after YouTube re-encode
-export const FFMPEG_AUDIO_BITRATE = '128k'; // Mono voice at 24kHz — 128k is transparent
+export const FFMPEG_CRF = '23';       
+export const FFMPEG_PRESET = 'medium'; 
+export const FFMPEG_AUDIO_BITRATE = '128k'; 
 export const VIDEO_WIDTH = 1080;
 export const VIDEO_HEIGHT = 1920;
-export const VIDEO_FPS = 25;           // Ken Burns on stills doesn't benefit from 30fps
+export const VIDEO_FPS = 25;           
 
-// Ken Burns zoom — alternating direction per slide
-// MrBeast-style: aggressive movement keeps the frame alive. 3x faster zoom.
 export const ZOOMPAN_ZOOM_IN_START = 1.0;
-export const ZOOMPAN_ZOOM_IN_END = 1.10;   // wider range for faster zoom travel
-export const ZOOMPAN_ZOOM_OUT_START = 1.10; // wider range for faster zoom travel
+export const ZOOMPAN_ZOOM_IN_END = 1.10;   
+export const ZOOMPAN_ZOOM_OUT_START = 1.10; 
 export const ZOOMPAN_ZOOM_OUT_END = 1.0;
-export const ZOOMPAN_SPEED = 0.0020; // 3x faster — dynamic motion per MrBeast retention principles
+export const ZOOMPAN_SPEED = 0.0007; 
 
-// Hard cuts between slides — no crossfade. MrBeast-style: zero dead air.
 export const XFADE_DURATION = 0;
-
-// Transition variety — cycles through these to prevent visual habituation
 export const XFADE_TRANSITIONS = [
-  'fade',
-  'slideleft',
-  'slideup',
-  'wiperight',
-  'smoothleft',
-  'circlecrop',
+  'fade', 'slideleft', 'slideup', 'wiperight', 'smoothleft', 'circlecrop',
 ] as const;
 
-// Background music
-export const MUSIC_VOLUME = 0.35; // 35% — increased volume
+export const MUSIC_VOLUME = 0.35; 
 export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
 export const MUSIC_FILES = ['focus-01.mp3', 'tension-01.mp3', 'ambient-01.mp3'];
-// CC BY 4.0 — must be included in YouTube video descriptions
 export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/';
 
-
-// Captions
-export const CAPTION_FONT_SIZE = 92; // larger text for more aggressive screen presence
+export const CAPTION_FONT_SIZE = 92; 
 export const CAPTION_MAX_CHARS_PER_LINE = 18;
-export const CAPTION_Y_POSITION = 0.80; // 80% down the frame (bottom, but safe from clipping)
+export const CAPTION_Y_POSITION = 0.80; 
 export const CAPTION_LINE_HEIGHT = 110;
 export const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'Montserrat-Bold.ttf');
 
-// Thumbnail
 export const THUMBNAIL_WIDTH = 1280;
 export const THUMBNAIL_HEIGHT = 720;
-
-// Cloudinary
 export const CLOUDINARY_FOLDER = 'ai-slideshow';
 export const CLOUDINARY_EXPIRE_DAYS = 7;
 
-// Image style prefix — left intentionally blank to allow the LLM to generate Visual Whiplash
-export const IMAGE_STYLE_PREFIX = '';
-
-// Thumbnail style prefix — "Anti-best" clickbait
-export const THUMBNAIL_STYLE_PREFIX =
-  'deep-fried meme style, aggressively over-saturated, glowing red eyes, low resolution, chaotic cursed image, YouTube thumbnail quality, no text in image,';
+// Dynamic Aesthetics Array for A/B Testing
+export const AESTHETICS = [
+  {
+    id: 'dossier',
+    instruction: 'All images must feel like a premium, dark, cinematic classified dossier.',
+    imagePrefix: 'vintage archival photograph, high contrast black and white, heavily textured film grain, declassified document style, blueprint elements, ominous lighting, no text in image, ',
+    thumbnailPrefix: 'vintage archival photograph, declassified document style, high-quality, striking contrast, no text in image, '
+  },
+  {
+    id: 'vector',
+    instruction: 'All images must feel like a premium, high-budget educational vector animation (like Kurzgesagt or Vox).',
+    imagePrefix: 'premium 2D vector flat art, Kurzgesagt style, dramatic isometric perspective, limited bold color palette, clean geometric shapes, dramatic lighting, no text in image, ',
+    thumbnailPrefix: 'premium 2D vector flat art, Kurzgesagt style, bold colors, high-quality, striking contrast, no text in image, '
+  }
+];
