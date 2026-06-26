@@ -191,7 +191,7 @@ async function generateSingleImage(prompt: string): Promise<Buffer> {
   if (!imageData) {
     const safety = response.generatedImages?.[0]?.safetyAttributes;
     const reason = safety ? JSON.stringify(safety) : 'no image data in response';
-    throw new Error(`Imagen returned no image data: ${reason}`);
+    throw new Error(`Image model returned no image data: ${reason}`);
   }
 
   const rawBuffer = Buffer.from(imageData, 'base64');

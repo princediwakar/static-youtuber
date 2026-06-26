@@ -2,7 +2,7 @@
 
 export interface Slide {
   text: string;         // Sentence read aloud & displayed
-  image_prompt: string; // Sent to Gemini Imagen 3
+  image_prompt: string; // Sent to Gemini Image model
   audio_tag?: string;   // Dynamic audio tone/tag for TTS
   imageUrl?: string;    // Cloudinary URL after generation
   audioUrl?: string;    // Cloudinary URL of TTS clip for this slide
