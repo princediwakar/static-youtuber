@@ -129,9 +129,11 @@ async function buildSlideClip(
 // ─── Concat assembly ──────────────────────────────────────────────────────────
 
 /**
- * Assemble N clips into a single video using the FFmpeg concat demuxer.
- * Memory-efficient and nearly instant because it uses stream copy (-c copy)
- * without re-encoding. Avoids Vercel memory limits.
+ * Assemble N clips into a single video using the FFmpeg concat filter.
+ * Uses the concat filter (not demuxer) for frame-accurate gapless audio —
+ * the demuxer can introduce priming-sample gaps at clip boundaries.
+ * Requires video re-encode (no stream copy), but for short-form content
+ * the encode time is negligible and the audio continuity is worth it.
  */
 async function assembleClips(
   clipPaths: string[],
@@ -142,22 +144,30 @@ async function assembleClips(
     return;
   }
 
-  console.log(`[Assembler] Assembling ${clipPaths.length} clips using concat demuxer (no fades, audio re-encode)…`);
+  console.log(`[Assembler] Assembling ${clipPaths.length} clips using concat filter (gapless audio, video re-encode)…`);
 
-  // Create concat.txt file for FFmpeg
-  const concatListPath = path.join(path.dirname(clipPaths[0]), 'concat.txt');
-  const concatContent = clipPaths.map(p => `file '${p}'`).join('\n');
-  await fs.writeFile(concatListPath, concatContent);
+  // Build filter: [0:v][0:a][1:v][1:a]...[N:v][N:a]concat=n=N:v=1:a=1[v][a]
+  const filterInputs = clipPaths.map((_, i) => `[${i}:v][${i}:a]`).join('');
+  const filterGraph = `${filterInputs}concat=n=${clipPaths.length}:v=1:a=1[v][a]`;
+
+  const cmd = ffmpeg();
+  for (const clipPath of clipPaths) {
+    cmd.input(clipPath);
+  }
 
   await runFfmpeg(
-    ffmpeg()
-      .input(concatListPath)
-      .inputOptions(['-f', 'concat', '-safe', '0'])
+    cmd
+      .complexFilter([filterGraph])
       .outputOptions([
-        '-c:v', 'copy',
-        '-c:a', 'aac',
+        '-map [v]',
+        '-map [a]',
+        '-c:v libx264',
+        `-crf ${FFMPEG_CRF}`,
+        `-preset ${FFMPEG_PRESET}`,
+        '-pix_fmt yuv420p',
+        '-c:a aac',
         `-b:a ${FFMPEG_AUDIO_BITRATE}`,
-        '-movflags', '+faststart',
+        '-movflags +faststart',
       ])
       .output(outputPath)
   );

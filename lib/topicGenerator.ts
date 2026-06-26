@@ -22,7 +22,10 @@ function getTextClient(): GoogleGenAI {
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 const SlideSchema = z.object({
-  text: z.string().max(130), // ~16 words max, keeps captions to 2–3 lines
+  text: z.string().refine(
+    val => val.length <= 130 && /[.!?]$/.test(val.trimEnd()),
+    { message: 'Slide text must be ≤130 chars and end with punctuation (. ! ?)' },
+  ),
   image_prompt: z.string(),
   audio_tag: z.string().optional().transform(val => {
     if (!val) return '[serious]';
@@ -261,9 +264,12 @@ Slide 2 — SETUP: Exact stakes, numbers, dates, names. Zoom into a rare detail.
 Slide 3 — TURNING POINT: The moment things go wrong or a secret is revealed.
 Slide 4 — THE TRUTH: The twist happens visually and narratively.
 Slide 5 — EXPLANATION: Why/how — plain, punchy English. No jargon.
-Slide 6 — COMPLETE PAYOFF: The full, final, satisfying outcome of the story.
-           ABSOLUTELY NO cliffhangers. The story must be 100% resolved.
-           Do NOT add a loop fragment — end cleanly.`;
+Slide 6 — COMPLETE PAYOFF: Resolve the story fully in one or two sentences.
+HARD RULE: The last word of Slide 6 must be a complete sentence ending with a full stop.
+NEVER end with a subordinate clause, a relative clause starting with "where" or "through",
+or any fragment designed to loop back to Slide 1. That is ONLY for quiz/facts format.
+Example of WRONG ending: "...through a vision where the artist"
+Example of CORRECT ending: "Today, his paintings hang in temples across India."`;
   }
 
   return base + '\n\n' + formatRules;

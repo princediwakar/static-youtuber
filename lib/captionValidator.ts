@@ -63,6 +63,16 @@ export function validateSlideCaption(slide: Slide): CaptionValidationResult {
     );
   }
 
+  // ── Check total character count ────────────────────────────────────────────
+  if (slide.text.length > 130) {
+    errors.push(`Slide ${slide.index}: ${slide.text.length} chars — exceeds 130 char limit.`);
+  }
+
+  // ── Check sentence-ending punctuation (catches LLM fragments) ──────────────
+  if (!/[.!?]$/.test(slide.text.trimEnd())) {
+    errors.push(`Slide ${slide.index}: does not end with sentence-ending punctuation (. ! ?) — likely a truncated fragment.`);
+  }
+
   // ── Check total word count (too long = unreadable in ~10 seconds) ─────────
   if (words.length > 18) {
     errors.push(`Slide ${slide.index}: ${words.length} words — too long. Max is 16.`);

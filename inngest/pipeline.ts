@@ -10,6 +10,7 @@ import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
 import { generateThumbnail } from '@/lib/thumbnailGenerator';
 import { assembleVideo } from '@/lib/videoAssembler';
+import { validateAllCaptions } from '@/lib/captionValidator';
 import { syncAnalytics } from '@/lib/analyticsSync';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
@@ -58,6 +59,13 @@ export const generateHistoryShort = inngest.createFunction(
 
       const topic = await pickUnusedTopic(niche);
       const script = await generateScript(topic, format, niche);
+
+      // Validate captions before spending API budget on images/TTS
+      const captionResult = validateAllCaptions(script.slides.map(s => ({ text: s.text })));
+      if (!captionResult.valid) {
+        throw new Error(`Caption validation failed:\n${captionResult.errors.join('\n')}`);
+      }
+
       const jobId = await db.createJob({ account_id: ACCOUNT_ID, topic, niche, format, status: 'script_ready', script, variant });
       return { script, jobId, format, niche, variant };
     });
