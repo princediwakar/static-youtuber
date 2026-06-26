@@ -1,3 +1,4 @@
+// lib/constants.ts
 import path from 'path';
 
 export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'english_shots';
@@ -8,11 +9,8 @@ export const FORMATS = ['story', 'quiz', 'facts'];
 export const SLIDE_COUNT = 6;
 
 // ─── Model config ─────────────────────────────────────────────────────────────
-// All text generation now runs on Gemini — no separate DeepSeek dependency.
-// Flash-Lite handles topic generation, script writing, and the quality gate.
-// Use Flash for the quality gate if you want stronger reasoning (costs more).
-export const GEMINI_TEXT_MODEL = 'gemini-3.1-flash-lite';       // topic gen + script gen
-export const GEMINI_QUALITY_GATE_MODEL = 'gemini-3.1-flash-lite'; // script scoring (swap to gemini-3.5-flash for higher accuracy)
+export const GEMINI_TEXT_MODEL = 'gemini-3.1-flash-lite';
+export const GEMINI_QUALITY_GATE_MODEL = 'gemini-3.1-flash-lite';
 
 export const IMAGE_MODEL = 'gemini-2.5-flash-image';
 export const IMAGE_MODEL_THUMBNAIL = 'gemini-3.1-flash-image';
@@ -21,13 +19,9 @@ export const IMAGE_ASPECT_RATIO = '9:16';
 export const TTS_MODEL = 'gemini-3.1-flash-tts-preview';
 export const TTS_SAMPLE_RATE = 24000;
 
-// ─── TTS Voice profiles (per niche) ──────────────────────────────────────────
-// Charon is "Informative" — fine, but the system prompt was pushing it into
-// melodrama. We now control tone via the TTS prompt instead of just the voice.
-// Sadaltager ("Knowledgeable") and Orus ("Firm") are better documentary fits.
 export const TTS_VOICE_PROFILES: Record<string, TTSVoiceProfile> = {
   'Geography': {
-    voice: 'Sadaltager',  // Knowledgeable — calm, authoritative
+    voice: 'Sadaltager',
     directorNotes: `
 # AUDIO PROFILE: Documentary Narrator
 ## "Geography Shorts"
@@ -49,7 +43,7 @@ Each slide reads in 3–4 seconds. Never slow enough to feel ponderous.
 Accent: Clear, neutral international English.`,
   },
   'Modern Indian History': {
-    voice: 'Orus',  // Firm — authoritative, serious
+    voice: 'Orus',
     directorNotes: `
 # AUDIO PROFILE: History Narrator  
 ## "Modern Indian History Shorts"
@@ -111,9 +105,10 @@ export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
 export const MUSIC_FILES = ['focus-01.mp3', 'tension-01.mp3', 'ambient-01.mp3'];
 export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/';
 
+// --- FIXED CAPTION MATH ---
 export const CAPTION_FONT_SIZE = 72;
-export const CAPTION_MAX_CHARS_PER_LINE = 15;
-export const CAPTION_MAX_CHARS = 80; // first-pass filter; line-count check is the binding constraint
+export const CAPTION_MAX_CHARS_PER_LINE = 26; // Increased to fit normal words without snapping
+export const CAPTION_MAX_CHARS = 80;          // 3 lines * 26 chars = 78 chars (safe zone)
 export const CAPTION_Y_POSITION = 0.72;
 export const CAPTION_LINE_HEIGHT = 84;
 export const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'Montserrat-Bold.ttf');
@@ -123,14 +118,10 @@ export const THUMBNAIL_HEIGHT = 720;
 export const CLOUDINARY_FOLDER = 'ai-slideshow';
 export const CLOUDINARY_EXPIRE_DAYS = 7;
 
-// ─── Niche profiles: couples niche → aesthetic + tone + format weights ────────
-// This replaces random aesthetic selection and the GDP-only country restriction.
-// Each profile locks in a coherent visual/tonal identity for a channel niche.
 export type NicheProfile = {
   aestheticId: string;
-  toneInstruction: string;   // injected into the script system prompt
+  toneInstruction: string;
   formatWeights: { story: number; facts: number; quiz: number };
-  // Quality threshold for the script gate (0–10). Reject below this.
   minQualityScore: number;
 };
 
@@ -164,13 +155,11 @@ facts and pacing, not theatrical emphasis.`,
   minQualityScore: 5,
 };
 
-// ─── Aesthetics (keyed by id for profile lookup) ─────────────────────────────
 export type Aesthetic = {
   id: string;
   instruction: string;
   imagePrefix: string;
   thumbnailPrefix: string;
-  // Negative prompt — appended to every image prompt to reduce common failures
   imageNegative: string;
 };
 
@@ -191,5 +180,4 @@ export const AESTHETICS: Record<string, Aesthetic> = {
   },
 };
 
-// ─── Script quality gate thresholds ──────────────────────────────────────────
-export const QUALITY_GATE_MAX_RETRIES = 2; // how many times to regenerate before giving up
+export const QUALITY_GATE_MAX_RETRIES = 2;

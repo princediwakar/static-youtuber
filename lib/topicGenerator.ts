@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { GoogleGenAI } from '@google/genai';
 import { query } from './database';
 import { SlideshowScript } from './types';
+import { validateAllCaptions } from './captionValidator';
 import {
   GEMINI_TEXT_MODEL,
   GEMINI_QUALITY_GATE_MODEL,
@@ -15,14 +16,12 @@ import {
   CAPTION_MAX_CHARS_PER_LINE,
 } from './constants';
 
-// ─── Gemini client ─────────────────────────────────────────────────────────────
 function getTextClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
   return new GoogleGenAI({ apiKey });
 }
 
-// ─── Zod schema ───────────────────────────────────────────────────────────────
 const SlideSchema = z.object({
   text: z.string().refine(
     val => val.length <= CAPTION_MAX_CHARS && /[.!?]$/.test(val.trimEnd()),
@@ -40,8 +39,8 @@ const SlideshowScriptSchema = z.object({
   fact_check_and_sources: z.array(z.object({
     claim: z.string(),
     source: z.string(),
-  })).min(1), // structured array instead of a single string — easier to verify
-  visual_world: z.string(), // new: one-sentence visual continuity anchor
+  })).min(1),
+  visual_world: z.string(),
   title: z.string().max(100),
   description: z.string(),
   tags: z.array(z.string()).min(5).max(12),
@@ -53,15 +52,13 @@ const QualityScoreSchema = z.object({
   hook_strength: z.number().min(0).max(10),
   factual_specificity: z.number().min(0).max(10),
   pacing: z.number().min(0).max(10),
-  tone_calibration: z.number().min(0).max(10), // new: penalise melodrama
+  tone_calibration: z.number().min(0).max(10),
   overall: z.number().min(0).max(10),
   issues: z.array(z.string()),
   approved: z.boolean(),
 });
 
 type QualityScore = z.infer<typeof QualityScoreSchema>;
-
-// ─── Topic deduplication ─────────────────────────────────────────────────────
 
 export async function generateTopics(niche: string): Promise<void> {
   const client = getTextClient();
@@ -72,19 +69,17 @@ export async function generateTopics(niche: string): Promise<void> {
   );
   const pastTopics = pastTopicsRes.rows.map(r => r.topic);
 
-  // Removed the "top 10 GDP countries only" restriction — replaced with a
-  // quality/relevance filter that doesn't artificially cap geography content.
   const prompt = `You are an expert content strategist for a YouTube Shorts channel in the "${niche}" niche.
 Generate 20 completely unique, highly engaging, and viral video topics.
 
-TOPIC QUALITY CRITERIA (use these instead of geographic restrictions):
+TOPIC QUALITY CRITERIA:
 - The story has genuine global interest — someone from any country would find it fascinating
 - It can be explained clearly in 60 seconds without specialist knowledge  
 - It involves a real, verifiable, surprising fact or event
 - It has strong visual potential (can be shown, not just told)
-- For Geography: obscure borders, bizarre territories, geographical anomalies, and small or unusual countries are EXCELLENT — don't restrict to large countries
+- For Geography: obscure borders, bizarre territories, geographical anomalies, and small or unusual countries are EXCELLENT.
 
-DO NOT generate any of these previously used topics (or anything too similar):
+DO NOT generate any of these previously used topics:
 ${pastTopics.length > 0 ? pastTopics.join('\n') : 'No past topics yet.'}
 
 Output ONLY valid JSON in this format, no markdown:
@@ -152,8 +147,6 @@ export async function pickUnusedTopic(niche: string): Promise<string> {
   return result.rows[0].topic;
 }
 
-// ─── Format-weighted selection ────────────────────────────────────────────────
-
 export function pickWeightedFormat(niche: string): string {
   const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
   const weights = profile.formatWeights;
@@ -162,8 +155,6 @@ export function pickWeightedFormat(niche: string): string {
   if (rand < weights.facts + weights.story) return 'story';
   return 'quiz';
 }
-
-// ─── System prompt factory ─────────────────────────────────────────────────────
 
 function getSystemPrompt(
   niche: string,
@@ -178,106 +169,62 @@ ${toneInstruction}
 
 STORYTELLING MECHANICS:
 1. COGNITIVE DISSONANCE HOOK: Slide 1 must present two facts that cannot logically coexist but do.
-   State it as a bizarre anomaly. Do NOT ask a question. Do NOT use the words "mind-blowing" or "insane".
-2. EMOTIONAL ARC:
-   - Wonder/Awe: Opening hook and final reveal
-   - Tension: Middle slides — raise the stakes through FACTS, not adjectives
-3. EXTREME SPECIFICITY: NEVER use vague words like "many" or "a long time".
-   ALWAYS use exact numbers ("47 tons", "800 meters", "1962").
-4. CLEAN ENDING: Every slide 6 must end with a complete, satisfying sentence.
-   No sentence fragments. No cliffhangers. The viewer must feel the video is finished.
+2. EMOTIONAL ARC: Tension built through exact FACTS, not adjectives.
+3. EXTREME SPECIFICITY: NEVER use vague words like "many". Use exact numbers.
+4. CLEAN ENDING: Every slide 6 must end with a complete, satisfying sentence. No fragments.
 
-VISUAL WORLD MANDATE (critical for image continuity):
+VISUAL WORLD MANDATE:
 Before writing any slide, define a one-sentence "visual world" that describes the unified
-aesthetic, lighting, and color palette that ALL six images must share. Then write every
-image_prompt as if it's a shot from inside that world. Include this in the "visual_world" field.
+aesthetic, lighting, and color palette that ALL six images must share.
 
 FACT VERIFICATION MANDATE:
-Every factual claim must be verifiable. Output sources as a structured array in
-"fact_check_and_sources" — each entry has a "claim" field and a "source" field.
-Never present fabricated stories as real events.
+Every factual claim must be verifiable. Output sources as a structured array in "fact_check_and_sources".
 
-AUDIO TAGS: Use these sparingly from the slide's audio_tag field:
-[serious], [curious], [amazed], [whispers], [intense]
-The tag sets the delivery for the entire slide. Default is [serious].
-Do NOT stack multiple tags or overuse [intense] — most slides should be [serious] or [curious].
-
-Output ONLY valid JSON. No markdown. No code fences. No trailing commas.
-
-Schema:
-{
-  "fact_check_and_sources": [{"claim": "string", "source": "string"}],
-  "visual_world": "string (one sentence describing the unified visual aesthetic for all 6 slides)",
-  "title": "string (max 100 chars)",
-  "description": "string",
-  "tags": ["string"],
-  "slides": [
-    {
-      "text": "string (narration, max 10 words)",
-      "image_prompt": "string (visual scene description — no text in image, consistent with visual_world)",
-      "audio_tag": "string (e.g. [serious], [curious], [amazed])"
-    }
-  ],
-  "thumbnailPrompt": "string"
-}
-
-CAPTION CONSTRAINT (HARD LIMIT): Each slide text must fit in 3 lines at ${CAPTION_MAX_CHARS_PER_LINE} characters per line — roughly ${CAPTION_MAX_CHARS} characters total. Text longer than ${CAPTION_MAX_CHARS} characters will be rejected. Be ruthless with word count. No slide over 10 words. Each slide reads in 2–3 seconds. Slides 1+2 combined must read aloud in under 6 seconds.
+CAPTION CONSTRAINT (HARD LIMIT):
+Each slide's text MUST fit inside 3 rendering lines. You have a maximum of ${CAPTION_MAX_CHARS} characters TOTAL per slide. Do not exceed 10 words per slide. Be ruthless with word count. Slides 1+2 combined must read aloud in under 6 seconds.
 
 IMAGE PROMPT RULES:
 - Describe only the visual scene. No text in image, ever.
 - Hyper-specific: exact lighting, weather, textures, camera angle.
 - CONSISTENT AESTHETIC: ${aestheticInstruction}
-- NEGATIVE: avoid text, watermarks, logos, cluttered compositions.
-- Slide 1: Wide establishing shot of the subject.
-- Slide 2: Zoom into a rare, specific historical detail or mechanism.
-- Slide 6: Wide, breathtaking resolution shot.
-- TAGS: include #shorts and 4 specific niche tags.`;
+
+Output ONLY valid JSON. No markdown. No code fences.`;
 
   let formatRules = '';
 
   if (format === 'quiz') {
     formatRules = `
 SLIDE STRUCTURE — MCQ QUIZ (6 slides):
-Slide 1 — HOOK: Cognitive dissonance hook. No question mark. Present the anomaly.
-Slide 2 — CLUE 1: An interesting, slightly obscure hint. Audio: [curious].
+Slide 1 — HOOK: Cognitive dissonance hook. No question mark.
+Slide 2 — CLUE 1: An interesting hint. Audio: [curious].
 Slide 3 — CLUE 2: Second hint. Build quiet tension.
-Slide 4 — CLUE 3: More obvious hint. Maintain calm.
-Slide 5 — TENSION: One sentence that raises the stakes through facts.
-Slide 6 — REVEAL: Reveal the answer fully. One stunning context fact.
-           End with a complete, satisfying sentence. No fragments.`;
+Slide 4 — CLUE 3: More obvious hint.
+Slide 5 — TENSION: One sentence raising stakes.
+Slide 6 — REVEAL: Final answer and stunning context fact.`;
 
   } else if (format === 'facts') {
     formatRules = `
 SLIDE STRUCTURE — TOP FACTS (6 slides):
-Slide 1 — HOOK: Cognitive dissonance hook. No question mark.
-Slide 2 — FACT 3: Interesting but not the wildest. Zoom in on a specific detail. Audio: [curious].
-Slide 3 — SECRET: A dark or hidden layer of Fact 3. Narrator is quiet, not dramatic.
-Slide 4 — FACT 2: Weirder fact. Let the specificity do the work.
-Slide 5 — FACT 1: The most surprising fact. One sentence. Let it land.
-Slide 6 — PAYOFF: Final resolution. Full payoff — no unresolved threads.
-           End with a complete, satisfying sentence. No fragments.`;
+Slide 1 — HOOK: Cognitive dissonance hook.
+Slide 2 — FACT 3: Zoom in on specific detail. Audio: [curious].
+Slide 3 — SECRET: A hidden layer.
+Slide 4 — FACT 2: Weirder fact.
+Slide 5 — FACT 1: The most surprising fact.
+Slide 6 — PAYOFF: Final resolution. No unresolved threads.`;
 
   } else {
-    // story — NO mandatory loop, clean ending required
     formatRules = `
 SLIDE STRUCTURE — STORY (6 slides):
-Slide 1 — HOOK: Cognitive dissonance hook. Extreme curiosity gap. No question mark.
-Slide 2 — SETUP: Exact stakes, numbers, dates, names. Zoom into a rare detail. Audio: [curious].
-Slide 3 — TURNING POINT: The moment things go wrong or a secret is revealed.
-Slide 4 — THE TRUTH: The twist happens visually and narratively.
-Slide 5 — EXPLANATION: Why/how — plain, punchy English. No jargon.
-Slide 6 — COMPLETE PAYOFF: Resolve the story fully in one or two sentences.
-HARD RULE: The last word of Slide 6 must be a complete sentence ending with a full stop.
-NEVER end with a subordinate clause, a relative clause starting with "where" or "through",
-or any fragment designed to loop back to Slide 1. That is ONLY for quiz/facts format.
-Example of WRONG ending: "...through a vision where the artist"
-Example of CORRECT ending: "Today, his paintings hang in temples across India."`;
+Slide 1 — HOOK: Cognitive dissonance hook.
+Slide 2 — SETUP: Exact stakes, numbers, dates. Audio: [curious].
+Slide 3 — TURNING POINT: Secret revealed.
+Slide 4 — THE TRUTH: Twist happens visually and narratively.
+Slide 5 — EXPLANATION: Why/how — punchy English. No jargon.
+Slide 6 — COMPLETE PAYOFF: Resolve story. The last word must end with a full stop.`;
   }
 
   return base + '\n\n' + formatRules;
 }
-
-// ─── Normalise LLM field names ─────────────────────────────────────────────────
 
 function normalizeFieldNames(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(normalizeFieldNames);
@@ -295,8 +242,6 @@ function normalizeFieldNames(obj: unknown): unknown {
   return obj;
 }
 
-// ─── Script quality gate ──────────────────────────────────────────────────────
-
 async function scoreScript(
   script: z.infer<typeof SlideshowScriptSchema>,
   niche: string,
@@ -312,14 +257,9 @@ ${JSON.stringify({ title: script.title, slides: script.slides.map(s => s.text) }
 
 SCORING RUBRIC:
 - hook_strength (0-10): Does Slide 1 create genuine cognitive dissonance without being melodramatic?
-- factual_specificity (0-10): Are exact numbers, dates, and names used? Zero vague words like "many"?
-- pacing (0-10): Do slides 1+2 feel fast? Does each slide flow naturally to the next?
-- tone_calibration (0-10): Is the language calm and authoritative (10) or theatrical/sensationalist (0)?
-  Penalise: "mind-blowing", "insane", "you won't believe", excessive drama, cliffhanger on story format.
-
-- overall: average of the four scores (calculated by you)
-- issues: list specific problems as strings (empty array if none)
-- approved: true if overall >= ${minScore}, false otherwise
+- factual_specificity (0-10): Exact numbers, dates, names?
+- pacing (0-10): Do slides flow fast and naturally?
+- tone_calibration (0-10): Calm and authoritative (10) or theatrical/sensationalist (0)?
 
 Output ONLY valid JSON, no markdown:
 {
@@ -345,8 +285,6 @@ Output ONLY valid JSON, no markdown:
   return QualityScoreSchema.parse(parsed);
 }
 
-// ─── Script generation (with quality gate + retry) ────────────────────────────
-
 export async function generateScript(
   topic: string,
   format: string,
@@ -354,30 +292,19 @@ export async function generateScript(
 ): Promise<SlideshowScript> {
   const client = getTextClient();
 
-  // Resolve niche profile → locked aesthetic + tone + quality threshold
   const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
   const aesthetic = AESTHETICS[profile.aestheticId] ?? Object.values(AESTHETICS)[0];
   const toneInstruction = profile.toneInstruction;
   const minQualityScore = profile.minQualityScore;
-
-  console.log(`[TopicGenerator] Niche: "${niche}" → Aesthetic: ${aesthetic.id}`);
 
   const systemPrompt = getSystemPrompt(niche, format, aesthetic.instruction, toneInstruction);
 
   let lastScore: QualityScore | null = null;
 
   for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      console.log(`[TopicGenerator] Retry ${attempt}/${QUALITY_GATE_MAX_RETRIES} — issues: ${lastScore?.issues.join(', ')}`);
-    }
-
-    // Build user prompt — on retries, include the issues from the last attempt
     const userContent = attempt === 0
       ? `Write a viral YouTube Shorts script about this ${niche} topic: ${topic}`
-      : `Write a viral YouTube Shorts script about this ${niche} topic: ${topic}
-
-CRITICAL — Fix these issues from the previous attempt:
-${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
+      : `Write a viral YouTube Shorts script about this ${niche} topic: ${topic}\n\nCRITICAL — Fix these issues from the previous attempt:\n${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
 
     const response = await client.models.generateContent({
       model: GEMINI_TEXT_MODEL,
@@ -385,26 +312,21 @@ ${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
       config: {
         systemInstruction: systemPrompt,
         responseMimeType: 'application/json',
-        temperature: attempt === 0 ? 0.85 : 0.75, // slightly lower temp on retries
+        temperature: attempt === 0 ? 0.85 : 0.75, 
       },
     });
 
-    if (!response.candidates?.[0]) throw new Error('Gemini returned no candidates');
-
-    const raw = response.candidates[0].content?.parts?.[0]?.text;
+    const raw = response.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!raw) throw new Error('Gemini returned empty content for script');
 
     let parsed: unknown;
     try {
       let cleanRaw = raw.trim();
-      if (cleanRaw.startsWith('```json')) {
-        cleanRaw = cleanRaw.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-      } else if (cleanRaw.startsWith('```')) {
-        cleanRaw = cleanRaw.replace(/^```\n?/, '').replace(/\n?```$/, '');
-      }
+      if (cleanRaw.startsWith('```json')) cleanRaw = cleanRaw.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+      else if (cleanRaw.startsWith('```')) cleanRaw = cleanRaw.replace(/^```\n?/, '').replace(/\n?```$/, '');
       parsed = JSON.parse(cleanRaw);
     } catch (err: any) {
-      throw new Error(`Gemini output is not valid JSON. Parse Error: ${err.message}. Raw: ${raw.substring(0, 200)}`);
+      throw new Error(`Parse Error: ${err.message}.`);
     }
 
     parsed = normalizeFieldNames(parsed);
@@ -416,29 +338,30 @@ ${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
       if (zodErr instanceof z.ZodError) {
         const issues = zodErr.issues.map(i => `${i.path.join('.')}: ${i.message}`);
         if (attempt < QUALITY_GATE_MAX_RETRIES) {
-          console.warn(`[TopicGenerator] Zod validation failed (attempt ${attempt + 1}), retrying with feedback:`, issues);
           lastScore = { issues, approved: false } as QualityScore;
           continue;
         }
-        throw new Error(`Script validation failed after all retries:\n${issues.join('\n')}`);
+        throw new Error(`Script validation failed:\n${issues.join('\n')}`);
       }
       throw zodErr;
     }
 
-    // ── Quality gate ──────────────────────────────────────────────────────────
+    // --- NEW: In-loop Caption Validation ---
+    const captionValidation = validateAllCaptions(validated.slides);
+    if (!captionValidation.valid) {
+      if (attempt < QUALITY_GATE_MAX_RETRIES) {
+        console.warn(`[TopicGenerator] Caption validation failed (attempt ${attempt + 1}), forcing rewrite. Issues:`, captionValidation.errors);
+        lastScore = { issues: captionValidation.errors, approved: false } as QualityScore;
+        continue;
+      }
+      throw new Error(`Caption validation failed after all retries:\n${captionValidation.errors.join('\n')}`);
+    }
+
     try {
       const score = await scoreScript(validated, niche, minQualityScore);
-      console.log(`[QualityGate] Attempt ${attempt + 1}: overall=${score.overall.toFixed(1)}, approved=${score.approved}`);
-
       if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
-        if (!score.approved) {
-          console.warn(`[QualityGate] Max retries reached — publishing best effort (score: ${score.overall.toFixed(1)})`);
-        }
-
-        // ── Assemble final script ─────────────────────────────────────────────
         return {
           ...validated,
-          // Flatten fact_check_and_sources back to a readable string for storage
           fact_check_and_sources: validated.fact_check_and_sources
             .map(f => `${f.claim} → ${f.source}`)
             .join('\n'),
@@ -446,20 +369,15 @@ ${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
           description: `${validated.description}\n\n[Aesthetic: ${aesthetic.id}]\n\n${MUSIC_ATTRIBUTION}`,
           slides: validated.slides.map(slide => ({
             ...slide,
-            // Visual world prefix anchors continuity; aesthetic prefix sets style
             image_prompt: `${aesthetic.imagePrefix}${slide.image_prompt} | Visual world: ${validated.visual_world} | Avoid: ${aesthetic.imageNegative}`,
           })),
           thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt} | Avoid: ${aesthetic.imageNegative}`,
         };
       }
-
       lastScore = score;
     } catch (gateErr) {
-      // If the quality gate itself fails, don't block publishing
-      console.warn(`[QualityGate] Scoring failed (attempt ${attempt + 1}):`, gateErr);
       break;
     }
   }
-
   throw new Error('Script generation failed after all retries');
 }
