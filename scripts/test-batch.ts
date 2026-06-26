@@ -9,10 +9,10 @@ async function main() {
   console.log('Testing Batch API for Image and TTS...');
   
   const imageBatch = await ai.batches.create({
-    model: 'gemini-2.5-flash-image',
+    model: 'gemini-3.1-flash-image',
     src: [{
       contents: [{ role: 'user', parts: [{ text: 'A tiny cute kitten sitting in a mug.' }] }],
-      config: { responseModalities: ['IMAGE'] },
+      config: { responseModalities: ['TEXT', 'IMAGE'] },
     }],
     config: { displayName: `test-images-${Date.now()}` },
   });

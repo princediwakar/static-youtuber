@@ -9,6 +9,7 @@ export const FORMATS = ['story', 'quiz', 'facts'];
 export const SLIDE_COUNT = 6; 
 
 export const IMAGE_MODEL = 'gemini-2.5-flash-image';
+export const IMAGE_MODEL_THUMBNAIL = 'gemini-3.1-flash-image';
 export const IMAGE_ASPECT_RATIO = '9:16';
 
 export const TTS_MODEL = 'gemini-3.1-flash-tts-preview';

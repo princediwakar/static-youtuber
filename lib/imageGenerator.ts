@@ -178,23 +178,27 @@ export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Bu
 async function generateSingleImage(prompt: string): Promise<Buffer> {
   const client = getClient();
 
-  const response = await client.models.generateImages({
+  const response = await client.models.generateContent({
     model: IMAGE_MODEL,
-    prompt,
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
     config: {
-      aspectRatio: IMAGE_ASPECT_RATIO,
-      numberOfImages: 1,
+      responseModalities: ['TEXT', 'IMAGE'],
+      imageConfig: {
+        aspectRatio: IMAGE_ASPECT_RATIO,
+      },
     },
   });
 
-  const imageData = response.generatedImages?.[0]?.image?.imageBytes;
+  const imagePart = response.candidates?.[0]?.content?.parts?.find(
+    (p: any) => p.inlineData?.mimeType?.startsWith('image/')
+  );
+  const imageData = imagePart?.inlineData?.data;
   if (!imageData) {
-    const safety = response.generatedImages?.[0]?.safetyAttributes;
-    const reason = safety ? JSON.stringify(safety) : 'no image data in response';
-    throw new Error(`Image model returned no image data: ${reason}`);
+    const finishReason = response.candidates?.[0]?.finishReason;
+    throw new Error(`Image model returned no image data: finishReason=${finishReason ?? 'unknown'}`);
   }
 
-  const rawBuffer = Buffer.from(imageData, 'base64');
+  const rawBuffer = Buffer.from(imageData as string, 'base64');
 
   return sharp(rawBuffer)
     .resize(VIDEO_WIDTH, VIDEO_HEIGHT, { fit: 'cover', position: 'centre' })

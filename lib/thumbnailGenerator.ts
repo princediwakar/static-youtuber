@@ -1,7 +1,7 @@
 // Path: lib/thumbnailGenerator.ts
 import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
-import { THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, IMAGE_MODEL } from './constants';
+import { THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, IMAGE_MODEL_THUMBNAIL } from './constants';
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -90,19 +90,24 @@ export async function generateThumbnail(title: string, thumbnailPrompt: string):
 
   const fullPrompt = thumbnailPrompt;
 
-  const response = await client.models.generateImages({
-    model: IMAGE_MODEL,
-    prompt: fullPrompt,
+  const response = await client.models.generateContent({
+    model: IMAGE_MODEL_THUMBNAIL,
+    contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
     config: {
-      aspectRatio: '16:9',
-      numberOfImages: 1,
+      responseModalities: ['TEXT', 'IMAGE'],
+      imageConfig: {
+        aspectRatio: '16:9',
+      },
     },
   });
 
-  const imageData = response.generatedImages?.[0]?.image?.imageBytes;
+  const imagePart = response.candidates?.[0]?.content?.parts?.find(
+    (p: any) => p.inlineData?.mimeType?.startsWith('image/')
+  );
+  const imageData = imagePart?.inlineData?.data;
   if (!imageData) throw new Error('Image model returned no thumbnail data');
 
-  const rawBuffer = Buffer.from(imageData, 'base64');
+  const rawBuffer = Buffer.from(imageData as string, 'base64');
   const withText = await addTextOverlay(rawBuffer, title);
 
   console.log(`[Thumbnail] Generated: ${(withText.length / 1024).toFixed(0)} KB`);

@@ -68,7 +68,7 @@ export const generateHistoryShort = inngest.createFunction(
         ...script.slides.map((slide: any, i: number) => ({
           key: `image-${i}`,
           contents: [{ role: 'user', parts: [{ text: slide.image_prompt }] }],
-          config: { responseModalities: ['IMAGE', 'TEXT'] },
+          config: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '9:16' } },
         })),
         // 9 TTS requests
         ...script.slides.map((slide: any, i: number) => ({
@@ -175,7 +175,7 @@ export const generateHistoryShort = inngest.createFunction(
           const syncResp = await ai.models.generateContent({
             model: IMAGE_MODEL,
             contents: [{ role: 'user', parts: [{ text: imgPrompt }] }],
-            config: { responseModalities: ['IMAGE', 'TEXT'] },
+            config: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '9:16' } },
           });
           const syncPart = syncResp.candidates?.[0]?.content?.parts
             ?.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
