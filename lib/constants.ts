@@ -44,10 +44,10 @@ export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
 export const MUSIC_FILES = ['focus-01.mp3', 'tension-01.mp3', 'ambient-01.mp3'];
 export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/';
 
-export const CAPTION_FONT_SIZE = 92; 
+export const CAPTION_FONT_SIZE = 80;
 export const CAPTION_MAX_CHARS_PER_LINE = 18;
-export const CAPTION_Y_POSITION = 0.80; 
-export const CAPTION_LINE_HEIGHT = 110;
+export const CAPTION_Y_POSITION = 0.80;
+export const CAPTION_LINE_HEIGHT = 96;
 export const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'Montserrat-Bold.ttf');
 
 export const THUMBNAIL_WIDTH = 1280;
