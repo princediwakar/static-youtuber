@@ -1,7 +1,7 @@
 // Path: lib/thumbnailGenerator.ts
 import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
-import { IMAGE_MODEL, THUMBNAIL_STYLE_PREFIX, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT } from './constants';
+import { THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, IMAGE_MODEL } from './constants';
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -80,7 +80,7 @@ async function addTextOverlay(imageBuffer: Buffer, title: string): Promise<Buffe
 
 /**
  * Generates a thumbnail:
- * 1. Calls Imagen 3 with the thumbnailPrompt
+ * 1. Calls Gemini Image model with the thumbnailPrompt
  * 2. Resizes to 1280×720 (YouTube thumbnail spec)
  * 3. Overlays the video title as bold text
  */
@@ -88,10 +88,10 @@ export async function generateThumbnail(title: string, thumbnailPrompt: string):
   console.log(`[Thumbnail] Generating for: "${title}"`);
   const client = getClient();
 
-  const fullPrompt = `${THUMBNAIL_STYLE_PREFIX} ${thumbnailPrompt}`;
+  const fullPrompt = thumbnailPrompt;
 
   const response = await client.models.generateImages({
-    model: 'imagen-4.0-fast-generate-001',
+    model: IMAGE_MODEL,
     prompt: fullPrompt,
     config: {
       aspectRatio: '16:9',
@@ -100,7 +100,7 @@ export async function generateThumbnail(title: string, thumbnailPrompt: string):
   });
 
   const imageData = response.generatedImages?.[0]?.image?.imageBytes;
-  if (!imageData) throw new Error('Imagen 3 returned no thumbnail data');
+  if (!imageData) throw new Error('Image model returned no thumbnail data');
 
   const rawBuffer = Buffer.from(imageData, 'base64');
   const withText = await addTextOverlay(rawBuffer, title);
