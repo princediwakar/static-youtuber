@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "trigger": "npx tsx scripts/trigger.ts"
+    "trigger": "npx tsx scripts/trigger.ts",
+    "trigger:prod": "npx tsx scripts/trigger-prod.ts"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
