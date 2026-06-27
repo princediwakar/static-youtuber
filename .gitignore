@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code (local, may contain secrets)
+/.claude/
+
+# neon cli state
+/.neon
