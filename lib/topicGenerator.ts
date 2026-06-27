@@ -212,8 +212,8 @@ Output ONLY valid JSON in this format, no markdown:
   }
 }
 
-export async function pickUnusedTopic(niche: string, accountId: string): Promise<string> {
-  let result = await query<{ topic: string }>(`
+export async function reserveTopic(niche: string, accountId: string): Promise<{ id: number; topic: string }> {
+  let result = await query<{ id: number; topic: string }>(`
     UPDATE slideshow_topics
     SET used = TRUE, used_at = NOW()
     WHERE id = (
@@ -222,14 +222,14 @@ export async function pickUnusedTopic(niche: string, accountId: string): Promise
       LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING topic
+    RETURNING id, topic
   `, [niche, accountId]);
 
   if (result.rows.length === 0) {
     console.log(`[TopicGenerator] No unused topics for ${niche}/${accountId}, generating more...`);
     await generateTopics(niche, accountId);
 
-    result = await query<{ topic: string }>(`
+    result = await query<{ id: number; topic: string }>(`
       UPDATE slideshow_topics
       SET used = TRUE, used_at = NOW()
       WHERE id = (
@@ -238,13 +238,25 @@ export async function pickUnusedTopic(niche: string, accountId: string): Promise
         LIMIT 1
         FOR UPDATE SKIP LOCKED
       )
-      RETURNING topic
+      RETURNING id, topic
     `, [niche, accountId]);
 
     if (result.rows.length === 0) throw new Error(`Failed to generate new topics for ${niche}/${accountId}`);
   }
 
-  return result.rows[0].topic;
+  return result.rows[0];
+}
+
+export async function releaseTopic(id: number): Promise<void> {
+  await query(
+    `UPDATE slideshow_topics SET used = FALSE, used_at = NULL WHERE id = $1`,
+    [id]
+  );
+}
+
+export async function pickUnusedTopic(niche: string, accountId: string): Promise<string> {
+  const { topic } = await reserveTopic(niche, accountId);
+  return topic;
 }
 
 export function pickFormatTemplate(niche: string): FormatTemplate {
@@ -408,8 +420,9 @@ export async function generateScript(
   const toneInstruction = profile.toneInstruction;
   const minQualityScore = profile.minQualityScore;
 
-  // Pick the topic and format template
-  const topic = await pickUnusedTopic(niche, accountId);
+  // Reserve topic atomically — released on failure to avoid burning topics on retry
+  const reserved = await reserveTopic(niche, accountId);
+  const topic = reserved.topic;
   const formatTemplate = pickFormatTemplate(niche);
 
   const systemPrompt = getSystemPrompt(niche, aesthetic.instruction, toneInstruction, formatTemplate);
@@ -421,94 +434,99 @@ Write the script now. Follow every rule in the system prompt exactly.`;
 
   let lastScore: QualityScore | null = null;
 
-  for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
-    const userContent = attempt === 0
-      ? userPrompt
-      : `${userPrompt}\n\nCRITICAL — Fix these issues from the previous attempt:\n${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
+  try {
+    for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
+      const userContent = attempt === 0
+        ? userPrompt
+        : `${userPrompt}\n\nCRITICAL — Fix these issues from the previous attempt:\n${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
 
-    const response = await client.models.generateContent({
-      model: GEMINI_TEXT_MODEL,
-      contents: [{ role: 'user', parts: [{ text: userContent }] }],
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: 'application/json',
-        responseSchema: GeminiScriptSchema,
-        temperature: attempt === 0 ? 0.85 : 0.75,
-      },
-    });
+      const response = await client.models.generateContent({
+        model: GEMINI_TEXT_MODEL,
+        contents: [{ role: 'user', parts: [{ text: userContent }] }],
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: 'application/json',
+          responseSchema: GeminiScriptSchema,
+          temperature: attempt === 0 ? 0.85 : 0.75,
+        },
+      });
 
-    const raw = response.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) throw new Error('Gemini returned empty content for script');
+      const raw = response.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!raw) throw new Error('Gemini returned empty content for script');
 
-    let parsed: unknown;
-    try {
-      let cleanRaw = raw.trim();
-      if (cleanRaw.startsWith('```')) {
-        cleanRaw = cleanRaw.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+      let parsed: unknown;
+      try {
+        let cleanRaw = raw.trim();
+        if (cleanRaw.startsWith('```')) {
+          cleanRaw = cleanRaw.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+        }
+        const bracketMatch = cleanRaw.match(/\{[\s\S]*\}/);
+        if (bracketMatch) cleanRaw = bracketMatch[0];
+        parsed = JSON.parse(cleanRaw);
+      } catch (err: any) {
+        throw new Error(`Parse Error: ${err.message}.`);
       }
-      const bracketMatch = cleanRaw.match(/\{[\s\S]*\}/);
-      if (bracketMatch) cleanRaw = bracketMatch[0];
-      parsed = JSON.parse(cleanRaw);
-    } catch (err: any) {
-      throw new Error(`Parse Error: ${err.message}.`);
-    }
 
-    let validated: z.infer<typeof SlideshowScriptSchema>;
-    try {
-      validated = SlideshowScriptSchema.parse(parsed);
-    } catch (zodErr) {
-      if (zodErr instanceof z.ZodError) {
-        const issues = zodErr.issues.map(i => `${i.path.join('.')}: ${i.message}`);
+      let validated: z.infer<typeof SlideshowScriptSchema>;
+      try {
+        validated = SlideshowScriptSchema.parse(parsed);
+      } catch (zodErr) {
+        if (zodErr instanceof z.ZodError) {
+          const issues = zodErr.issues.map(i => `${i.path.join('.')}: ${i.message}`);
+          if (attempt < QUALITY_GATE_MAX_RETRIES) {
+            lastScore = { issues, approved: false } as QualityScore;
+            continue;
+          }
+          throw new Error(`Script validation failed:\n${issues.join('\n')}`);
+        }
+        throw zodErr;
+      }
+
+      // --- In-loop Caption Validation ---
+      const captionValidation = validateAllCaptions(validated.shots.map(s => ({ text: s.tts_text })));
+      if (!captionValidation.valid) {
         if (attempt < QUALITY_GATE_MAX_RETRIES) {
-          lastScore = { issues, approved: false } as QualityScore;
+          console.warn(`[TopicGenerator] Caption validation failed (attempt ${attempt + 1}), forcing rewrite. Issues:`, captionValidation.errors);
+          lastScore = { issues: captionValidation.errors, approved: false } as QualityScore;
           continue;
         }
-        throw new Error(`Script validation failed:\n${issues.join('\n')}`);
+        throw new Error(`Caption validation failed after all retries:\n${captionValidation.errors.join('\n')}`);
       }
-      throw zodErr;
-    }
 
-    // --- In-loop Caption Validation ---
-    const captionValidation = validateAllCaptions(validated.shots.map(s => ({ text: s.tts_text })));
-    if (!captionValidation.valid) {
-      if (attempt < QUALITY_GATE_MAX_RETRIES) {
-        console.warn(`[TopicGenerator] Caption validation failed (attempt ${attempt + 1}), forcing rewrite. Issues:`, captionValidation.errors);
-        lastScore = { issues: captionValidation.errors, approved: false } as QualityScore;
-        continue;
+      try {
+        const score = await scoreScript(validated, niche, minQualityScore);
+        if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
+          return {
+            script: {
+              title: validated.title,
+              description: `${validated.description}\n\n[Aesthetic: ${aesthetic.id}]`,
+              visual_world: validated.visual_world,
+              format_template: validated.format_template,
+              fact_check_and_sources: validated.fact_check_and_sources
+                .map(f => `${f.claim} → ${f.source}`)
+                .join('\n'),
+              tags: validated.tags,
+              shots: validated.shots.map(shot => ({
+                id: shot.id,
+                visual_prompt: `${aesthetic.imagePrefix}${shot.visual_prompt} | Visual world: ${validated.visual_world} | Avoid: ${aesthetic.imageNegative}`,
+                tts_text: shot.tts_text,
+                audio_instruction: shot.audio_instruction,
+                is_conclusion: shot.is_conclusion,
+              })),
+              thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt} | Avoid: ${aesthetic.imageNegative}`,
+              hook_intro: validated.hook_intro,
+            },
+            topic,
+          };
+        }
+        lastScore = score;
+      } catch (gateErr) {
+        break;
       }
-      throw new Error(`Caption validation failed after all retries:\n${captionValidation.errors.join('\n')}`);
     }
-
-    try {
-      const score = await scoreScript(validated, niche, minQualityScore);
-      if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
-        return {
-          script: {
-            title: validated.title,
-            description: `${validated.description}\n\n[Aesthetic: ${aesthetic.id}]`,
-            visual_world: validated.visual_world,
-            format_template: validated.format_template,
-            fact_check_and_sources: validated.fact_check_and_sources
-              .map(f => `${f.claim} → ${f.source}`)
-              .join('\n'),
-            tags: validated.tags,
-            shots: validated.shots.map(shot => ({
-              id: shot.id,
-              visual_prompt: `${aesthetic.imagePrefix}${shot.visual_prompt} | Visual world: ${validated.visual_world} | Avoid: ${aesthetic.imageNegative}`,
-              tts_text: shot.tts_text,
-              audio_instruction: shot.audio_instruction,
-              is_conclusion: shot.is_conclusion,
-            })),
-            thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt} | Avoid: ${aesthetic.imageNegative}`,
-            hook_intro: validated.hook_intro,
-          },
-          topic,
-        };
-      }
-      lastScore = score;
-    } catch (gateErr) {
-      break;
-    }
+    throw new Error('Script generation failed after all retries');
+  } catch (err) {
+    await releaseTopic(reserved.id);
+    throw err;
   }
-  throw new Error('Script generation failed after all retries');
 }
