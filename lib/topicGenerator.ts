@@ -24,8 +24,6 @@ function getTextClient(): GoogleGenAI {
   return new GoogleGenAI({ apiKey });
 }
 
-const BANNED_WORDS = ['many', 'several', 'a lot', 'huge', 'massive', 'significant', 'various', 'some', 'often', 'usually', 'sometimes', 'generally', 'most', 'few', 'countless', 'numerous', 'unthinkable', 'unprecedented', 'shocking', 'insane', 'crazy', 'mind-blowing', 'game-changing', 'revolutionary', 'subscribe', 'like and', 'comment below', 'follow', 'link in bio', 'pinned comment', 'thanks for watching'];
-
 const BANNED_END_PUNCTUATION = ['.', '!', '?', ':', ';', ','];
 
 const ShotSchema = z.object({
@@ -33,10 +31,7 @@ const ShotSchema = z.object({
   visual_prompt: z.string()
     .min(30, 'Image prompt must be at least 30 characters — describe lighting, camera angle, colors, textures')
     .max(600, 'Image prompt must be ≤600 chars')
-    .refine(val => {
-      const cleaned = val.toLowerCase().replace(/\bno text\b/gi, '').replace(/\bwithout text\b/gi, '').replace(/\bfree of text\b/gi, '');
-      return !cleaned.includes('text');
-    }, {
+    .refine(val => !/\btext\b/.test(val.toLowerCase()), {
       message: 'Image prompt must not contain the word "text" — no text in images',
     }),
   tts_text: z.string()
@@ -45,9 +40,6 @@ const ShotSchema = z.object({
     })
     .refine(t => t.split(' ').length <= 12, 'Soft cap: 12 words max per shot')
     .refine(t => t.split(' ').length >= 3, 'Min 3 words per shot')
-    .refine(val => !BANNED_WORDS.some(w => val.toLowerCase().includes(w)), {
-      message: 'Shot text contains a banned vague/filler word',
-    })
     .refine(val => val.trim() === val, {
       message: 'Shot text must not have leading or trailing whitespace',
     }),
@@ -60,7 +52,7 @@ const SlideshowScriptSchema = z.object({
     claim: z.string().min(10, 'Each fact claim must be at least 10 characters — write a full sentence'),
     source: z.string().min(5, 'Each source must be at least 5 characters — name the publication, study, or document'),
   })).min(3, 'At least 3 sourced factual claims required'),
-  visual_world: z.enum(['vector', 'dossier', 'dark_cinematic', 'tactical']),
+  visual_world: z.enum(['vector', 'dossier', 'dark-cinematic', 'tactical']),
   format_template: z.enum(['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST']),
   title: z.string()
     .min(5, 'Title must be at least 5 characters')
@@ -75,16 +67,16 @@ const SlideshowScriptSchema = z.object({
     .refine(val => val === val.toLowerCase(), 'Tags must be lowercase')
     .refine(val => !val.includes(' '), 'Tags must not contain spaces — use hyphens'),
   ).min(5).max(12),
-  shots: z.array(ShotSchema).min(12, 'Minimum 12 shots required').max(18, 'Maximum 18 shots allowed'),
-  thumbnailPrompt: z.string()
-    .min(30, 'Thumbnail prompt must be at least 30 characters')
-    .max(500, 'Thumbnail prompt must be ≤500 chars'),
   hook_intro: z.string()
     .min(3, 'hook_intro must be at least 3 characters')
     .max(40, 'hook_intro must be ≤40 chars')
     .refine(val => !BANNED_END_PUNCTUATION.some(p => val.trim().endsWith(p)), {
       message: 'hook_intro must not end with punctuation — it is the first words of shot 1',
     }),
+  shots: z.array(ShotSchema).min(12, 'Minimum 12 shots required').max(18, 'Maximum 18 shots allowed'),
+  thumbnailPrompt: z.string()
+    .min(30, 'Thumbnail prompt must be at least 30 characters')
+    .max(500, 'Thumbnail prompt must be ≤500 chars'),
 }).refine(data => {
   const conclusionShots = data.shots.filter(s => s.is_conclusion);
   return conclusionShots.length === 1;
@@ -137,11 +129,12 @@ const GeminiScriptSchema: Schema = {
         required: ['claim', 'source'],
       },
     },
-    visual_world: { type: Type.STRING, description: 'The unified aesthetic for all images. Must be one of: vector, dossier, dark_cinematic, tactical.' },
+    visual_world: { type: Type.STRING, description: 'The unified aesthetic for all images. Must be one of: vector, dossier, dark-cinematic, tactical.' },
     format_template: { type: Type.STRING, description: 'The script format. Must be one of: RAPID_FIRE, SLOW_BURN, THE_LIST. This drives shot count and pacing.' },
     title: { type: Type.STRING, description: 'Script title. 5-100 characters. Must not end with a period.' },
     description: { type: Type.STRING, description: 'Script description. 30-500 characters.' },
     tags: { type: Type.ARRAY, description: '5-12 lowercase tags with hyphens instead of spaces. Each tag 2-30 chars.', items: { type: Type.STRING } },
+    hook_intro: { type: Type.STRING, description: 'The first 3-5 words of the video — must be the exact first words of shot 1 tts_text. High-tension phrase. Must not end with punctuation — it flows directly into shot 1 tts_text. Write this BEFORE writing any shots so it matches shot 1 exactly.' },
     shots: {
       type: Type.ARRAY,
       description: '12-18 shots composing the full script. Each shot has an id, visual_prompt describing the image scene, tts_text for voiceover, audio_instruction for delivery tone, and is_conclusion boolean (exactly one shot must be conclusion — the last one).',
@@ -158,9 +151,8 @@ const GeminiScriptSchema: Schema = {
       },
     },
     thumbnailPrompt: { type: Type.STRING, description: 'Thumbnail image prompt. 30-500 characters. Must match the visual world aesthetic.' },
-    hook_intro: { type: Type.STRING, description: 'The first 3-5 words of the video. High-tension phrase. Must not end with punctuation — it flows directly into shot 1 tts_text.' },
   },
-  required: ['fact_check_and_sources', 'visual_world', 'format_template', 'title', 'description', 'tags', 'shots', 'thumbnailPrompt', 'hook_intro'],
+  required: ['fact_check_and_sources', 'visual_world', 'format_template', 'title', 'description', 'tags', 'hook_intro', 'shots', 'thumbnailPrompt'],
 };
 
 type QualityScore = z.infer<typeof QualityScoreSchema>;

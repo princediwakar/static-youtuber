@@ -14,7 +14,7 @@ export interface Shot {
 export type SlideshowScript = {
   title: string;
   description: string;
-  visual_world: 'vector' | 'dossier' | 'dark_cinematic' | 'tactical';
+  visual_world: 'vector' | 'dossier' | 'dark-cinematic' | 'tactical';
   format_template: 'RAPID_FIRE' | 'SLOW_BURN' | 'THE_LIST';
   fact_check_and_sources: string;
   tags: string[];
