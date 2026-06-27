@@ -142,8 +142,8 @@ const GeminiScriptSchema: Schema = {
         type: Type.OBJECT,
         properties: {
           id: { type: Type.NUMBER, description: 'Sequential shot number starting from 1.' },
-          visual_prompt: { type: Type.STRING, description: 'Visual scene description. 30-600 chars. Must specify lighting direction, camera angle, focal distance, dominant colors, textures, atmosphere. No text or UI in image.' },
-          tts_text: { type: Type.STRING, description: 'Shot voiceover text. 3-12 words. Must be spoken English. Zero banned vague words. Zero CTAs.' },
+          visual_prompt: { type: Type.STRING, description: 'Visual scene description. 30-600 chars. Must specify lighting direction, camera angle, focal distance, dominant colors, textures, atmosphere. Never write the word "text" — not even to say "no text." Describe only what IS visible.' },
+          tts_text: { type: Type.STRING, description: `Shot voiceover text. 3-12 words, max ${CAPTION_MAX_CHARS} chars, each word ≤${CAPTION_MAX_CHARS_PER_LINE} chars. Must end with . ! or ?. Spoken English. Zero vague words. Zero CTAs.` },
           audio_instruction: { type: Type.STRING, description: 'Audio delivery tag in brackets: [serious], [curious], [urgent], [measured], or [grave].' },
           is_conclusion: { type: Type.BOOLEAN, description: 'True only for the final shot. Exactly one shot in the array must have this set to true — and it must be the last shot.' },
         },
@@ -325,10 +325,10 @@ VISUAL WORLD MANDATE:
 All images must share a unified aesthetic. ${aestheticInstruction} Every visual_prompt must reference specific elements from this aesthetic.
 
 CAPTION CONSTRAINT (HARD LIMIT):
-Each shot's tts_text MUST fit inside 3 rendering lines. You have a maximum of ${CAPTION_MAX_CHARS} characters TOTAL per shot. Be ruthless with word count. Shots 1+2 combined must read aloud in under 6 seconds. Every shot must be readable at a glance while audio plays.
+Each shot's tts_text MUST fit inside 3 rendering lines. You have a maximum of ${CAPTION_MAX_CHARS} characters TOTAL per shot and each word must be ≤${CAPTION_MAX_CHARS_PER_LINE} characters. Maximum 12 words per shot. Every shot must end with sentence-ending punctuation (. ! ?). Be ruthless with word count. Shots 1+2 combined must read aloud in under 6 seconds.
 
 IMAGE PROMPT RULES:
-- Describe only the visual scene. No text in image, ever. No UI elements, no screenshots, no labels.
+- Describe only the visual scene. Never write the word "text" — not even in phrases like "no text" or "without text." Describe what IS visible, never what isn't.
 - Every prompt must specify: exact lighting direction, camera angle, focal distance, dominant color palette, texture quality, and atmospheric conditions.
 - Each visual_prompt must be visually distinct from the others while sharing the unified visual world. No two shots should look like the same image.
 
