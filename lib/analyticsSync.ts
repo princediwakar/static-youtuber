@@ -205,19 +205,21 @@ export async function syncAnalytics(accountId?: string): Promise<void> {
     ORDER BY used_at DESC
     LIMIT 50
   `;
+  let toSyncParams: any[] = [];
 
   if (accountId) {
     toSyncQuery = `
       SELECT id AS topic_id, youtube_id, account_id
       FROM slideshow_topics
-      WHERE youtube_id IS NOT NULL AND account_id = '${accountId}'
+      WHERE youtube_id IS NOT NULL AND account_id = $1
         AND (analytics_synced_at IS NULL OR analytics_synced_at < NOW() - INTERVAL '24 hours')
       ORDER BY used_at DESC
       LIMIT 50
     `;
+    toSyncParams = [accountId];
   }
 
-  const toSync = await query<{ topic_id: number; youtube_id: string; account_id: string }>(toSyncQuery);
+  const toSync = await query<{ topic_id: number; youtube_id: string; account_id: string }>(toSyncQuery, toSyncParams);
 
   if (toSync.rows.length === 0) {
     console.log('[Analytics] Nothing to sync');

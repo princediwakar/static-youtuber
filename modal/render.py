@@ -153,12 +153,16 @@ def mix_music(video_path: str, music_path: str, output_path: str) -> None:
     ])
 
 
-# Map account IDs to their Cloudinary credential suffixes
+# Map account IDs to their Cloudinary credential suffixes.
+# Each account requires three Modal secrets:
+#   CLOUDINARY_CLOUD_NAME_{SUFFIX}
+#   CLOUDINARY_API_KEY_{SUFFIX}
+#   CLOUDINARY_API_SECRET_{SUFFIX}
 ACCOUNT_CRED_SUFFIXES = {
-    "english_shots": "ENGLISH_SHOTS",
-    "astronomy_shots": "ASTRONOMY_SHOTS",
-    "health_shots": "HEALTH_SHOTS",
-    "ssc_shots": "SSC_SHOTS",
+    "tech_shots": "TECH_SHOTS",
+    "finance_shots": "FINANCE_SHOTS",
+    "stoic_shots": "STOIC_SHOTS",
+    "survival_shots": "SURVIVAL_SHOTS",
 }
 
 
@@ -207,6 +211,7 @@ def render(payload: dict):
         musicUrl    — Cloudinary URL for background music MP3
         jobId       — unique job identifier
         accountId   — account ID for selecting the correct Cloudinary credentials
+        callbackUrl — (optional) URL to POST result to after render completes
     Returns:
         { "mp4Url": "https://res.cloudinary.com/..." }
     """
@@ -267,6 +272,19 @@ def render(payload: dict):
         # ── Upload to Cloudinary ────────────────────────────────────────
         print("[render] Uploading final video to Cloudinary…")
         mp4_url = upload_video(str(final), job_id, account_id)
+
+        # ── Callback to pipeline webhook ────────────────────────────────
+        callback_url = payload.get("callbackUrl")
+        if callback_url:
+            try:
+                cb_resp = requests.post(
+                    callback_url,
+                    json={"jobId": job_id, "mp4Url": mp4_url},
+                    timeout=30,
+                )
+                print(f"[render] Webhook callback: {cb_resp.status_code}")
+            except Exception as exc:
+                print(f"[render] Webhook callback failed (non-fatal): {exc}")
 
         print(f"[render] Done: {mp4_url}")
         return {"mp4Url": mp4_url}

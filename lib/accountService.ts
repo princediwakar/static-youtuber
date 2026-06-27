@@ -37,10 +37,11 @@ function decrypt(encryptedText: string): string {
 }
 
 // Cache to avoid repeated DB hits within a Lambda warm instance
-let credentialCache: AccountCredentials | null = null;
+const credentialCache = new Map<string, AccountCredentials>();
 
 export async function getAccountCredentials(accountId: string): Promise<AccountCredentials> {
-  if (credentialCache?.id === accountId) return credentialCache;
+  const cached = credentialCache.get(accountId);
+  if (cached) return cached;
 
   const result = await query<EncryptedAccountRow>(
     "SELECT id, youtube_channel_id, google_client_id_encrypted, google_client_secret_encrypted, refresh_token_encrypted, cloudinary_cloud_name_encrypted, cloudinary_api_key_encrypted, cloudinary_api_secret_encrypted FROM accounts WHERE id = $1 AND status = 'active'",
@@ -52,7 +53,7 @@ export async function getAccountCredentials(accountId: string): Promise<AccountC
   }
 
   const row = result.rows[0];
-  credentialCache = {
+  const creds: AccountCredentials = {
     id: row.id,
     youtubeChannelId: row.youtube_channel_id,
     googleClientId: decrypt(row.google_client_id_encrypted),
@@ -63,5 +64,6 @@ export async function getAccountCredentials(accountId: string): Promise<AccountC
     cloudinaryApiSecret: decrypt(row.cloudinary_api_secret_encrypted),
   };
 
-  return credentialCache;
+  credentialCache.set(accountId, creds);
+  return creds;
 }

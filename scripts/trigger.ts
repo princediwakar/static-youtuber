@@ -1,5 +1,8 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
 async function triggerPipeline() {
@@ -7,8 +10,10 @@ async function triggerPipeline() {
 
   console.log('Sending manual trigger event to Inngest...');
 
+  const accountId = process.env.ACCOUNT_ID || 'tech_shots';
   const result = await inngest.send({
     name: 'slideshow/trigger',
+    data: { accountId },
   });
 
   console.log('✅ Trigger sent!');

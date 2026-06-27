@@ -34,9 +34,9 @@ async function getStats(): Promise<{
     }>(`
       SELECT
         COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE status = 'uploaded')  AS uploaded,
+        COUNT(*) FILTER (WHERE status = 'published')  AS uploaded,
         COUNT(*) FILTER (WHERE status = 'failed')    AS failed,
-        COUNT(*) FILTER (WHERE status NOT IN ('uploaded','failed')) AS in_progress
+        COUNT(*) FILTER (WHERE status NOT IN ('published','failed')) AS in_progress
       FROM slideshow_jobs
     `);
     const r = result.rows[0];
@@ -65,13 +65,17 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  pending:     'Pending',
-  generating:  'Generating',
-  images_done: 'Images ✓',
-  tts_done:    'TTS ✓',
-  assembled:   'Assembled',
-  uploaded:    'Uploaded',
-  failed:      'Failed',
+  pending:       'Pending',
+  generating:    'Generating',
+  script_ready:  'Script Ready',
+  batch_pending: 'Batch Pending',
+  assets_ready:  'Assets Ready',
+  images_done:   'Images ✓',
+  tts_done:      'TTS ✓',
+  assembled:     'Assembled',
+  uploaded:      'Uploaded',
+  published:     'Published',
+  failed:        'Failed',
 };
 
 function StatusBadge({ status }: { status: string }) {

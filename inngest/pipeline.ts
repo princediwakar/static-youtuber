@@ -49,6 +49,7 @@ export const generateShort = inngest.createFunction(
   {
     id: 'generate-short',
     retries: 3,
+    timeouts: { finish: '2h' },
     triggers: [
       { event: 'slideshow/trigger' },
     ],
@@ -162,23 +163,22 @@ export const generateShort = inngest.createFunction(
     const imageUrls: string[] = new Array(script.shots.length);
     const audioUrls: string[] = new Array(script.shots.length);
 
-    const { imageResponses, audioResponses } = await step.run('fetch-batch-results', async () => {
-      const [imageJob, audioJob] = await Promise.all([
-        ai.batches.get({ name: batchJobName.imageBatchName as string }),
-        ai.batches.get({ name: batchJobName.audioBatchName as string }),
-      ]);
-
-      return {
-        imageResponses: imageJob.dest?.inlinedResponses || [],
-        audioResponses: audioJob.dest?.inlinedResponses || [],
-      };
-    });
-
-    // Process each shot in its own step.run() for memoization
+    // Process each shot in its own step.run() for memoization.
+    // Each step independently fetches batch results so no single step exceeds
+    // Inngest's 4 MiB step return payload limit.
     for (let i = 0; i < script.shots.length; i++) {
       const result = await step.run(`harvest-shot-${i}`, async () => {
         const shot = script.shots[i];
         const creds = await getAccountCredentials(accountId);
+
+        // Fetch batch results (this step returns only its own shot's data, under 4 MiB)
+        const [imageJob, audioJob] = await Promise.all([
+          ai.batches.get({ name: batchJobName.imageBatchName as string }),
+          ai.batches.get({ name: batchJobName.audioBatchName as string }),
+        ]);
+
+        const imageResponses = imageJob.dest?.inlinedResponses || [];
+        const audioResponses = audioJob.dest?.inlinedResponses || [];
 
         // 1. HARVEST & VALIDATE IMAGE
         // Strict mapping: trim spaces and match exactly to ensure order invariance
@@ -279,6 +279,9 @@ export const generateShort = inngest.createFunction(
       await db.updateJob(jobId, { thumbnail_url: thumbnailUrl });
 
       if (useModal) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 90_000); // 90s timeout
+
         try {
           const response = await fetch(MODAL_RENDER_URL, {
             method: 'POST',
@@ -292,16 +295,28 @@ export const generateShort = inngest.createFunction(
               fps: 25,
               width: 1080,
               height: 1920,
+              callbackUrl: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/webhooks/modal`,
             }),
+            signal: controller.signal,
           });
+
+          clearTimeout(timeout);
 
           if (response.ok) {
             const { mp4Url } = await response.json();
-            if (mp4Url) return mp4Url;
+            if (mp4Url) {
+              console.log(`[Pipeline] Modal returned video: ${mp4Url}`);
+              return mp4Url;
+            }
           }
           console.warn(`[Pipeline] Modal returned ${response.status}, falling back to local assembler`);
-        } catch (e) {
-          console.warn(`[Pipeline] Modal unreachable: ${e}, falling back to local assembler`);
+        } catch (e: any) {
+          clearTimeout(timeout);
+          if (e.name === 'AbortError') {
+            console.warn('[Pipeline] Modal timed out after 90s — will await webhook');
+          } else {
+            console.warn(`[Pipeline] Modal unreachable: ${e}, will await webhook`);
+          }
         }
       }
 
