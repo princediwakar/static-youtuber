@@ -2,10 +2,9 @@
 import { inngest } from './client';
 import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
 import { generateImage } from '@/lib/cloudflareAi';
-import { generateSpeech } from '@/lib/fishAudio';
+import { generateSpeech } from '@/lib/edgeTts';
 import { selectMusicTrack } from '@/lib/musicSelector';
 import { burnCaption } from '@/lib/imageGenerator';
-import { buildTTSPrompt } from '@/lib/ttsGenerator';
 import {
   uploadSlideImage,
   uploadSlideAudio,
@@ -18,8 +17,7 @@ import { db, query } from '@/lib/database';
 import {
   CF_AI_SLIDE_WIDTH,
   CF_AI_SLIDE_HEIGHT,
-  TTS_VOICE_PROFILES,
-  DEFAULT_TTS_VOICE_PROFILE,
+  EDGE_TTS_VOICES,
   NICHE_PROFILES,
   DEFAULT_NICHE_PROFILE,
   MODAL_RENDER_URL,
@@ -108,13 +106,15 @@ export const generateShort = inngest.createFunction(
         const shot = script.shots[i];
         const creds = await getAccountCredentials(accountId);
         const captionText = shot.tts_text.replace(/\[.*?\]\s*/g, '').trim();
-        const voiceProfile = TTS_VOICE_PROFILES[niche] ?? DEFAULT_TTS_VOICE_PROFILE;
-        const ttsPrompt = buildTTSPrompt(voiceProfile, shot.tts_text, shot.audio_instruction ?? '[conversational]');
+        const voice = EDGE_TTS_VOICES[niche] ?? 'en-US-AriaNeural';
+        const ttsText = shot.audio_instruction
+          ? `${shot.audio_instruction} ${shot.tts_text}`
+          : shot.tts_text;
 
         // PARALLEL: Image gen and TTS share no state — run concurrently
         const [rawImageBuffer, rawAudioBuffer] = await Promise.all([
           generateImage(shot.visual_prompt, CF_AI_SLIDE_WIDTH, CF_AI_SLIDE_HEIGHT),
-          generateSpeech(ttsPrompt, voiceProfile.referenceId),
+          generateSpeech(ttsText, voice),
         ]);
 
         // Post-processing: caption burn depends on image buffer, uploads are independent

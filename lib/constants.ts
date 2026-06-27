@@ -56,6 +56,17 @@ export const CF_AI_SLIDE_WIDTH = 576;
 export const CF_AI_SLIDE_HEIGHT = 1024;
 export const FISH_AUDIO_MODEL = 's2.1-pro-free';
 
+// Edge TTS (self-hosted on EC2)
+export const EDGE_TTS_URL = process.env.EDGE_TTS_URL || 'http://localhost:5050';
+export const EDGE_TTS_API_KEY = process.env.EDGE_TTS_API_KEY || 'your_api_key_here';
+
+export const EDGE_TTS_VOICES: Record<string, string> = {
+  'SaaS & AI Tools':       'en-US-AriaNeural',
+  'Financial Forensics':   'en-US-GuyNeural',
+  'Stoic Philosophy':      'en-US-ChristopherNeural',
+  'Urban Survival':        'en-US-EricNeural',
+};
+
 // Default Fish Audio reference_id (Generic Female / English).
 // Swap per niche if different voices are desired.
 const FISH_VOICE_GENERIC_FEMALE = 'fb6c0e1ea91e427fb9a93b9bbf0a1e4d';
