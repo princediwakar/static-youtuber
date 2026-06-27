@@ -40,6 +40,9 @@ const ShotSchema = z.object({
       message: 'Image prompt must not contain the word "text" — no text in images',
     }),
   tts_text: z.string()
+    .refine(t => !/\[.*?\]/.test(t), {
+      message: 'tts_text must not contain audio director tags like [curious] — use the audio_instruction field instead',
+    })
     .refine(t => t.split(' ').length <= 12, 'Soft cap: 12 words max per shot')
     .refine(t => t.split(' ').length >= 3, 'Min 3 words per shot')
     .refine(val => !BANNED_WORDS.some(w => val.toLowerCase().includes(w)), {

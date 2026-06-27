@@ -30,11 +30,20 @@ function simulateWordWrap(text: string, maxCharsPerLine: number): string[] {
   return lines;
 }
 
+function stripDirectorTags(text: string): string {
+  return text.replace(/\[.*?\]\s*/g, '').trim();
+}
+
 export function validateShotCaption(shot: Shot): CaptionValidationResult {
   const warnings: string[] = [];
   const errors: string[] = [];
 
-  const words = shot.text.split(/\s+/);
+  // Defensive: never render director tags in captions
+  const cleaned = stripDirectorTags(shot.text);
+  if (cleaned !== shot.text) {
+    warnings.push(`Shot ${shot.index}: contained director tags — stripped before caption render.`);
+  }
+  const words = cleaned.split(/\s+/);
 
   const overflowWords = words.filter(w => w.length > CAPTION_MAX_CHARS_PER_LINE);
   if (overflowWords.length > 0) {
@@ -44,11 +53,11 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
     );
   }
 
-  if (shot.text.length > CAPTION_MAX_CHARS) {
-    errors.push(`Shot ${shot.index}: ${shot.text.length} chars — exceeds ${CAPTION_MAX_CHARS} char limit.`);
+  if (cleaned.length > CAPTION_MAX_CHARS) {
+    errors.push(`Shot ${shot.index}: ${cleaned.length} chars — exceeds ${CAPTION_MAX_CHARS} char limit.`);
   }
 
-  if (!/[.!?]$/.test(shot.text.trimEnd())) {
+  if (!/[.!?]$/.test(cleaned.trimEnd())) {
     errors.push(`Shot ${shot.index}: does not end with sentence-ending punctuation (. ! ?) — likely a truncated fragment.`);
   }
 
@@ -58,7 +67,7 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
     warnings.push(`Shot ${shot.index}: ${words.length} words — target ≤12.`);
   }
 
-  const lines = simulateWordWrap(shot.text, CAPTION_MAX_CHARS_PER_LINE);
+  const lines = simulateWordWrap(cleaned, CAPTION_MAX_CHARS_PER_LINE);
   if (lines.length > 3) {
     errors.push(`Shot ${shot.index}: wraps to ${lines.length} caption lines — max is 3.`);
   } else if (lines.length === 3) {

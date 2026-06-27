@@ -201,8 +201,9 @@ export const generateShort = inngest.createFunction(
           rawImageBuffer = Buffer.from(imgPart.inlineData.data, 'base64');
         }
 
-        // Process Canvas/Sharp overlay safely
-        const captionedBuffer = await burnCaption(rawImageBuffer, shot.tts_text);
+        // Process Canvas/Sharp overlay safely — strip any leaked director tags
+        const captionText = shot.tts_text.replace(/\[.*?\]\s*/g, '').trim();
+        const captionedBuffer = await burnCaption(rawImageBuffer, captionText);
         const imageUrl = await uploadSlideImage(captionedBuffer, jobId, i, creds);
 
         // 2. HARVEST & VALIDATE AUDIO
