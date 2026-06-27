@@ -13,6 +13,14 @@ export const ACCOUNT_NICHE: Record<string, string> = {
   survival_shots: 'Urban Survival',
 };
 
+// Immutable YouTube channel IDs — handles can be renamed, these never change
+export const ACCOUNT_YOUTUBE_CHANNEL_ID: Record<string, string> = {
+  tech_shots: 'UCYJQqqRf4tMxc7ra5FF08eQ',
+  finance_shots: 'UCzKvcGH7IyS684PQ4aCw2PQ',
+  survival_shots: 'UC6gH91v6aGmQFdNwMFC5RwQ',
+  stoic_shots: 'UCnBL50AkM_6BmvrNlS1rxVw',
+};
+
 // Optimal publish hour per niche (UTC).
 // Staggered across the US daytime window so each channel hits a different
 // sweet spot: videos are indexed by the algorithm 2-3 hours before peak

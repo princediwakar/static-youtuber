@@ -5,6 +5,7 @@ import { AccountCredentials } from './types';
 
 interface EncryptedAccountRow {
   id: string;
+  youtube_channel_id: string;
   google_client_id_encrypted: string;
   google_client_secret_encrypted: string;
   refresh_token_encrypted: string;
@@ -42,7 +43,7 @@ export async function getAccountCredentials(accountId: string): Promise<AccountC
   if (credentialCache?.id === accountId) return credentialCache;
 
   const result = await query<EncryptedAccountRow>(
-    "SELECT id, google_client_id_encrypted, google_client_secret_encrypted, refresh_token_encrypted, cloudinary_cloud_name_encrypted, cloudinary_api_key_encrypted, cloudinary_api_secret_encrypted FROM accounts WHERE id = $1 AND status = 'active'",
+    "SELECT id, youtube_channel_id, google_client_id_encrypted, google_client_secret_encrypted, refresh_token_encrypted, cloudinary_cloud_name_encrypted, cloudinary_api_key_encrypted, cloudinary_api_secret_encrypted FROM accounts WHERE id = $1 AND status = 'active'",
     [accountId]
   );
 
@@ -53,6 +54,7 @@ export async function getAccountCredentials(accountId: string): Promise<AccountC
   const row = result.rows[0];
   credentialCache = {
     id: row.id,
+    youtubeChannelId: row.youtube_channel_id,
     googleClientId: decrypt(row.google_client_id_encrypted),
     googleClientSecret: decrypt(row.google_client_secret_encrypted),
     refreshToken: decrypt(row.refresh_token_encrypted),

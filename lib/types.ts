@@ -51,6 +51,7 @@ export interface SlideshowJob {
 
 export interface AccountCredentials {
   id: string;
+  youtubeChannelId: string;
   googleClientId: string;
   googleClientSecret: string;
   refreshToken: string;
