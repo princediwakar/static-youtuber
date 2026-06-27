@@ -1,16 +1,16 @@
 // lib/constants.ts
 import path from 'path';
 
-export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'english_shots';
+export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'tech_shots';
 
 export const NICHES = ['SaaS & AI Tools', 'Financial Forensics', 'Stoic Philosophy', 'Urban Survival'];
 
 // One niche per channel — deterministic, no random selection
 export const ACCOUNT_NICHE: Record<string, string> = {
-  english_shots: 'SaaS & AI Tools',
-  astronomy_shots: 'Financial Forensics',
-  health_shots: 'Stoic Philosophy',
-  ssc_shots: 'Urban Survival',
+  tech_shots: 'SaaS & AI Tools',
+  finance_shots: 'Financial Forensics',
+  stoic_shots: 'Stoic Philosophy',
+  survival_shots: 'Urban Survival',
 };
 
 // Optimal publish hour per niche (UTC).
