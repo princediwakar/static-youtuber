@@ -33,7 +33,10 @@ const ShotSchema = z.object({
   visual_prompt: z.string()
     .min(30, 'Image prompt must be at least 30 characters — describe lighting, camera angle, colors, textures')
     .max(600, 'Image prompt must be ≤600 chars')
-    .refine(val => !val.toLowerCase().includes('text'), {
+    .refine(val => {
+      const cleaned = val.toLowerCase().replace(/\bno text\b/gi, '').replace(/\bwithout text\b/gi, '').replace(/\bfree of text\b/gi, '');
+      return !cleaned.includes('text');
+    }, {
       message: 'Image prompt must not contain the word "text" — no text in images',
     }),
   tts_text: z.string()
