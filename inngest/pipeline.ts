@@ -1,9 +1,11 @@
 // Path: inngest/pipeline.ts
 import { inngest } from './client';
-import { GoogleGenAI } from '@google/genai';
 import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
+import { generateImage } from '@/lib/cloudflareAi';
+import { generateSpeech } from '@/lib/fishAudio';
+import { selectMusicTrack } from '@/lib/musicSelector';
 import { burnCaption } from '@/lib/imageGenerator';
-import { generateSlideAudio, buildTTSPrompt } from '@/lib/ttsGenerator';
+import { buildTTSPrompt } from '@/lib/ttsGenerator';
 import {
   uploadSlideImage,
   uploadSlideAudio,
@@ -14,13 +16,12 @@ import {
 } from '@/lib/cloudinary';
 import { db, query } from '@/lib/database';
 import {
-  IMAGE_MODEL,
-  TTS_MODEL,
+  CF_AI_SLIDE_WIDTH,
+  CF_AI_SLIDE_HEIGHT,
   TTS_VOICE_PROFILES,
   DEFAULT_TTS_VOICE_PROFILE,
   NICHE_PROFILES,
   DEFAULT_NICHE_PROFILE,
-  MUSIC_MODEL,
   MODAL_RENDER_URL,
   NICHES,
   ACCOUNT_NICHE,
@@ -30,19 +31,7 @@ import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
 import { generateThumbnail } from '@/lib/thumbnailGenerator';
 import { assembleVideo } from '@/lib/videoAssembler';
-import { validateAllCaptions } from '@/lib/captionValidator';
 import { syncAnalytics, recordPublishedVideo } from '@/lib/analyticsSync';
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-
-function buildPipelineTTSPrompt(text: string, niche: string, audioInstruction?: string): string {
-  const profile = TTS_VOICE_PROFILES[niche] ?? DEFAULT_TTS_VOICE_PROFILE;
-  return buildTTSPrompt(profile, text, audioInstruction ?? '[conversational]');
-}
-
-function getVoiceForNiche(niche: string): string {
-  return (TTS_VOICE_PROFILES[niche] ?? DEFAULT_TTS_VOICE_PROFILE).voice;
-}
 
 export const generateShort = inngest.createFunction(
   {
@@ -77,8 +66,6 @@ export const generateShort = inngest.createFunction(
 
     // ── Step 1: Generate Script / Resume ─────────────────────────────────────
     const { script, jobId, format_template, niche, variant, topic } = await step.run('generate-script', async () => {
-      // If an explicit jobId is given, resume that job. Otherwise check for any
-      // incomplete job for this account so we never leave orphaned work behind.
       const jobToResume = explicitJobId
         ? await db.getJob(explicitJobId)
         : await db.getIncompleteJob(accountId);
@@ -102,111 +89,17 @@ export const generateShort = inngest.createFunction(
 
       const { script, topic } = await generateScript(niche, accountId);
 
-      const captionResult = validateAllCaptions(script.shots.map(s => ({ text: s.tts_text })));
-      if (!captionResult.valid) {
-        throw new Error(`Caption validation failed:\n${captionResult.errors.join('\n')}`);
-      }
-
       const jobId = await db.createJob({ account_id: accountId, topic, niche, format_template, script, status: 'script_ready', variant });
       return { script, jobId, format_template, niche, variant, topic };
     });
 
-    // ── Step 2: Submit Batch Job ─────────────────────────────────────────────
-    const batchJobName = await step.run('submit-batch', async () => {
-      const job = await db.getJob(jobId);
-      if (job?.imageBatchName && job?.audioBatchName) {
-        return { imageBatchName: job.imageBatchName, audioBatchName: job.audioBatchName };
-      }
-
-      const inlineRequests = [
-        ...script.shots.map((shot: any, i: number) => ({
-          contents: [{ role: 'user', parts: [{ text: shot.visual_prompt }] }],
-          config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '9:16' } },
-        })),
-        ...script.shots.map((shot: any, i: number) => ({
-          contents: [{
-            role: 'user',
-            parts: [{ text: buildPipelineTTSPrompt(shot.tts_text, niche, shot.audio_instruction) }],
-          }],
-          config: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: getVoiceForNiche(niche) },
-              },
-            },
-          },
-        })),
-      ];
-
-      // Slice the array to cleanly separate image and audio requests without relying on fragile string keys
-      const imageBatch = await ai.batches.create({
-        model: IMAGE_MODEL,
-        src: inlineRequests.slice(0, script.shots.length),
-        config: { displayName: `images-${jobId}` },
-      });
-
-      const audioBatch = await ai.batches.create({
-        model: TTS_MODEL,
-        src: inlineRequests.slice(script.shots.length),
-        config: { displayName: `audio-${jobId}` },
-      });
-
-      await db.updateJob(jobId, {
-        status: 'batch_pending',
-        imageBatchName: imageBatch.name,
-        audioBatchName: audioBatch.name,
-      });
-
-      return { imageBatchName: imageBatch.name, audioBatchName: audioBatch.name };
-    });
-
-    // ── Step 3: Poll batches ──────────────────────────────────────────────────
-    let bothDone = false;
-    const MAX_POLLS = 45;
-
-    for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
-      const isDone = await step.run(`poll-batch-${attempt}`, async () => {
-        const [imageJob, audioJob] = await Promise.all([
-          ai.batches.get({ name: batchJobName.imageBatchName as string }),
-          ai.batches.get({ name: batchJobName.audioBatchName as string }),
-        ]);
-
-        const imageState = imageJob.state as string;
-        const audioState = audioJob.state as string;
-
-        if (['JOB_STATE_FAILED', 'JOB_STATE_CANCELLED', 'JOB_STATE_EXPIRED'].includes(imageState)) {
-          throw new Error(`Image batch ${imageState}: ${batchJobName.imageBatchName}`);
-        }
-        if (['JOB_STATE_FAILED', 'JOB_STATE_CANCELLED', 'JOB_STATE_EXPIRED'].includes(audioState)) {
-          throw new Error(`Audio batch ${audioState}: ${batchJobName.audioBatchName}`);
-        }
-
-        return imageState === 'JOB_STATE_SUCCEEDED' && audioState === 'JOB_STATE_SUCCEEDED';
-      });
-
-      if (isDone) {
-        bothDone = true;
-        break;
-      }
-
-      await step.sleep(`wait-batch-${attempt}`, '1m');
-    }
-
-    if (!bothDone) {
-      throw new Error('Batch polling exhausted 45 attempts without completion');
-    }
-
-    // ── Step 4: Harvest + Caption + Upload ──────────────────────────────────
+    // ── Step 2: Generate Images + Audio per shot (parallelized, memoized) ────
     const imageUrls: string[] = new Array(script.shots.length);
     const audioUrls: string[] = new Array(script.shots.length);
 
-    // Process each shot in its own step.run() for memoization.
-    // Each step independently fetches batch results so no single step exceeds
-    // Inngest's 4 MiB step return payload limit.
     for (let i = 0; i < script.shots.length; i++) {
-      const result = await step.run(`harvest-shot-${i}`, async () => {
-        // Skip if this shot was already harvested in a prior run
+      const result = await step.run(`process-shot-${i}`, async () => {
+        // MEMOIZATION: If this shot was already processed in a prior run, return cached URLs
         const job = await db.getJob(jobId);
         if (job?.shot_image_urls?.[i] && job?.shot_audio_urls?.[i]) {
           return { imageUrl: job.shot_image_urls[i], audioUrl: job.shot_audio_urls[i] };
@@ -214,73 +107,33 @@ export const generateShort = inngest.createFunction(
 
         const shot = script.shots[i];
         const creds = await getAccountCredentials(accountId);
+        const captionText = shot.tts_text.replace(/\[.*?\]\s*/g, '').trim();
+        const voiceProfile = TTS_VOICE_PROFILES[niche] ?? DEFAULT_TTS_VOICE_PROFILE;
+        const ttsPrompt = buildTTSPrompt(voiceProfile, shot.tts_text, shot.audio_instruction ?? '[conversational]');
 
-        // Fetch batch results (this step returns only its own shot's data, under 4 MiB)
-        const [imageJob, audioJob] = await Promise.all([
-          ai.batches.get({ name: batchJobName.imageBatchName as string }),
-          ai.batches.get({ name: batchJobName.audioBatchName as string }),
+        // PARALLEL: Image gen and TTS share no state — run concurrently
+        const [rawImageBuffer, rawAudioBuffer] = await Promise.all([
+          generateImage(shot.visual_prompt, CF_AI_SLIDE_WIDTH, CF_AI_SLIDE_HEIGHT),
+          generateSpeech(ttsPrompt, voiceProfile.referenceId),
         ]);
 
-        const imageResponses = imageJob.dest?.inlinedResponses || [];
-        const audioResponses = audioJob.dest?.inlinedResponses || [];
-
-        // 1. HARVEST & VALIDATE IMAGE
-        // Strict mapping: trim spaces and match exactly to ensure order invariance
-        const imgPrompt = shot.visual_prompt.trim();
-        const imgRespObj = imageResponses.find((r: any) =>
-          r.request?.contents?.[0]?.parts?.[0]?.text?.trim() === imgPrompt
-        );
-
-        let imgPart = imgRespObj?.response?.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
-        let rawImageBuffer = imgPart?.inlineData?.data ? Buffer.from(imgPart.inlineData.data, 'base64') : Buffer.alloc(0);
-
-        if (rawImageBuffer.length === 0) {
-          console.warn(`[Pipeline] Shot ${i} batch image missing/failed. Triggering sync fallback...`);
-          try {
-            const syncResp = await ai.models.generateContent({
-              model: IMAGE_MODEL,
-              contents: [{ role: 'user', parts: [{ text: shot.visual_prompt }] }],
-              config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '9:16' } },
-            });
-            imgPart = syncResp.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
-            if (!imgPart?.inlineData?.data) throw new Error('response missing image data');
-            rawImageBuffer = Buffer.from(imgPart.inlineData.data, 'base64');
-          } catch (imgErr: any) {
-            throw new Error(`Fallback image generation failed for shot ${i}: ${imgErr?.message ?? imgErr}`);
-          }
-        }
-
-        // Process Canvas/Sharp overlay safely — strip any leaked director tags
-        const captionText = shot.tts_text.replace(/\[.*?\]\s*/g, '').trim();
+        // Post-processing: caption burn depends on image buffer, uploads are independent
         const captionedBuffer = await burnCaption(rawImageBuffer, captionText);
-        const imageUrl = await uploadSlideImage(captionedBuffer, jobId, i, creds);
+        const [imageUrl, audioUrl] = await Promise.all([
+          uploadSlideImage(captionedBuffer, jobId, i, creds),
+          uploadSlideAudio(rawAudioBuffer, jobId, i, creds),
+        ]);
 
-        // 2. HARVEST & VALIDATE AUDIO
-        const audioPrompt = buildPipelineTTSPrompt(shot.tts_text, niche, shot.audio_instruction).trim();
-        const audioRespObj = audioResponses.find((r: any) =>
-          r.request?.contents?.[0]?.parts?.[0]?.text?.trim() === audioPrompt
-        );
-
-        let audioPart = audioRespObj?.response?.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('audio/'));
-        let rawAudioBuffer: Buffer = audioPart?.inlineData?.data ? Buffer.from(audioPart.inlineData.data, 'base64') : Buffer.alloc(0);
-
-        if (rawAudioBuffer.length === 0) {
-          console.warn(`[Pipeline] Shot ${i} batch audio missing/failed. Triggering sync fallback...`);
-          try {
-            const { audioBuffer } = await generateSlideAudio(
-              { text: shot.tts_text, audio_tag: shot.audio_instruction ?? '[conversational]' },
-              niche,
-            );
-            rawAudioBuffer = audioBuffer;
-          } catch (syncErr: any) {
-            throw new Error(`Fallback audio generation failed for shot ${i}: ${syncErr?.message ?? syncErr}`);
-          }
-          if (rawAudioBuffer.length === 0) {
-            throw new Error(`Fallback audio generation failed for shot ${i} — returned empty buffer`);
-          }
-        }
-
-        const audioUrl = await uploadSlideAudio(rawAudioBuffer, jobId, i, creds);
+        // Persist URLs immediately so crash recovery doesn't lose completed work
+        const currentJob = await db.getJob(jobId);
+        const updatedImageUrls = [...(currentJob?.shot_image_urls ?? [])];
+        const updatedAudioUrls = [...(currentJob?.shot_audio_urls ?? [])];
+        updatedImageUrls[i] = imageUrl;
+        updatedAudioUrls[i] = audioUrl;
+        await db.updateJob(jobId, {
+          shot_image_urls: updatedImageUrls,
+          shot_audio_urls: updatedAudioUrls,
+        });
 
         return { imageUrl, audioUrl };
       });
@@ -290,39 +143,22 @@ export const generateShort = inngest.createFunction(
     }
 
     await step.run('update-assets-ready', async () => {
-      await db.updateJob(jobId, {
-        status: 'assets_ready',
-        shot_image_urls: imageUrls,
-        shot_audio_urls: audioUrls,
-      });
+      await db.updateJob(jobId, { status: 'assets_ready' });
     });
 
-    // ── Step 5: Generate Background Music ───────────────────────────────────
-    const musicUrl = await step.run('generate-music', async () => {
+    // ── Step 3: Select Background Music ──────────────────────────────────────
+    const musicUrl = await step.run('select-music', async () => {
       const job = await db.getJob(jobId);
       if (job?.music_url) return job.music_url;
 
       const creds = await getAccountCredentials(accountId);
-      // Injecting the visual world and format template so the audio actually matches the visuals
-      const prompt = `Cinematic ${niche} underscore for a ${format_template} video about: ${script.title}. The visual aesthetic is: ${script.visual_world}. Tense, engaging, no lyrics, dramatic pacing, appropriate instrumentation.`;
-
-      const response = await ai.models.generateContent({
-        model: MUSIC_MODEL,
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      });
-
-      const audioPart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('audio/'));
-      if (!audioPart?.inlineData?.data) {
-        throw new Error('No music data returned from Lyria-3');
-      }
-
-      const buffer = Buffer.from(audioPart.inlineData.data as string, 'base64');
+      const { buffer, filename } = await selectMusicTrack(script.title, niche, script.visual_world);
       const url = await uploadMusicTrack(buffer, jobId, creds);
       await db.updateJob(jobId, { music_url: url });
       return url;
     });
 
-    // ── Step 6: Generate thumbnail & Render ──────────────────────────────────
+    // ── Step 4: Generate thumbnail & Render ──────────────────────────────────
     const useModal = MODAL_RENDER_URL && !MODAL_RENDER_URL.includes('example-modal-url');
 
     const videoUrl = await step.run('render-video', async () => {
@@ -337,7 +173,7 @@ export const generateShort = inngest.createFunction(
 
       if (useModal) {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 90_000); // 90s timeout
+        const timeout = setTimeout(() => controller.abort(), 90_000);
 
         try {
           const response = await fetch(MODAL_RENDER_URL, {
@@ -381,7 +217,7 @@ export const generateShort = inngest.createFunction(
       return uploadVideo(videoBuffer, jobId, creds);
     });
 
-    // ── Step 6b: Wait for Modal webhook if render was sent to Modal ──────────
+    // ── Step 4b: Wait for Modal webhook if render was sent to Modal ──────────
     let resolvedVideoUrl = videoUrl;
 
     if (useModal && !videoUrl) {
@@ -393,7 +229,6 @@ export const generateShort = inngest.createFunction(
 
       resolvedVideoUrl = modalResult?.data?.mp4Url;
       if (!resolvedVideoUrl) {
-        // Fallback to local assembly
         console.warn(`[Pipeline] Modal webhook never arrived, falling back to local assembler`);
         const videoBuffer = await assembleVideo(imageUrls, audioUrls, musicUrl, jobId);
         const creds = await getAccountCredentials(accountId);
@@ -401,7 +236,7 @@ export const generateShort = inngest.createFunction(
       }
     }
 
-    // ── Step 7: Publish ──────────────────────────────────────────────────────
+    // ── Step 5: Publish ──────────────────────────────────────────────────────
     await step.run('publish', async () => {
       const job = await db.getJob(jobId);
       if (job?.status === 'published') return;
@@ -410,7 +245,6 @@ export const generateShort = inngest.createFunction(
 
       const jobRecord = await query('SELECT thumbnail_url FROM slideshow_jobs WHERE id = $1', [jobId]);
 
-      // Implement basic retry for external network calls to prevent late-stage crashes
       let thumbRes;
       for (let t = 0; t < 3; t++) {
         thumbRes = await fetch(jobRecord.rows[0].thumbnail_url);
@@ -429,7 +263,6 @@ export const generateShort = inngest.createFunction(
         [jobId, result.youtubeVideoId, result.title, result.description, JSON.stringify(script.tags), variant]
       );
 
-      // Link the topic row to the published YouTube video for analytics attribution
       const topicRes = await query<{ id: number }>(
         'SELECT id FROM slideshow_topics WHERE topic = $1 AND account_id = $2',
         [topic, accountId]
@@ -484,7 +317,6 @@ export const channelScheduler = inngest.createFunction(
       return result.rows.map(r => ({ account_id: r.id, niche: ACCOUNT_NICHE[r.id] }));
     });
 
-    // Only trigger channels whose niche is scheduled for this hour
     const dueChannels = channels.filter(c => NICHE_PUBLISH_HOUR_UTC[c.niche] === currentHour);
 
     if (dueChannels.length === 0) {
@@ -520,7 +352,6 @@ export const channelScheduler = inngest.createFunction(
       }
     }
 
-    // Log channels not due at this hour (informational)
     const notDue = channels.filter(c => NICHE_PUBLISH_HOUR_UTC[c.niche] !== currentHour);
     for (const c of notDue) {
       console.log(`[Scheduler] ${c.account_id} (${c.niche}) scheduled for ${NICHE_PUBLISH_HOUR_UTC[c.niche]}:00 UTC, skipping at ${currentHour}:00`);

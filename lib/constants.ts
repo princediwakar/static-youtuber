@@ -50,19 +50,19 @@ export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: nu
 };
 
 // ─── Model config ─────────────────────────────────────────────────────────────
-export const GEMINI_TEXT_MODEL = 'gemini-3.1-flash-lite';
-export const GEMINI_QUALITY_GATE_MODEL = 'gemini-3.1-flash-lite';
+export const DEEPSEEK_TEXT_MODEL = 'deepseek-chat';
+export const CF_AI_IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
+export const CF_AI_SLIDE_WIDTH = 576;
+export const CF_AI_SLIDE_HEIGHT = 1024;
+export const FISH_AUDIO_MODEL = 's2.1-pro-free';
 
-export const IMAGE_MODEL = 'gemini-2.5-flash-image';
-export const IMAGE_MODEL_THUMBNAIL = 'gemini-3.1-flash-image';
-export const IMAGE_ASPECT_RATIO = '9:16';
-
-export const TTS_MODEL = 'gemini-3.1-flash-tts-preview';
-export const TTS_SAMPLE_RATE = 24000;
+// Default Fish Audio reference_id (Generic Female / English).
+// Swap per niche if different voices are desired.
+const FISH_VOICE_GENERIC_FEMALE = 'fb6c0e1ea91e427fb9a93b9bbf0a1e4d';
 
 export const TTS_VOICE_PROFILES: Record<string, TTSVoiceProfile> = {
   'SaaS & AI Tools': {
-    voice: 'Orus',
+    referenceId: FISH_VOICE_GENERIC_FEMALE,
     directorNotes: `
 # AUDIO PROFILE: Tech Reviewer
 ## "SaaS & AI Tools"
@@ -83,7 +83,7 @@ before the key benefit or feature name.
 Accent: Clear, neutral international English.`,
   },
   'Financial Forensics': {
-    voice: 'Orus',
+    referenceId: FISH_VOICE_GENERIC_FEMALE,
     directorNotes: `
 # AUDIO PROFILE: Investigative Journalist
 ## "Financial Forensics"
@@ -106,7 +106,7 @@ of the money involved.
 Accent: Clear, neutral international English.`,
   },
   'Stoic Philosophy': {
-    voice: 'Orus',
+    referenceId: FISH_VOICE_GENERIC_FEMALE,
     directorNotes: `
 # AUDIO PROFILE: Stoic Narrator
 ## "Stoic Philosophy"
@@ -127,7 +127,7 @@ Pause before moral conclusions. The final line should hang in the air.
 Accent: Clear, deep international English with gravitas.`,
   },
   'Urban Survival': {
-    voice: 'Sadaltager',
+    referenceId: FISH_VOICE_GENERIC_FEMALE,
     directorNotes: `
 # AUDIO PROFILE: Tactical Briefing
 ## "Urban Survival"
@@ -151,13 +151,12 @@ Accent: Clear, neutral international English.`,
 
 // ─── Music ─────────────────────────────────────────────────────────────────────
 export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
-export const MUSIC_FILES = ['focus-01.mp3', 'tension-01.mp3', 'ambient-01.mp3'];
 export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/';
 
 export const FORMATS = FORMAT_TEMPLATES; // alias for backward compatibility
 
 export const DEFAULT_TTS_VOICE_PROFILE: TTSVoiceProfile = {
-  voice: 'Orus',
+  referenceId: FISH_VOICE_GENERIC_FEMALE,
   directorNotes: `
 ### DIRECTOR'S NOTES
 Style: Crisp, authoritative narrator. Tension from facts, not voice.
@@ -166,11 +165,10 @@ Accent: Clear, neutral international English.`,
 };
 
 export type TTSVoiceProfile = {
-  voice: string;
+  referenceId: string;
   directorNotes: string;
 };
 
-export const MUSIC_MODEL = 'lyria-3-clip-preview';
 export const MODAL_RENDER_URL = process.env.MODAL_RENDER_URL || 'https://example-modal-url.com/render';
 
 export const FFMPEG_CRF = '23';
@@ -280,33 +278,36 @@ export type Aesthetic = {
   imageNegative: string;
 };
 
+// FLUX.1 [schnell] optimized image prefixes — keyword-dense, comma-separated tags, not prose.
+// FLUX is a distilled model that interprets prompts literally. Each prefix includes the 7
+// required tag categories: subject, environment, lighting, camera, color palette, texture, atmosphere.
 export const AESTHETICS: Record<string, Aesthetic> = {
   dossier: {
     id: 'dossier',
     instruction: 'All images must feel like a premium, dark, cinematic classified dossier.',
-    imagePrefix: 'vintage archival photograph, high contrast black and white, heavily textured film grain, declassified document style, blueprint elements, ominous lighting, no text in image, ',
-    thumbnailPrefix: 'vintage archival photograph, declassified document style, high-quality, striking contrast, no text in image, ',
+    imagePrefix: 'black and white photography, high contrast, film grain texture, declassified document, blueprint blueprint-style, dramatic shadows, chiaroscuro lighting, vintage archival, ',
+    thumbnailPrefix: 'black and white photography, declassified document, high contrast, film grain, dramatic shadows, no text, no watermark, ',
     imageNegative: 'text, watermark, logo, blurry, low quality, unrealistic anatomy, modern style, color photo, bright colors',
   },
   vector: {
     id: 'vector',
     instruction: 'All images must feel like a premium, high-budget UI/UX product demo (like Apple keynotes or high-end SaaS explainers).',
-    imagePrefix: 'premium 2D vector flat art, clean UI mockup style, dramatic isometric perspective, limited bold color palette, clean geometric shapes, dramatic lighting, no text in image, ',
-    thumbnailPrefix: 'premium 2D vector flat art, clean SaaS UI style, bold colors, high-quality, striking contrast, no text in image, ',
+    imagePrefix: '2D vector flat art, clean UI mockup, isometric perspective, bold limited color palette, geometric shapes, dramatic studio lighting, smooth matte texture, no text, ',
+    thumbnailPrefix: '2D vector flat art, clean SaaS UI style, bold colors, high contrast, isometric perspective, no text, no watermark, ',
     imageNegative: 'text, watermark, logo, blurry, low quality, photorealistic, 3D render, stock photo, cluttered',
   },
   'dark-cinematic': {
     id: 'dark-cinematic',
     instruction: 'All images must feel like a dark, moody cinematic frame — dramatic chiaroscuro, ancient textures, and powerful solitary figures.',
-    imagePrefix: 'dark cinematic photography, dramatic chiaroscuro lighting, marble statues, storm clouds, solitary figure in vast landscape, desaturated with deep blacks, film grain, no text in image, ',
-    thumbnailPrefix: 'dark cinematic, dramatic chiaroscuro, powerful solitary imagery, high-quality, striking contrast, no text in image, ',
+    imagePrefix: 'cinematic photography, dramatic chiaroscuro, marble statue texture, storm cloud sky, solitary figure, wide landscape, desaturated deep blacks, film grain, ',
+    thumbnailPrefix: 'dark cinematic, dramatic chiaroscuro, solitary figure, storm clouds, high contrast, film grain, no text, no watermark, ',
     imageNegative: 'text, watermark, logo, blurry, bright colors, cheerful, cartoon, modern technology, crowded scenes, selfie style',
   },
   tactical: {
     id: 'tactical',
     instruction: 'All images must feel like hyper-realistic tactical photography — gear close-ups, high-stakes scenarios, and functional minimalism.',
-    imagePrefix: 'hyper-realistic tactical photography, matte black gear, dramatic practical lighting, shallow depth of field on equipment, moody urban environment, no text in image, ',
-    thumbnailPrefix: 'hyper-realistic tactical gear, dramatic moody lighting, high-quality, striking contrast, no text in image, ',
+    imagePrefix: 'hyper-realistic tactical photography, matte black gear, dramatic practical lighting, shallow depth of field, moody urban environment, rough texture, atmospheric haze, ',
+    thumbnailPrefix: 'hyper-realistic tactical gear, dramatic moody lighting, shallow depth of field, high contrast, no text, no watermark, ',
     imageNegative: 'text, watermark, logo, blurry, low quality, cartoon, illustration, bright cheerful colors, cluttered background, AI-generated look',
   },
 };

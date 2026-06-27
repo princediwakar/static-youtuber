@@ -7,10 +7,10 @@ import { existsSync } from 'fs';
 import path from 'path';
 import {
   MUSIC_DIR,
-  MUSIC_FILES,
   MUSIC_ATTRIBUTION,
   FONT_PATH,
 } from '../lib/constants';
+import { MUSIC_CATALOG } from '../lib/musicSelector';
 
 async function main() {
   console.log('═══ Asset Verification ═══\n');
@@ -29,10 +29,11 @@ async function main() {
   // ── 2. Music ─────────────────────────────────────────────────────────
   console.log('\n2. Background Music');
   console.log(`   Dir: ${MUSIC_DIR}`);
-  console.log(`   Expected files: ${MUSIC_FILES.join(', ')}`);
+  const musicFiles = MUSIC_CATALOG.map(t => t.filename);
+  console.log(`   Expected files: ${musicFiles.join(', ')}`);
 
   const available: string[] = [];
-  for (const f of MUSIC_FILES) {
+  for (const f of musicFiles) {
     const full = path.join(MUSIC_DIR, f);
     const ok = existsSync(full);
     console.log(`   ${f}: ${ok ? 'EXISTS' : 'MISSING'}`);

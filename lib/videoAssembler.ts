@@ -6,7 +6,6 @@ import path from 'path';
 import { tmpdir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { downloadAsBuffer } from './cloudinary';
-import { TTS_SAMPLE_RATE } from './constants';
 import {
   FFMPEG_CRF,
   FFMPEG_PRESET,
@@ -93,7 +92,7 @@ async function buildShotClip(
       .input(imagePath)
       .inputOptions(['-loop 1'])
       .input(audioPath)
-      .inputOptions(['-f', 's16le', '-ar', `${TTS_SAMPLE_RATE}`, '-ac', '1'])
+      .inputOptions(['-f', 'wav'])
       .videoFilter(zoompanFilter)
       .outputOptions([
         '-c:v libx264',

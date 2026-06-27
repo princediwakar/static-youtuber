@@ -1,12 +1,10 @@
 // Path: lib/topicGenerator.ts
 import { z } from 'zod';
-import { GoogleGenAI, Type, Schema } from '@google/genai';
+import { chatCompletion, extractJson } from './deepseek';
 import { query } from './database';
 import { SlideshowScript } from './types';
 import { validateAllCaptions } from './captionValidator';
 import {
-  GEMINI_TEXT_MODEL,
-  GEMINI_QUALITY_GATE_MODEL,
   AESTHETICS,
   NICHE_PROFILES,
   DEFAULT_NICHE_PROFILE,
@@ -17,12 +15,6 @@ import {
   TEMPLATE_SHOT_COUNTS,
 } from './constants';
 import type { FormatTemplate } from './constants';
-
-function getTextClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  return new GoogleGenAI({ apiKey });
-}
 
 const BANNED_END_PUNCTUATION = ['.', '!', '?', ':', ';', ','];
 
@@ -114,52 +106,9 @@ const QualityScoreSchema = z.object({
   approved: z.boolean(),
 });
 
-const GeminiScriptSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    fact_check_and_sources: {
-      type: Type.ARRAY,
-      description: 'At least 3 verified factual claims. Each must have a full-sentence claim (min 10 chars) and a named source (min 5 chars — publication, study, document name).',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          claim: { type: Type.STRING, description: 'Full sentence stating the verifiable fact. Min 10 characters.' },
-          source: { type: Type.STRING, description: 'Named source — publication, study, document. Min 5 characters.' },
-        },
-        required: ['claim', 'source'],
-      },
-    },
-    visual_world: { type: Type.STRING, description: 'The unified aesthetic for all images. Must be one of: vector, dossier, dark-cinematic, tactical.' },
-    format_template: { type: Type.STRING, description: 'The script format. Must be one of: RAPID_FIRE, SLOW_BURN, THE_LIST. This drives shot count and pacing.' },
-    title: { type: Type.STRING, description: 'Script title. 5-100 characters. Must not end with a period.' },
-    description: { type: Type.STRING, description: 'Script description. 30-500 characters.' },
-    tags: { type: Type.ARRAY, description: '5-12 lowercase tags with hyphens instead of spaces. Each tag 2-30 chars.', items: { type: Type.STRING } },
-    hook_intro: { type: Type.STRING, description: 'The first 3-5 words of the video — must be the exact first words of shot 1 tts_text. High-tension phrase. Must not end with punctuation — it flows directly into shot 1 tts_text. Write this BEFORE writing any shots so it matches shot 1 exactly.' },
-    shots: {
-      type: Type.ARRAY,
-      description: '12-18 shots composing the full script. Each shot has an id, visual_prompt describing the image scene, tts_text for voiceover, audio_instruction for delivery tone, and is_conclusion boolean (exactly one shot must be conclusion — the last one).',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          id: { type: Type.NUMBER, description: 'Sequential shot number starting from 1.' },
-          visual_prompt: { type: Type.STRING, description: 'Visual scene description. 30-600 chars. Must specify lighting direction, camera angle, focal distance, dominant colors, textures, atmosphere. Never write the word "text" — not even to say "no text." Describe only what IS visible.' },
-          tts_text: { type: Type.STRING, description: `Shot voiceover text. 3-12 words, max ${CAPTION_MAX_CHARS} chars, each word ≤${CAPTION_MAX_CHARS_PER_LINE} chars. Must end with . ! or ?. Spoken English. Zero vague words. Zero CTAs.` },
-          audio_instruction: { type: Type.STRING, description: 'Audio delivery tag in brackets: [serious], [curious], [urgent], [measured], or [grave].' },
-          is_conclusion: { type: Type.BOOLEAN, description: 'True only for the final shot. Exactly one shot in the array must have this set to true — and it must be the last shot.' },
-        },
-        required: ['id', 'visual_prompt', 'tts_text', 'is_conclusion'],
-      },
-    },
-    thumbnailPrompt: { type: Type.STRING, description: 'Thumbnail image prompt. 30-500 characters. Must match the visual world aesthetic.' },
-  },
-  required: ['fact_check_and_sources', 'visual_world', 'format_template', 'title', 'description', 'tags', 'hook_intro', 'shots', 'thumbnailPrompt'],
-};
-
 type QualityScore = z.infer<typeof QualityScoreSchema>;
 
 export async function generateTopics(niche: string, accountId: string): Promise<void> {
-  const client = getTextClient();
-
   const pastTopicsRes = await query<{ topic: string }>(
     `SELECT topic FROM slideshow_topics WHERE niche = $1 AND account_id = $2 ORDER BY used_at DESC NULLS LAST LIMIT 50`,
     [niche, accountId]
@@ -182,29 +131,20 @@ TOPIC QUALITY CRITERIA:
 DO NOT generate any of these previously used topics:
 ${pastTopics.length > 0 ? pastTopics.join('\n') : 'No past topics yet.'}
 
-Output ONLY valid JSON in this format, no markdown:
+Output ONLY valid JSON. No markdown.
 { "topics": ["topic 1", "topic 2", ...] }`;
 
-  const response = await client.models.generateContent({
-    model: GEMINI_TEXT_MODEL,
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    config: {
-      responseMimeType: 'application/json',
-      temperature: 0.9,
-    },
-  });
+  const raw = await chatCompletion(
+    [{ role: 'user', content: prompt }],
+    { temperature: 0.9, responseJson: true },
+  );
 
-  const raw = response.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) throw new Error('Gemini returned empty content for topic generation');
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e) {
-    throw new Error('Failed to parse topic generation response');
+  const parsed = extractJson(raw);
+  if (!parsed || typeof parsed !== 'object' || !('topics' in parsed)) {
+    throw new Error('Topic generation response missing topics array');
   }
 
-  for (const topic of parsed.topics || []) {
+  for (const topic of (parsed as { topics: string[] }).topics || []) {
     await query(
       `INSERT INTO slideshow_topics (topic, niche, account_id) VALUES ($1, $2, $3) ON CONFLICT (topic, account_id) DO NOTHING`,
       [topic, niche, accountId]
@@ -252,11 +192,6 @@ export async function releaseTopic(id: number): Promise<void> {
     `UPDATE slideshow_topics SET used = FALSE, used_at = NULL WHERE id = $1`,
     [id]
   );
-}
-
-export async function pickUnusedTopic(niche: string, accountId: string): Promise<string> {
-  const { topic } = await reserveTopic(niche, accountId);
-  return topic;
 }
 
 export function pickFormatTemplate(niche: string): FormatTemplate {
@@ -339,10 +274,20 @@ All images must share a unified aesthetic. ${aestheticInstruction} Every visual_
 CAPTION CONSTRAINT (HARD LIMIT):
 Each shot's tts_text MUST fit inside 3 rendering lines. You have a maximum of ${CAPTION_MAX_CHARS} characters TOTAL per shot and each word must be ≤${CAPTION_MAX_CHARS_PER_LINE} characters. Maximum 12 words per shot. Every shot must end with sentence-ending punctuation (. ! ?). Be ruthless with word count. Shots 1+2 combined must read aloud in under 6 seconds.
 
-IMAGE PROMPT RULES:
-- Describe only the visual scene. Never write the word "text" — not even in phrases like "no text" or "without text." Describe what IS visible, never what isn't.
-- Every prompt must specify: exact lighting direction, camera angle, focal distance, dominant color palette, texture quality, and atmospheric conditions.
-- Each visual_prompt must be visually distinct from the others while sharing the unified visual world. No two shots should look like the same image.
+IMAGE PROMPT RULES (FLUX.1 [schnell] — literal, keyword-driven model):
+- Output comma-separated descriptive tags, NOT narrative prose. FLUX interprets prompts literally.
+  BAD: "A man stands alone in a vast empty warehouse bathed in cold fluorescent light"
+  GOOD: "solitary figure, abandoned warehouse, cold fluorescent overhead lighting, wide 24mm shot, concrete floor texture, desaturated blue-grey palette, volumetric light beams, deep shadows"
+- Every visual_prompt MUST include these 7 tag categories, in order:
+  1. Subject (what is in frame — be specific)
+  2. Environment (where — surfaces, materials, space)
+  3. Lighting (direction + quality — "rim light from upper left", "harsh top-down key light")
+  4. Camera (angle + lens — "low angle 35mm", "overhead macro 100mm")
+  5. Color palette (dominant colors — "amber and navy", "desaturated with deep blacks")
+  6. Texture (surface quality — "rough-hewn stone", "smooth matte plastic", "film grain")
+  7. Atmosphere (environmental conditions — "volumetric fog", "dust motes in light", "rain-slicked")
+- Never write the word "text" — not even in phrases like "no text"
+- Each visual_prompt must be visually distinct. Vary camera angles, lighting direction, and subject distance between shots.
 
 Output ONLY valid JSON. No markdown. No code fences.`;
 
@@ -354,8 +299,6 @@ async function scoreScript(
   niche: string,
   minScore: number,
 ): Promise<QualityScore> {
-  const client = getTextClient();
-
   const prompt = `You are the final quality controller for a ${niche} YouTube Shorts channel. Your standards are absolute. You reject scripts that a casual reviewer would approve. Every dimension must earn its score — default is 5, not 7.
 
 SCRIPT TO EVALUATE:
@@ -382,7 +325,7 @@ SCORING RUBRIC (0–10 each):
 OVERALL: Average of the 7 dimensions. Round to one decimal.
 approved: true if overall >= 7.0 AND no individual dimension < 5.
 
-Output ONLY valid JSON, no markdown:
+Output ONLY valid JSON. No markdown.
 {
   "specificity": number,
   "hook_strength": number,
@@ -396,16 +339,14 @@ Output ONLY valid JSON, no markdown:
   "approved": boolean
 }`;
 
-  const response = await client.models.generateContent({
-    model: GEMINI_QUALITY_GATE_MODEL,
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    config: { responseMimeType: 'application/json', temperature: 0.2 },
-  });
+  const raw = await chatCompletion(
+    [{ role: 'user', content: prompt }],
+    { temperature: 0.2, responseJson: true },
+  );
 
-  const raw = response.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!raw) throw new Error('Quality gate returned empty response');
 
-  const parsed = JSON.parse(raw);
+  const parsed = extractJson(raw);
   return QualityScoreSchema.parse(parsed);
 }
 
@@ -413,8 +354,6 @@ export async function generateScript(
   niche: string,
   accountId: string,
 ): Promise<{ script: SlideshowScript; topic: string }> {
-  const client = getTextClient();
-
   const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
   const aesthetic = AESTHETICS[profile.aestheticId] ?? Object.values(AESTHETICS)[0];
   const toneInstruction = profile.toneInstruction;
@@ -440,31 +379,21 @@ Write the script now. Follow every rule in the system prompt exactly.`;
         ? userPrompt
         : `${userPrompt}\n\nCRITICAL — Fix these issues from the previous attempt:\n${lastScore!.issues.map(i => `- ${i}`).join('\n')}`;
 
-      const response = await client.models.generateContent({
-        model: GEMINI_TEXT_MODEL,
-        contents: [{ role: 'user', parts: [{ text: userContent }] }],
-        config: {
-          systemInstruction: systemPrompt,
-          responseMimeType: 'application/json',
-          responseSchema: GeminiScriptSchema,
-          temperature: attempt === 0 ? 0.85 : 0.75,
-        },
-      });
+      const raw = await chatCompletion(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+        { temperature: attempt === 0 ? 0.85 : 0.75, responseJson: true, timeout: 120_000 },
+      );
 
-      const raw = response.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!raw) throw new Error('Gemini returned empty content for script');
+      if (!raw) throw new Error('DeepSeek returned empty content for script');
 
       let parsed: unknown;
       try {
-        let cleanRaw = raw.trim();
-        if (cleanRaw.startsWith('```')) {
-          cleanRaw = cleanRaw.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-        }
-        const bracketMatch = cleanRaw.match(/\{[\s\S]*\}/);
-        if (bracketMatch) cleanRaw = bracketMatch[0];
-        parsed = JSON.parse(cleanRaw);
+        parsed = extractJson(raw);
       } catch (err: any) {
-        throw new Error(`Parse Error: ${err.message}.`);
+        throw new Error(`Parse Error: ${err.message}`, { cause: err });
       }
 
       let validated: z.infer<typeof SlideshowScriptSchema>;

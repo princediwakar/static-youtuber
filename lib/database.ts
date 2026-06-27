@@ -29,7 +29,7 @@ export async function query<T extends QueryResultRow = any>(text: string, params
 const JOB_COLUMNS = new Set([
   'account_id', 'topic', 'niche', 'format_template', 'status',
   'inngest_run_id', 'imageBatchName', 'audioBatchName', 'script',
-  'shot_image_urls', 'shot_audio_urls', 'video_url', 'thumbnail_url',
+  'shot_image_urls', 'shot_audio_urls', 'music_url', 'video_url', 'thumbnail_url',
   'youtube_video_id', 'error_message', 'variant',
 ]);
 
