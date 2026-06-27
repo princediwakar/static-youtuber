@@ -3,6 +3,7 @@ import { inngest } from './client';
 import { GoogleGenAI } from '@google/genai';
 import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
 import { burnCaption } from '@/lib/imageGenerator';
+import { generateSlideAudio } from '@/lib/ttsGenerator';
 import {
   uploadSlideImage,
   uploadSlideAudio,
@@ -60,9 +61,29 @@ export const generateShort = inngest.createFunction(
   },
   async ({ step, event }) => {
     const accountId: string = event.data.accountId;
+    const explicitJobId: string | undefined = event.data.jobId;
 
-    // ── Step 1: Generate Script ──────────────────────────────────────────────
+    // ── Step 1: Generate Script / Resume ─────────────────────────────────────
     const { script, jobId, format_template, niche, variant, topic } = await step.run('generate-script', async () => {
+      // If an explicit jobId is given, resume that job. Otherwise check for any
+      // incomplete job for this account so we never leave orphaned work behind.
+      const jobToResume = explicitJobId
+        ? await db.getJob(explicitJobId)
+        : await db.getIncompleteJob(accountId);
+
+      if (jobToResume) {
+        console.log(`[Pipeline] Resuming job ${jobToResume.id} (status: ${jobToResume.status})`);
+        if (!jobToResume.script) throw new Error(`Job ${jobToResume.id} has no script`);
+        return {
+          script: jobToResume.script,
+          jobId: jobToResume.id,
+          format_template: jobToResume.format_template,
+          niche: jobToResume.niche,
+          variant: jobToResume.variant ?? 'A',
+          topic: jobToResume.topic,
+        };
+      }
+
       const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
       const format_template = pickFormatTemplate(niche);
       const variant = Math.random() < 0.5 ? 'A' : 'B';
@@ -80,6 +101,11 @@ export const generateShort = inngest.createFunction(
 
     // ── Step 2: Submit Batch Job ─────────────────────────────────────────────
     const batchJobName = await step.run('submit-batch', async () => {
+      const job = await db.getJob(jobId);
+      if (job?.imageBatchName && job?.audioBatchName) {
+        return { imageBatchName: job.imageBatchName, audioBatchName: job.audioBatchName };
+      }
+
       const inlineRequests = [
         ...script.shots.map((shot: any, i: number) => ({
           contents: [{ role: 'user', parts: [{ text: shot.visual_prompt }] }],
@@ -168,6 +194,12 @@ export const generateShort = inngest.createFunction(
     // Inngest's 4 MiB step return payload limit.
     for (let i = 0; i < script.shots.length; i++) {
       const result = await step.run(`harvest-shot-${i}`, async () => {
+        // Skip if this shot was already harvested in a prior run
+        const job = await db.getJob(jobId);
+        if (job?.shot_image_urls?.[i] && job?.shot_audio_urls?.[i]) {
+          return { imageUrl: job.shot_image_urls[i], audioUrl: job.shot_audio_urls[i] };
+        }
+
         const shot = script.shots[i];
         const creds = await getAccountCredentials(accountId);
 
@@ -214,21 +246,15 @@ export const generateShort = inngest.createFunction(
         );
 
         let audioPart = audioRespObj?.response?.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('audio/'));
-        let rawAudioBuffer = audioPart?.inlineData?.data ? Buffer.from(audioPart.inlineData.data, 'base64') : Buffer.alloc(0);
+        let rawAudioBuffer: Buffer = audioPart?.inlineData?.data ? Buffer.from(audioPart.inlineData.data, 'base64') : Buffer.alloc(0);
 
         if (rawAudioBuffer.length === 0) {
           console.warn(`[Pipeline] Shot ${i} batch audio missing/failed. Triggering sync fallback...`);
-          const syncResp = await ai.models.generateContent({
-            model: TTS_MODEL,
-            contents: [{ role: 'user', parts: [{ text: audioPrompt }] }],
-            config: {
-              responseModalities: ['AUDIO'],
-              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: getVoiceForNiche(niche) } } },
-            },
-          });
-          audioPart = syncResp.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('audio/'));
-          if (!audioPart?.inlineData?.data) throw new Error(`Fallback audio generation failed for shot ${i}`);
-          rawAudioBuffer = Buffer.from(audioPart.inlineData.data, 'base64');
+          const { audioBuffer } = await generateSlideAudio(
+            { text: shot.tts_text, audio_tag: shot.audio_instruction ?? '[conversational]' },
+            niche,
+          );
+          rawAudioBuffer = audioBuffer;
         }
 
         const audioUrl = await uploadSlideAudio(rawAudioBuffer, jobId, i, creds);
@@ -250,6 +276,9 @@ export const generateShort = inngest.createFunction(
 
     // ── Step 5: Generate Background Music ───────────────────────────────────
     const musicUrl = await step.run('generate-music', async () => {
+      const job = await db.getJob(jobId);
+      if (job?.music_url) return job.music_url;
+
       const creds = await getAccountCredentials(accountId);
       // Injecting the visual world and format template so the audio actually matches the visuals
       const prompt = `Cinematic ${niche} underscore for a ${format_template} video about: ${script.title}. The visual aesthetic is: ${script.visual_world}. Tense, engaging, no lyrics, dramatic pacing, appropriate instrumentation.`;
@@ -265,13 +294,18 @@ export const generateShort = inngest.createFunction(
       }
 
       const buffer = Buffer.from(audioPart.inlineData.data as string, 'base64');
-      return uploadMusicTrack(buffer, jobId, creds);
+      const url = await uploadMusicTrack(buffer, jobId, creds);
+      await db.updateJob(jobId, { music_url: url });
+      return url;
     });
 
     // ── Step 6: Generate thumbnail & Render ──────────────────────────────────
     const useModal = MODAL_RENDER_URL && !MODAL_RENDER_URL.includes('example-modal-url');
 
     const videoUrl = await step.run('render-video', async () => {
+      const job = await db.getJob(jobId);
+      if (job?.video_url) return job.video_url;
+
       const creds = await getAccountCredentials(accountId);
 
       const thumbBuffer = await generateThumbnail(script.title, script.thumbnailPrompt, niche);
@@ -346,6 +380,9 @@ export const generateShort = inngest.createFunction(
 
     // ── Step 7: Publish ──────────────────────────────────────────────────────
     await step.run('publish', async () => {
+      const job = await db.getJob(jobId);
+      if (job?.status === 'published') return;
+
       const creds = await getAccountCredentials(accountId);
 
       const jobRecord = await query('SELECT thumbnail_url FROM slideshow_jobs WHERE id = $1', [jobId]);

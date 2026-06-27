@@ -27,6 +27,24 @@ export async function query<T extends QueryResultRow = any>(text: string, params
 }
 
 export const db = {
+  getJob: async (id: string) => {
+    const res = await query(
+      `SELECT * FROM slideshow_jobs WHERE id = $1`,
+      [id]
+    );
+    return res.rows[0] ?? null;
+  },
+  getIncompleteJob: async (accountId: string) => {
+    const res = await query(
+      `SELECT * FROM slideshow_jobs
+       WHERE account_id = $1
+         AND status != 'published'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [accountId]
+    );
+    return res.rows[0] ?? null;
+  },
   createJob: async (data: { account_id: string, topic: string, niche: string, format_template: string, script: any, status: string, variant?: string }) => {
     const res = await query(
       `INSERT INTO slideshow_jobs (account_id, topic, niche, format_template, script, status, variant)
