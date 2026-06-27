@@ -287,6 +287,7 @@ export const generateShort = inngest.createFunction(
               audioUrls,
               musicUrl,
               jobId,
+              accountId,
               fps: 25,
               width: 1080,
               height: 1920,

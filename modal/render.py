@@ -49,7 +49,7 @@ CLOUDINARY_FOLDER = "ai-slideshow"
 image = (
     modal.Image.debian_slim()
     .apt_install("ffmpeg")
-    .pip_install("cloudinary", "requests")
+    .pip_install("cloudinary", "requests", "fastapi")
 )
 
 app = modal.App("slideshow-render", image=image)
@@ -153,12 +153,30 @@ def mix_music(video_path: str, music_path: str, output_path: str) -> None:
     ])
 
 
-def upload_video(file_path: str, job_id: str) -> str:
-    """Upload final MP4 to Cloudinary, return secure URL."""
+# Map account IDs to their Cloudinary credential suffixes
+ACCOUNT_CRED_SUFFIXES = {
+    "english_shots": "ENGLISH_SHOTS",
+    "astronomy_shots": "ASTRONOMY_SHOTS",
+    "health_shots": "HEALTH_SHOTS",
+    "ssc_shots": "SSC_SHOTS",
+}
+
+
+def upload_video(file_path: str, job_id: str, account_id: str) -> str:
+    """Upload final MP4 to Cloudinary, return secure URL.
+
+    Selects the correct Cloudinary account credentials based on account_id.
+    Credentials are stored in Modal secrets as:
+        CLOUDINARY_CLOUD_NAME_{SUFFIX}
+        CLOUDINARY_API_KEY_{SUFFIX}
+        CLOUDINARY_API_SECRET_{SUFFIX}
+    """
+    suffix = ACCOUNT_CRED_SUFFIXES[account_id]
+
     cloudinary.config(
-        cloud_name=os.environ["CLOUDINARY_CLOUD_NAME"],
-        api_key=os.environ["CLOUDINARY_API_KEY"],
-        api_secret=os.environ["CLOUDINARY_API_SECRET"],
+        cloud_name=os.environ[f"CLOUDINARY_CLOUD_NAME_{suffix}"],
+        api_key=os.environ[f"CLOUDINARY_API_KEY_{suffix}"],
+        api_secret=os.environ[f"CLOUDINARY_API_SECRET_{suffix}"],
     )
     result = cloudinary.uploader.upload(
         str(file_path),
@@ -188,6 +206,7 @@ def render(payload: dict):
         audioUrls   — list of Cloudinary raw audio URLs (PCM, matching imageUrls length)
         musicUrl    — Cloudinary URL for background music MP3
         jobId       — unique job identifier
+        accountId   — account ID for selecting the correct Cloudinary credentials
     Returns:
         { "mp4Url": "https://res.cloudinary.com/..." }
     """
@@ -195,6 +214,7 @@ def render(payload: dict):
     audio_urls: list[str] = payload["audioUrls"]
     music_url: str = payload["musicUrl"]
     job_id: str = payload["jobId"]
+    account_id: str = payload["accountId"]
 
     n_shots = len(image_urls)
     if len(audio_urls) != n_shots:
@@ -246,7 +266,7 @@ def render(payload: dict):
 
         # ── Upload to Cloudinary ────────────────────────────────────────
         print("[render] Uploading final video to Cloudinary…")
-        mp4_url = upload_video(str(final), job_id)
+        mp4_url = upload_video(str(final), job_id, account_id)
 
         print(f"[render] Done: {mp4_url}")
         return {"mp4Url": mp4_url}
