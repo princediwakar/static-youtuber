@@ -1,14 +1,8 @@
 // Path: lib/imageGenerator.ts
-import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
 import { existsSync } from 'fs';
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
-import { Slide } from './types';
-// Assume uploadSlideImage is used elsewhere in your pipeline
-import { uploadSlideImage } from './cloudinary'; 
 import {
-  IMAGE_MODEL,
-  IMAGE_ASPECT_RATIO,
   VIDEO_WIDTH,
   VIDEO_HEIGHT,
   CAPTION_FONT_SIZE,
@@ -29,12 +23,6 @@ const FONT_FAMILY = (() => {
   }
   return 'sans-serif';
 })();
-
-function getClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  return new GoogleGenAI({ apiKey });
-}
 
 // ─── Caption helpers ──────────────────────────────────────────────────────────
 
@@ -79,10 +67,10 @@ function detectPowerWords(word: string): boolean {
   return POWER_WORDS.has(clean);
 }
 
-const HIGHLIGHT_COLOR = '#FFD700'; 
-const HIGHLIGHT_FONT_SCALE = 1.30; 
-const TEXT_FILL = '#000000';       
-const TEXT_STROKE = '#FFFFFF';     
+const HIGHLIGHT_COLOR = '#FFD700';
+const HIGHLIGHT_FONT_SCALE = 1.30;
+const TEXT_FILL = '#000000';
+const TEXT_STROKE = '#FFFFFF';
 const SAFE_ZONE_WIDTH = VIDEO_WIDTH - 120; // 60px safe margin on both sides
 
 export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Buffer> {
@@ -102,7 +90,7 @@ export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Bu
 
     const wordWidths: number[] = [];
     let totalWordWidth = 0;
-    
+
     // Pass 1: Measure baseline text width
     for (const word of words) {
       const isHighlighted = detectPowerWords(word);
@@ -163,67 +151,4 @@ export async function burnCaption(imageBuffer: Buffer, text: string): Promise<Bu
     .composite([{ input: textOverlay, blend: 'over' }])
     .png({ quality: 100, compressionLevel: 1 })
     .toBuffer();
-}
-
-// ─── Image generation ─────────────────────────────────────────────────────────
-
-async function generateSingleImage(prompt: string): Promise<Buffer> {
-  const client = getClient();
-
-  const response = await client.models.generateContent({
-    model: IMAGE_MODEL,
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    config: {
-      responseModalities: ['TEXT', 'IMAGE'],
-      imageConfig: {
-        aspectRatio: IMAGE_ASPECT_RATIO,
-      },
-    },
-  });
-
-  const imagePart = response.candidates?.[0]?.content?.parts?.find(
-    (p: any) => p.inlineData?.mimeType?.startsWith('image/')
-  );
-  
-  const imageData = imagePart?.inlineData?.data;
-  if (!imageData) {
-    const finishReason = response.candidates?.[0]?.finishReason;
-    throw new Error(`Image model returned no image data: finishReason=${finishReason ?? 'unknown'}`);
-  }
-
-  const rawBuffer = Buffer.from(imageData as string, 'base64');
-
-  return rawBuffer;
-}
-
-async function withConcurrencyLimit<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let currentIndex = 0;
-
-  async function worker() {
-    while (currentIndex < items.length) {
-      const idx = currentIndex++;
-      results[idx] = await fn(items[idx], idx);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
-// EXPORTED: Actually process the script slides in batch without hitting rate limits
-export async function generateAllSlideImages(slides: Slide[]): Promise<Buffer[]> {
-  console.log(`[ImageGen] Starting generation for ${slides.length} slides...`);
-  
-  // Concurrency set to 2 to respect typical Gemini API vision quotas
-  return withConcurrencyLimit(slides, 2, async (slide, idx) => {
-    console.log(`[ImageGen] Generating image ${idx + 1}/${slides.length}`);
-    const baseImage = await generateSingleImage(slide.image_prompt);
-    console.log(`[ImageGen] Burning captions for image ${idx + 1}/${slides.length}`);
-    return burnCaption(baseImage, slide.text);
-  });
 }

@@ -1,22 +1,26 @@
 // Path: lib/types.ts
 
-export interface Slide {
-  text: string;         // Sentence read aloud & displayed
-  image_prompt: string; // Sent to Gemini Image model
-  audio_tag?: string;   // Dynamic audio tone/tag for TTS
-  imageUrl?: string;    // Cloudinary URL after generation
-  audioUrl?: string;    // Cloudinary URL of TTS clip for this slide
+export interface Shot {
+  id: number;
+  visual_prompt: string;
+  tts_text: string;
+  audio_instruction?: '[serious]' | '[curious]' | '[urgent]' | '[measured]' | '[grave]';
+  is_conclusion: boolean;
+  duration_seconds?: number;
+  imageUrl?: string;
+  audioUrl?: string;
 }
 
 export type SlideshowScript = {
   title: string;
   description: string;
-  format: string;
-  visual_world: string; // <-- THIS IS THE MISSING PIECE
+  visual_world: 'vector' | 'dossier' | 'dark_cinematic' | 'tactical';
+  format_template: 'RAPID_FIRE' | 'SLOW_BURN' | 'THE_LIST';
   fact_check_and_sources: string;
   tags: string[];
-  slides: Slide[];
+  shots: Shot[];
   thumbnailPrompt: string;
+  hook_intro: string;
 };
 
 export interface SlideshowJob {
@@ -24,7 +28,7 @@ export interface SlideshowJob {
   account_id: string;
   topic: string;
   niche: string;
-  format: string;
+  format_template: string;
   status:
     | 'pending'
     | 'generating'
@@ -35,32 +39,14 @@ export interface SlideshowJob {
     | 'failed';
   inngest_run_id?: string;
   script?: SlideshowScript;
-  slide_image_urls?: string[];
-  slide_audio_urls?: string[];
+  shot_image_urls?: string[];
+  shot_audio_urls?: string[];
   video_url?: string;
   thumbnail_url?: string;
   youtube_video_id?: string;
   error_message?: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface SlideshowTopic {
-  id: number;
-  topic: string;
-  niche: string;
-  used: boolean;
-  used_at?: string;
-}
-
-export interface SlideshowUpload {
-  id: number;
-  job_id: string;
-  youtube_video_id: string;
-  title: string;
-  description?: string;
-  tags: string[];
-  uploaded_at: string;
 }
 
 export interface AccountCredentials {

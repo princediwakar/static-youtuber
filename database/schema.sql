@@ -7,15 +7,15 @@ CREATE TABLE IF NOT EXISTS slideshow_jobs (
   account_id TEXT NOT NULL,
   topic TEXT NOT NULL,
   niche TEXT NOT NULL DEFAULT 'psychology',
-  format TEXT NOT NULL DEFAULT 'story',
+  format_template VARCHAR(20),   -- RAPID_FIRE | SLOW_BURN | THE_LIST
   status TEXT NOT NULL DEFAULT 'pending',
   -- pending | generating | images_done | tts_done | assembled | uploaded | failed
   inngest_run_id TEXT,
   "imageBatchName" TEXT,
   "audioBatchName" TEXT,
-  script JSONB,             -- Full DeepSeek SlideshowScript output
-  slide_image_urls JSONB,   -- Array of Cloudinary URLs for slide images
-  slide_audio_urls JSONB,   -- Array of Cloudinary URLs for TTS WAV clips
+  script JSONB,             -- Full SlideshowScript output
+  shot_image_urls JSONB,    -- Array of Cloudinary URLs for shot images
+  shot_audio_urls JSONB,    -- Array of Cloudinary URLs for TTS clips
   video_url TEXT,           -- Cloudinary URL for assembled MP4
   thumbnail_url TEXT,       -- Cloudinary URL for YouTube thumbnail
   youtube_video_id TEXT,    -- Set after successful YouTube upload
@@ -25,22 +25,35 @@ CREATE TABLE IF NOT EXISTS slideshow_jobs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE slideshow_jobs ADD COLUMN IF NOT EXISTS variant VARCHAR(10);
-
 CREATE INDEX IF NOT EXISTS slideshow_jobs_status_idx ON slideshow_jobs(status);
 CREATE INDEX IF NOT EXISTS slideshow_jobs_account_idx ON slideshow_jobs(account_id);
 CREATE INDEX IF NOT EXISTS slideshow_jobs_created_idx ON slideshow_jobs(created_at DESC);
 
--- Topic pool with atomic deduplication
+-- Topic pool with atomic deduplication, scoped per account
 CREATE TABLE IF NOT EXISTS slideshow_topics (
   id SERIAL PRIMARY KEY,
-  topic TEXT NOT NULL UNIQUE,
+  topic TEXT NOT NULL,
   niche TEXT NOT NULL DEFAULT 'psychology',
+  account_id TEXT NOT NULL,
   used BOOLEAN NOT NULL DEFAULT FALSE,
-  used_at TIMESTAMPTZ
+  used_at TIMESTAMPTZ,
+  youtube_id TEXT,
+  aesthetic_id TEXT,
+  format TEXT,
+  quality_score FLOAT DEFAULT 0,
+  views INTEGER DEFAULT 0,
+  avg_view_duration_pct FLOAT DEFAULT 0,
+  impressions INTEGER DEFAULT 0,
+  traffic_search_pct FLOAT DEFAULT 0,
+  traffic_feed_pct FLOAT DEFAULT 0,
+  analytics_synced_at TIMESTAMPTZ,
+  UNIQUE(topic, account_id)
 );
 
-CREATE INDEX IF NOT EXISTS slideshow_topics_niche_used_idx ON slideshow_topics(niche, used);
+CREATE INDEX IF NOT EXISTS slideshow_topics_account_niche_used_idx ON slideshow_topics(account_id, niche, used);
+CREATE INDEX IF NOT EXISTS idx_slideshow_topics_niche_views ON slideshow_topics (niche, views DESC) WHERE youtube_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_slideshow_topics_sync ON slideshow_topics (analytics_synced_at) WHERE youtube_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_slideshow_topics_impressions ON slideshow_topics (impressions DESC) WHERE youtube_id IS NOT NULL AND impressions > 0;
 
 -- YouTube upload records
 CREATE TABLE IF NOT EXISTS slideshow_uploads (
@@ -54,7 +67,25 @@ CREATE TABLE IF NOT EXISTS slideshow_uploads (
   uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE slideshow_uploads ADD COLUMN IF NOT EXISTS variant VARCHAR(10);
+-- Reach matrix tables
+CREATE TABLE IF NOT EXISTS matrix_subjects (
+  id SERIAL PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  niche TEXT NOT NULL,
+  label TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS matrix_angles (
+  id SERIAL PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  niche TEXT NOT NULL,
+  label TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS matrix_subjects_account_niche_idx ON matrix_subjects(account_id, niche);
+CREATE INDEX IF NOT EXISTS matrix_angles_account_niche_idx ON matrix_angles(account_id, niche);
 
 -- Auto-update updated_at on slideshow_jobs
 CREATE OR REPLACE FUNCTION update_slideshow_jobs_updated_at()

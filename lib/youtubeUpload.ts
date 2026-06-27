@@ -56,7 +56,7 @@ export async function uploadToYouTube(
     await fs.writeFile(tempVideo, new Uint8Array(videoBuffer));
     await fs.writeFile(tempThumb, new Uint8Array(thumbnailBuffer));
 
-    const title = `${script.title} #Shorts`.substring(0, 100);
+    const title = script.title.substring(0, 100);
     const description = buildDescription(script);
 
     console.log(`[YouTube] Uploading: "${title}"…`);
@@ -71,7 +71,8 @@ export async function uploadToYouTube(
         },
         status: {
           privacyStatus: 'public',
-          selfDeclaredMadeForKids: false,
+          madeForKids: false,
+          containsSyntheticMedia: true,
         },
       },
       media: {
@@ -107,7 +108,6 @@ export async function uploadToYouTube(
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildDescription(script: SlideshowScript): string {
-  const cta =
-    '\n\n🔔 Subscribe for daily history stories!\n💬 Comment which fact surprised you most!\n🔁 Share with someone who needs to see this!';
-  return `${script.description}\n\n${cta}`.substring(0, 5000);
+  const aiDisclosure = '\n\nℹ This content was produced with AI tools and has been flagged accordingly.';
+  return `${script.description}${aiDisclosure}`.substring(0, 5000);
 }

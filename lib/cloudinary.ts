@@ -40,32 +40,34 @@ function uploadFromBuffer(
   });
 }
 
+/** Upload a single shot image to Cloudinary. */
 export async function uploadSlideImage(
   buffer: Buffer,
   jobId: string,
-  slideIndex: number,
+  shotIndex: number,
   creds: AccountCredentials
 ): Promise<string> {
   initCloudinary(creds);
   return uploadFromBuffer(
     buffer,
     `${CLOUDINARY_FOLDER}/${jobId}`,
-    `slide-${slideIndex}`,
+    `shot-${shotIndex}`,
     'image'
   );
 }
 
+/** Upload a single shot audio clip (raw PCM) to Cloudinary. */
 export async function uploadSlideAudio(
   buffer: Buffer,
   jobId: string,
-  slideIndex: number,
+  shotIndex: number,
   creds: AccountCredentials
 ): Promise<string> {
   initCloudinary(creds);
   return uploadFromBuffer(
     buffer,
     `${CLOUDINARY_FOLDER}/${jobId}`,
-    `audio-${slideIndex}`,
+    `audio-${shotIndex}`,
     'raw'
   );
 }

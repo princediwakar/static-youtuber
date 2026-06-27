@@ -1,39 +1,40 @@
 // Path: inngest/pipeline.ts
 import { inngest } from './client';
 import { GoogleGenAI } from '@google/genai';
-import { pickUnusedTopic, generateScript } from '@/lib/topicGenerator';
+import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
 import { burnCaption } from '@/lib/imageGenerator';
-import { 
-  uploadSlideImage, 
-  uploadSlideAudio, 
-  uploadMusicTrack, 
-  uploadVideo, 
-  uploadThumbnail, 
-  cleanupJobArtifacts 
+import {
+  uploadSlideImage,
+  uploadSlideAudio,
+  uploadMusicTrack,
+  uploadVideo,
+  uploadThumbnail,
+  cleanupJobArtifacts
 } from '@/lib/cloudinary';
 import { db, query } from '@/lib/database';
-import { 
-  IMAGE_MODEL, 
-  TTS_MODEL, 
-  TTS_VOICE_PROFILES, 
-  DEFAULT_TTS_VOICE_PROFILE, 
-  MUSIC_MODEL, 
-  MODAL_RENDER_URL, 
-  ACCOUNT_ID, 
-  NICHES, 
-  FORMATS 
+import {
+  IMAGE_MODEL,
+  TTS_MODEL,
+  TTS_VOICE_PROFILES,
+  DEFAULT_TTS_VOICE_PROFILE,
+  NICHE_PROFILES,
+  DEFAULT_NICHE_PROFILE,
+  MUSIC_MODEL,
+  MODAL_RENDER_URL,
+  NICHES,
+  ACCOUNT_NICHE,
 } from '@/lib/constants';
 import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
 import { generateThumbnail } from '@/lib/thumbnailGenerator';
 import { assembleVideo } from '@/lib/videoAssembler';
 import { validateAllCaptions } from '@/lib/captionValidator';
-import { syncAnalytics } from '@/lib/analyticsSync';
+import { syncAnalytics, recordPublishedVideo } from '@/lib/analyticsSync';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-function buildTTSPrompt(text: string, niche: string, audioTag?: string): string {
-  const tag = audioTag ?? '[conversational]';
+function buildTTSPrompt(text: string, niche: string, audioInstruction?: string): string {
+  const tag = audioInstruction ?? '[conversational]';
   const profile = TTS_VOICE_PROFILES[niche] ?? DEFAULT_TTS_VOICE_PROFILE;
 
   return `${profile.directorNotes}\n\n### TRANSCRIPT\n${tag} ${text}`;
@@ -43,52 +44,49 @@ function getVoiceForNiche(niche: string): string {
   return (TTS_VOICE_PROFILES[niche] ?? DEFAULT_TTS_VOICE_PROFILE).voice;
 }
 
-export const generateHistoryShort = inngest.createFunction(
+export const generateShort = inngest.createFunction(
   {
-    id: 'generate-history-short',
+    id: 'generate-short',
     retries: 3,
     triggers: [
-      { cron: '0 3 * * *' },   
-      { cron: '0 16 * * *' },  
-      { cron: '0 18 * * *' },  
       { event: 'slideshow/trigger' },
     ],
     onFailure: async ({ error, event }) => {
-      console.error(`[CRITICAL] generate-history-short pipeline failed or timed out!`);
-      console.error(`Event: ${JSON.stringify(event)}`);
+      console.error(`[CRITICAL] Pipeline failed for event: ${JSON.stringify(event)}`);
       console.error(`Error: ${error.message}`);
     }
   },
-  async ({ step }) => {
+  async ({ step, event }) => {
+    const accountId: string = event.data.accountId;
+
     // ── Step 1: Generate Script ──────────────────────────────────────────────
-    const { script, jobId, format, niche, variant } = await step.run('generate-script', async () => {
-      const niche = NICHES[Math.floor(Math.random() * NICHES.length)];
-      const format = FORMATS[Math.floor(Math.random() * FORMATS.length)];
-      const variant = Math.random() < 0.5 ? 'A' : 'B'; 
+    const { script, jobId, format_template, niche, variant, topic } = await step.run('generate-script', async () => {
+      const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
+      const format_template = pickFormatTemplate(niche);
+      const variant = Math.random() < 0.5 ? 'A' : 'B';
 
-      const topic = await pickUnusedTopic(niche);
-      const script = await generateScript(topic, format, niche);
+      const { script, topic } = await generateScript(niche, accountId);
 
-      const captionResult = validateAllCaptions(script.slides.map(s => ({ text: s.text })));
+      const captionResult = validateAllCaptions(script.shots.map(s => ({ text: s.tts_text })));
       if (!captionResult.valid) {
         throw new Error(`Caption validation failed:\n${captionResult.errors.join('\n')}`);
       }
 
-      const jobId = await db.createJob({ account_id: ACCOUNT_ID, topic, niche, format, status: 'script_ready', script, variant });
-      return { script, jobId, format, niche, variant };
+      const jobId = await db.createJob({ account_id: accountId, topic, niche, format_template, script, status: 'script_ready', variant });
+      return { script, jobId, format_template, niche, variant, topic };
     });
 
     // ── Step 2: Submit Batch Job ─────────────────────────────────────────────
     const batchJobName = await step.run('submit-batch', async () => {
       const inlineRequests = [
-        ...script.slides.map((slide: any, i: number) => ({
-          contents: [{ role: 'user', parts: [{ text: slide.image_prompt }] }],
+        ...script.shots.map((shot: any, i: number) => ({
+          contents: [{ role: 'user', parts: [{ text: shot.visual_prompt }] }],
           config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '9:16' } },
         })),
-        ...script.slides.map((slide: any, i: number) => ({
+        ...script.shots.map((shot: any, i: number) => ({
           contents: [{
             role: 'user',
-            parts: [{ text: buildTTSPrompt(slide.text, niche, slide.audio_tag) }],
+            parts: [{ text: buildTTSPrompt(shot.tts_text, niche, shot.audio_instruction) }],
           }],
           config: {
             responseModalities: ['AUDIO'],
@@ -104,13 +102,13 @@ export const generateHistoryShort = inngest.createFunction(
       // Slice the array to cleanly separate image and audio requests without relying on fragile string keys
       const imageBatch = await ai.batches.create({
         model: IMAGE_MODEL,
-        src: inlineRequests.slice(0, script.slides.length),
+        src: inlineRequests.slice(0, script.shots.length),
         config: { displayName: `images-${jobId}` },
       });
 
       const audioBatch = await ai.batches.create({
         model: TTS_MODEL,
-        src: inlineRequests.slice(script.slides.length),
+        src: inlineRequests.slice(script.shots.length),
         config: { displayName: `audio-${jobId}` },
       });
 
@@ -125,7 +123,7 @@ export const generateHistoryShort = inngest.createFunction(
 
     // ── Step 3: Poll batches ──────────────────────────────────────────────────
     let bothDone = false;
-    const MAX_POLLS = 45; 
+    const MAX_POLLS = 45;
 
     for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
       const isDone = await step.run(`poll-batch-${attempt}`, async () => {
@@ -160,52 +158,56 @@ export const generateHistoryShort = inngest.createFunction(
     }
 
     // ── Step 4: Harvest + Caption + Upload ──────────────────────────────────
-    const { imageUrls, audioUrls } = await step.run('harvest-assets', async () => {
-      const creds = await getAccountCredentials(ACCOUNT_ID);
-      const imageUrls: string[] = new Array(script.slides.length);
-      const audioUrls: string[] = new Array(script.slides.length);
+    const imageUrls: string[] = new Array(script.shots.length);
+    const audioUrls: string[] = new Array(script.shots.length);
 
+    const { imageResponses, audioResponses } = await step.run('fetch-batch-results', async () => {
       const [imageJob, audioJob] = await Promise.all([
         ai.batches.get({ name: batchJobName.imageBatchName as string }),
         ai.batches.get({ name: batchJobName.audioBatchName as string }),
       ]);
-      
-      const imageResponses = imageJob.dest?.inlinedResponses || [];
-      const audioResponses = audioJob.dest?.inlinedResponses || [];
 
-      // Process slides sequentially for sharp/canvas memory safety, but execute API fallbacks in parallel
-      for (let i = 0; i < script.slides.length; i++) {
-        const slide = script.slides[i];
-        
+      return {
+        imageResponses: imageJob.dest?.inlinedResponses || [],
+        audioResponses: audioJob.dest?.inlinedResponses || [],
+      };
+    });
+
+    // Process each shot in its own step.run() for memoization
+    for (let i = 0; i < script.shots.length; i++) {
+      const result = await step.run(`harvest-shot-${i}`, async () => {
+        const shot = script.shots[i];
+        const creds = await getAccountCredentials(accountId);
+
         // 1. HARVEST & VALIDATE IMAGE
         // Strict mapping: trim spaces and match exactly to ensure order invariance
-        const imgPrompt = slide.image_prompt.trim();
-        const imgRespObj = imageResponses.find((r: any) => 
+        const imgPrompt = shot.visual_prompt.trim();
+        const imgRespObj = imageResponses.find((r: any) =>
           r.request?.contents?.[0]?.parts?.[0]?.text?.trim() === imgPrompt
         );
-        
+
         let imgPart = imgRespObj?.response?.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
         let rawImageBuffer = imgPart?.inlineData?.data ? Buffer.from(imgPart.inlineData.data, 'base64') : Buffer.alloc(0);
 
         if (rawImageBuffer.length === 0) {
-          console.warn(`[Pipeline] Slide ${i} batch image missing/failed. Triggering sync fallback...`);
+          console.warn(`[Pipeline] Shot ${i} batch image missing/failed. Triggering sync fallback...`);
           const syncResp = await ai.models.generateContent({
             model: IMAGE_MODEL,
-            contents: [{ role: 'user', parts: [{ text: slide.image_prompt }] }],
+            contents: [{ role: 'user', parts: [{ text: shot.visual_prompt }] }],
             config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '9:16' } },
           });
           imgPart = syncResp.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
-          if (!imgPart?.inlineData?.data) throw new Error(`Fallback image generation failed for slide ${i}`);
+          if (!imgPart?.inlineData?.data) throw new Error(`Fallback image generation failed for shot ${i}`);
           rawImageBuffer = Buffer.from(imgPart.inlineData.data, 'base64');
         }
 
         // Process Canvas/Sharp overlay safely
-        const captionedBuffer = await burnCaption(rawImageBuffer, slide.text);
-        imageUrls[i] = await uploadSlideImage(captionedBuffer, jobId, i, creds);
+        const captionedBuffer = await burnCaption(rawImageBuffer, shot.tts_text);
+        const imageUrl = await uploadSlideImage(captionedBuffer, jobId, i, creds);
 
         // 2. HARVEST & VALIDATE AUDIO
-        const audioPrompt = buildTTSPrompt(slide.text, niche, slide.audio_tag).trim();
-        const audioRespObj = audioResponses.find((r: any) => 
+        const audioPrompt = buildTTSPrompt(shot.tts_text, niche, shot.audio_instruction).trim();
+        const audioRespObj = audioResponses.find((r: any) =>
           r.request?.contents?.[0]?.parts?.[0]?.text?.trim() === audioPrompt
         );
 
@@ -213,7 +215,7 @@ export const generateHistoryShort = inngest.createFunction(
         let rawAudioBuffer = audioPart?.inlineData?.data ? Buffer.from(audioPart.inlineData.data, 'base64') : Buffer.alloc(0);
 
         if (rawAudioBuffer.length === 0) {
-          console.warn(`[Pipeline] Slide ${i} batch audio missing/failed. Triggering sync fallback...`);
+          console.warn(`[Pipeline] Shot ${i} batch audio missing/failed. Triggering sync fallback...`);
           const syncResp = await ai.models.generateContent({
             model: TTS_MODEL,
             contents: [{ role: 'user', parts: [{ text: audioPrompt }] }],
@@ -223,22 +225,32 @@ export const generateHistoryShort = inngest.createFunction(
             },
           });
           audioPart = syncResp.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('audio/'));
-          if (!audioPart?.inlineData?.data) throw new Error(`Fallback audio generation failed for slide ${i}`);
+          if (!audioPart?.inlineData?.data) throw new Error(`Fallback audio generation failed for shot ${i}`);
           rawAudioBuffer = Buffer.from(audioPart.inlineData.data, 'base64');
         }
 
-        audioUrls[i] = await uploadSlideAudio(rawAudioBuffer, jobId, i, creds);
-      }
+        const audioUrl = await uploadSlideAudio(rawAudioBuffer, jobId, i, creds);
 
-      await db.updateJob(jobId, { status: 'assets_ready' });
-      return { imageUrls, audioUrls };
+        return { imageUrl, audioUrl };
+      });
+
+      imageUrls[i] = result.imageUrl;
+      audioUrls[i] = result.audioUrl;
+    }
+
+    await step.run('update-assets-ready', async () => {
+      await db.updateJob(jobId, {
+        status: 'assets_ready',
+        shot_image_urls: imageUrls,
+        shot_audio_urls: audioUrls,
+      });
     });
 
     // ── Step 5: Generate Background Music ───────────────────────────────────
     const musicUrl = await step.run('generate-music', async () => {
-      const creds = await getAccountCredentials(ACCOUNT_ID);
-      // FIXED: Injecting the visual world so the audio actually matches the visuals
-      const prompt = `Cinematic ${niche} underscore for a ${format} video about: ${script.title}. The visual aesthetic is: ${script.visual_world}. Tense, engaging, no lyrics, dramatic pacing, appropriate instrumentation.`;
+      const creds = await getAccountCredentials(accountId);
+      // Injecting the visual world and format template so the audio actually matches the visuals
+      const prompt = `Cinematic ${niche} underscore for a ${format_template} video about: ${script.title}. The visual aesthetic is: ${script.visual_world}. Tense, engaging, no lyrics, dramatic pacing, appropriate instrumentation.`;
 
       const response = await ai.models.generateContent({
         model: MUSIC_MODEL,
@@ -255,14 +267,15 @@ export const generateHistoryShort = inngest.createFunction(
     });
 
     // ── Step 6: Generate thumbnail & Render ──────────────────────────────────
+    const useModal = MODAL_RENDER_URL && !MODAL_RENDER_URL.includes('example-modal-url');
+
     const videoUrl = await step.run('render-video', async () => {
-      const creds = await getAccountCredentials(ACCOUNT_ID);
+      const creds = await getAccountCredentials(accountId);
 
       const thumbBuffer = await generateThumbnail(script.title, script.thumbnailPrompt, niche);
       const thumbnailUrl = await uploadThumbnail(thumbBuffer, jobId, creds);
       await db.updateJob(jobId, { thumbnail_url: thumbnailUrl });
 
-      const useModal = MODAL_RENDER_URL && !MODAL_RENDER_URL.includes('example-modal-url');
       if (useModal) {
         try {
           const response = await fetch(MODAL_RENDER_URL, {
@@ -281,7 +294,7 @@ export const generateHistoryShort = inngest.createFunction(
 
           if (response.ok) {
             const { mp4Url } = await response.json();
-            return mp4Url;
+            if (mp4Url) return mp4Url;
           }
           console.warn(`[Pipeline] Modal returned ${response.status}, falling back to local assembler`);
         } catch (e) {
@@ -289,28 +302,48 @@ export const generateHistoryShort = inngest.createFunction(
         }
       }
 
-      const videoBuffer = await assembleVideo(imageUrls, audioUrls, jobId);
+      const videoBuffer = await assembleVideo(imageUrls, audioUrls, musicUrl, jobId);
       return uploadVideo(videoBuffer, jobId, creds);
     });
 
+    // ── Step 6b: Wait for Modal webhook if render was sent to Modal ──────────
+    let resolvedVideoUrl = videoUrl;
+
+    if (useModal && !videoUrl) {
+      const modalResult = await step.waitForEvent('wait-for-modal', {
+        event: 'modal/render.complete',
+        timeout: '10m',
+        match: 'data.jobId',
+      }).catch(() => null);
+
+      resolvedVideoUrl = modalResult?.data?.mp4Url;
+      if (!resolvedVideoUrl) {
+        // Fallback to local assembly
+        console.warn(`[Pipeline] Modal webhook never arrived, falling back to local assembler`);
+        const videoBuffer = await assembleVideo(imageUrls, audioUrls, musicUrl, jobId);
+        const creds = await getAccountCredentials(accountId);
+        resolvedVideoUrl = await uploadVideo(videoBuffer, jobId, creds);
+      }
+    }
+
     // ── Step 7: Publish ──────────────────────────────────────────────────────
     await step.run('publish', async () => {
-      const creds = await getAccountCredentials(ACCOUNT_ID);
+      const creds = await getAccountCredentials(accountId);
 
       const jobRecord = await query('SELECT thumbnail_url FROM slideshow_jobs WHERE id = $1', [jobId]);
-      
-      // FIXED: Implement basic retry for external network calls to prevent late-stage crashes
+
+      // Implement basic retry for external network calls to prevent late-stage crashes
       let thumbRes;
-      for(let t = 0; t < 3; t++) {
+      for (let t = 0; t < 3; t++) {
         thumbRes = await fetch(jobRecord.rows[0].thumbnail_url);
         if (thumbRes.ok) break;
         await new Promise(res => setTimeout(res, 1000));
       }
-      
+
       if (!thumbRes || !thumbRes.ok) throw new Error('Failed to fetch thumbnail for YouTube upload after retries');
-      
+
       const thumbBuffer = Buffer.from(await thumbRes.arrayBuffer());
-      const result = await uploadToYouTube(videoUrl, thumbBuffer, script, creds);
+      const result = await uploadToYouTube(resolvedVideoUrl, thumbBuffer, script, creds);
 
       await query(
         `INSERT INTO slideshow_uploads (job_id, youtube_video_id, title, description, tags, variant)
@@ -318,9 +351,79 @@ export const generateHistoryShort = inngest.createFunction(
         [jobId, result.youtubeVideoId, result.title, result.description, JSON.stringify(script.tags), variant]
       );
 
-      await db.updateJob(jobId, { status: 'published', video_url: videoUrl, youtube_video_id: result.youtubeVideoId });
+      // Link the topic row to the published YouTube video for analytics attribution
+      const topicRes = await query<{ id: number }>(
+        'SELECT id FROM slideshow_topics WHERE topic = $1 AND account_id = $2',
+        [topic, accountId]
+      );
+      if (topicRes.rows.length > 0) {
+        const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
+        await recordPublishedVideo({
+          topicId: topicRes.rows[0].id,
+          youtubeId: result.youtubeVideoId,
+          aestheticId: profile.aestheticId,
+          format: format_template,
+          qualityScore: 7,
+        });
+      }
+
+      await db.updateJob(jobId, { status: 'published', video_url: resolvedVideoUrl, youtube_video_id: result.youtubeVideoId });
       await cleanupJobArtifacts(jobId, creds);
     });
+  }
+);
+
+// ── Channel Scheduler ──────────────────────────────────────────────────────────
+export const channelScheduler = inngest.createFunction(
+  {
+    id: 'channel-scheduler',
+    retries: 1,
+    triggers: [
+      { cron: '0 14 * * *' }, // Once daily at 14:00 UTC (7 AM PST / 10 AM EST)
+    ],
+    onFailure: async ({ error }) => {
+      console.error(`[CRITICAL] Channel scheduler failed: ${error.message}`);
+    },
+  },
+  async ({ step }) => {
+    const channels = await step.run('get-channels', async () => {
+      const result = await query<{ id: string }>(
+        "SELECT id FROM accounts WHERE status = 'active'"
+      );
+      return result.rows.map(r => ({ account_id: r.id, niche: ACCOUNT_NICHE[r.id] }));
+    });
+
+    let triggered = 0;
+    let skipped = 0;
+
+    for (const channel of channels) {
+      const shouldRun = await step.run(`check-throttle-${channel.account_id}`, async () => {
+        // Strict throttle: 1 video per day, per channel.
+        // YouTube needs 24h to test seed audience before the next publish.
+        const recent = await query<{ id: string }>(
+          `SELECT id FROM slideshow_jobs
+           WHERE account_id = $1
+             AND status = 'published'
+             AND created_at > NOW() - INTERVAL '24 hours'
+           LIMIT 1`,
+          [channel.account_id]
+        );
+        return recent.rows.length === 0;
+      });
+
+      if (shouldRun) {
+        await step.sendEvent(`trigger-${channel.account_id}`, {
+          name: 'slideshow/trigger',
+          data: { accountId: channel.account_id },
+        });
+        triggered++;
+      } else {
+        console.log(`[Scheduler] Skipping ${channel.account_id} — already published within 24h`);
+        skipped++;
+      }
+    }
+
+    return { accountsTriggered: triggered, accountsSkipped: skipped };
   }
 );
 

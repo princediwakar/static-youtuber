@@ -3,9 +3,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AI Slideshow — History Shorts Dashboard',
+  title: 'AI Slideshow — Dashboard',
   description:
-    'Automated pipeline dashboard for generating and uploading history-niche YouTube Shorts via Inngest, Gemini, and DeepSeek.',
+    'Automated pipeline dashboard for generating and uploading AI-powered YouTube Shorts across multiple channels via Inngest and Gemini.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

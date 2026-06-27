@@ -24,10 +24,13 @@ export async function POST(request: NextRequest) {
     // No JSON body — use the env default
   }
 
+  const resolvedAccountId = accountId ?? ACCOUNT_ID;
+  console.log(`[Cron] Triggering slideshow pipeline for account: ${resolvedAccountId}`);
+
   await inngest.send({
     name: 'slideshow/trigger',
-    data: { accountId: accountId ?? ACCOUNT_ID },
+    data: { accountId: resolvedAccountId },
   });
 
-  return NextResponse.json({ ok: true, message: 'Slideshow pipeline triggered' }, { status: 202 });
+  return NextResponse.json({ ok: true, message: `Pipeline triggered for ${resolvedAccountId}` }, { status: 202 });
 }
