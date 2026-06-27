@@ -136,7 +136,7 @@ Output ONLY valid JSON. No markdown.
 
   const raw = await chatCompletion(
     [{ role: 'user', content: prompt }],
-    { temperature: 0.9, responseJson: true },
+    { temperature: 0.9, maxTokens: 2048, responseJson: true },
   );
 
   const parsed = extractJson(raw);
@@ -289,6 +289,32 @@ IMAGE PROMPT RULES (FLUX.1 [schnell] — literal, keyword-driven model):
 - Never write the word "text" — not even in phrases like "no text"
 - Each visual_prompt must be visually distinct. Vary camera angles, lighting direction, and subject distance between shots.
 
+OUTPUT JSON SCHEMA (follow exactly — every field marked REQUIRED must be present):
+{
+  "fact_check_and_sources": [
+    { "claim": "full sentence stating a verifiable fact (min 10 chars)", "source": "named publication, study, or document (min 5 chars)" }
+  ], // REQUIRED. Min 3 items. Every factual claim in the script must appear here with a verifiable source.
+  "visual_world": "vector" | "dossier" | "dark-cinematic" | "tactical", // REQUIRED
+  "format_template": "RAPID_FIRE" | "SLOW_BURN" | "THE_LIST", // REQUIRED. Must match the assigned template.
+  "title": "5-100 character title, no trailing period", // REQUIRED
+  "description": "30-500 character video description", // REQUIRED
+  "tags": ["lowercase", "hyphenated", "tags"], // REQUIRED. 5-12 tags, each 2-30 lowercase chars, hyphens not spaces.
+  "hook_intro": "3-5 word high-tension opener", // REQUIRED. Must be the exact first words of shot 1 tts_text. No ending punctuation.
+  "shots": [ // REQUIRED. 12-18 shots.
+    {
+      "id": 1,                                    // REQUIRED. Sequential number starting from 1.
+      "visual_prompt": "comma-separated tags...", // REQUIRED. 30-600 chars. 7 tag categories. Never include the word "text".
+      "tts_text": "Shot voiceover text.",         // REQUIRED. 3-12 words. Each word ≤26 chars. Total ≤80 chars. Must end with . ! or ?
+      "audio_instruction": "[serious]",           // OPTIONAL. One of: [serious], [curious], [urgent], [measured], [grave].
+      "is_conclusion": false                      // REQUIRED. true ONLY for the final shot in the array. Exactly one shot must be true.
+    }
+  ],
+  "thumbnailPrompt": "30-500 char thumbnail image description" // REQUIRED. Must match the visual_world aesthetic.
+}
+
+EVERY shot object MUST have: id, visual_prompt, tts_text, is_conclusion.
+The LAST shot MUST have is_conclusion: true. NO other shot may have is_conclusion: true.
+
 Output ONLY valid JSON. No markdown. No code fences.`;
 
   return base;
@@ -341,7 +367,7 @@ Output ONLY valid JSON. No markdown.
 
   const raw = await chatCompletion(
     [{ role: 'user', content: prompt }],
-    { temperature: 0.2, responseJson: true },
+    { temperature: 0.2, maxTokens: 2048, responseJson: true },
   );
 
   if (!raw) throw new Error('Quality gate returned empty response');
@@ -384,7 +410,7 @@ Write the script now. Follow every rule in the system prompt exactly.`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent },
         ],
-        { temperature: attempt === 0 ? 0.85 : 0.75, responseJson: true, timeout: 120_000 },
+        { temperature: attempt === 0 ? 0.85 : 0.75, maxTokens: 8192, responseJson: true, timeout: 120_000 },
       );
 
       if (!raw) throw new Error('DeepSeek returned empty content for script');
@@ -393,6 +419,7 @@ Write the script now. Follow every rule in the system prompt exactly.`;
       try {
         parsed = extractJson(raw);
       } catch (err: any) {
+        console.error('[TopicGenerator] Raw DeepSeek response:', String(raw).slice(0, 2000));
         throw new Error(`Parse Error: ${err.message}`, { cause: err });
       }
 

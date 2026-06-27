@@ -52,16 +52,20 @@ export async function generateImage(
         body: JSON.stringify({ prompt, width, height, num_steps: steps }),
       });
 
-      if (res.status === 429 && attempt < retries) {
-        const delay = 2000 * attempt;
-        console.warn(`[CloudflareAI] Rate limited, retrying in ${delay}ms...`);
-        await new Promise(r => setTimeout(r, delay));
-        continue;
-      }
-
       if (!res.ok) {
         const errorText = await res.text().catch(() => 'unknown');
-        throw new Error(`Cloudflare AI error ${res.status}: ${errorText.slice(0, 500)}`);
+        const msg = `Cloudflare AI error ${res.status}: ${errorText.slice(0, 500)}`;
+
+        const isRetryable =
+          res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504;
+
+        if (attempt < retries && isRetryable) {
+          const delay = 2000 * attempt;
+          console.warn(`[CloudflareAI] Attempt ${attempt} failed with ${res.status}, retrying in ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        throw new Error(msg);
       }
 
       const json = await res.json();
@@ -73,15 +77,20 @@ export async function generateImage(
       writeFileSync(cachedPath, buffer);
       return buffer;
     } catch (err: any) {
-      if (attempt === retries) throw err;
-      const msg = err?.message ?? String(err);
-      if (msg.includes('429')) {
+      const msg: string = err?.message ?? String(err);
+      const isRetryable =
+        msg.includes('ETIMEDOUT') || msg.includes('ECONNRESET') ||
+        msg.includes('ECONNREFUSED') || msg.includes('ENOTFOUND') ||
+        msg.includes('fetch failed') || msg.includes('socket hang up') ||
+        msg.includes('network') || msg.includes('timeout') || msg.includes('abort');
+
+      if (attempt < retries && isRetryable) {
         const delay = 2000 * attempt;
-        console.warn(`[CloudflareAI] Rate limited, retrying in ${delay}ms...`);
+        console.warn(`[CloudflareAI] Attempt ${attempt} failed with network error, retrying in ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
-      } else {
-        throw err;
+        continue;
       }
+      throw err;
     }
   }
 

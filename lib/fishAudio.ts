@@ -29,9 +29,8 @@ export async function generateSpeech(
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          model: FISH_AUDIO_MODEL,
         },
-        body: JSON.stringify({ text, reference_id: referenceId, format: 'wav' }),
+        body: JSON.stringify({ text, reference_id: referenceId, format: 'wav', model: FISH_AUDIO_MODEL }),
       });
 
       if (!res.ok) {
