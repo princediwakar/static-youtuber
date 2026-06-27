@@ -3,7 +3,7 @@ import { inngest } from './client';
 import { GoogleGenAI } from '@google/genai';
 import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
 import { burnCaption } from '@/lib/imageGenerator';
-import { generateSlideAudio } from '@/lib/ttsGenerator';
+import { generateSlideAudio, buildTTSPrompt } from '@/lib/ttsGenerator';
 import {
   uploadSlideImage,
   uploadSlideAudio,
@@ -35,11 +35,9 @@ import { syncAnalytics, recordPublishedVideo } from '@/lib/analyticsSync';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-function buildTTSPrompt(text: string, niche: string, audioInstruction?: string): string {
-  const tag = audioInstruction ?? '[conversational]';
+function buildPipelineTTSPrompt(text: string, niche: string, audioInstruction?: string): string {
   const profile = TTS_VOICE_PROFILES[niche] ?? DEFAULT_TTS_VOICE_PROFILE;
-
-  return `${profile.directorNotes}\n\n### TRANSCRIPT\n${tag} ${text}`;
+  return buildTTSPrompt(profile, text, audioInstruction ?? '[conversational]');
 }
 
 function getVoiceForNiche(niche: string): string {
@@ -55,8 +53,22 @@ export const generateShort = inngest.createFunction(
       { event: 'slideshow/trigger' },
     ],
     onFailure: async ({ error, event }) => {
-      console.error(`[CRITICAL] Pipeline failed for event: ${JSON.stringify(event)}`);
-      console.error(`Error: ${error.message}`);
+      console.error(`[CRITICAL] Pipeline failed: ${error.message}`);
+      const accountId = (event as any)?.data?.accountId;
+      const explicitJobId = (event as any)?.data?.jobId;
+      try {
+        const job = explicitJobId
+          ? await db.getJob(explicitJobId)
+          : accountId
+            ? await db.getIncompleteJob(accountId)
+            : null;
+        if (job?.id) {
+          await db.updateJob(job.id, { status: 'failed', error_message: error.message });
+          console.error(`[Pipeline] Marked job ${job.id} as failed`);
+        }
+      } catch (dbErr: any) {
+        console.error(`[CRITICAL] Failed to update job failure status: ${dbErr.message}`);
+      }
     }
   },
   async ({ step, event }) => {
@@ -114,7 +126,7 @@ export const generateShort = inngest.createFunction(
         ...script.shots.map((shot: any, i: number) => ({
           contents: [{
             role: 'user',
-            parts: [{ text: buildTTSPrompt(shot.tts_text, niche, shot.audio_instruction) }],
+            parts: [{ text: buildPipelineTTSPrompt(shot.tts_text, niche, shot.audio_instruction) }],
           }],
           config: {
             responseModalities: ['AUDIO'],
@@ -224,14 +236,18 @@ export const generateShort = inngest.createFunction(
 
         if (rawImageBuffer.length === 0) {
           console.warn(`[Pipeline] Shot ${i} batch image missing/failed. Triggering sync fallback...`);
-          const syncResp = await ai.models.generateContent({
-            model: IMAGE_MODEL,
-            contents: [{ role: 'user', parts: [{ text: shot.visual_prompt }] }],
-            config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '9:16' } },
-          });
-          imgPart = syncResp.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
-          if (!imgPart?.inlineData?.data) throw new Error(`Fallback image generation failed for shot ${i}`);
-          rawImageBuffer = Buffer.from(imgPart.inlineData.data, 'base64');
+          try {
+            const syncResp = await ai.models.generateContent({
+              model: IMAGE_MODEL,
+              contents: [{ role: 'user', parts: [{ text: shot.visual_prompt }] }],
+              config: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '9:16' } },
+            });
+            imgPart = syncResp.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
+            if (!imgPart?.inlineData?.data) throw new Error('response missing image data');
+            rawImageBuffer = Buffer.from(imgPart.inlineData.data, 'base64');
+          } catch (imgErr: any) {
+            throw new Error(`Fallback image generation failed for shot ${i}: ${imgErr?.message ?? imgErr}`);
+          }
         }
 
         // Process Canvas/Sharp overlay safely — strip any leaked director tags
@@ -240,7 +256,7 @@ export const generateShort = inngest.createFunction(
         const imageUrl = await uploadSlideImage(captionedBuffer, jobId, i, creds);
 
         // 2. HARVEST & VALIDATE AUDIO
-        const audioPrompt = buildTTSPrompt(shot.tts_text, niche, shot.audio_instruction).trim();
+        const audioPrompt = buildPipelineTTSPrompt(shot.tts_text, niche, shot.audio_instruction).trim();
         const audioRespObj = audioResponses.find((r: any) =>
           r.request?.contents?.[0]?.parts?.[0]?.text?.trim() === audioPrompt
         );
@@ -250,11 +266,18 @@ export const generateShort = inngest.createFunction(
 
         if (rawAudioBuffer.length === 0) {
           console.warn(`[Pipeline] Shot ${i} batch audio missing/failed. Triggering sync fallback...`);
-          const { audioBuffer } = await generateSlideAudio(
-            { text: shot.tts_text, audio_tag: shot.audio_instruction ?? '[conversational]' },
-            niche,
-          );
-          rawAudioBuffer = audioBuffer;
+          try {
+            const { audioBuffer } = await generateSlideAudio(
+              { text: shot.tts_text, audio_tag: shot.audio_instruction ?? '[conversational]' },
+              niche,
+            );
+            rawAudioBuffer = audioBuffer;
+          } catch (syncErr: any) {
+            throw new Error(`Fallback audio generation failed for shot ${i}: ${syncErr?.message ?? syncErr}`);
+          }
+          if (rawAudioBuffer.length === 0) {
+            throw new Error(`Fallback audio generation failed for shot ${i} — returned empty buffer`);
+          }
         }
 
         const audioUrl = await uploadSlideAudio(rawAudioBuffer, jobId, i, creds);

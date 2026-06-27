@@ -14,7 +14,7 @@ function getClient(): GoogleGenAI {
   return new GoogleGenAI({ apiKey });
 }
 
-function buildTTSPrompt(profile: TTSVoiceProfile, slideText: string, audioTag: string): string {
+export function buildTTSPrompt(profile: TTSVoiceProfile, slideText: string, audioTag: string): string {
   const tag = audioTag.trim();
   return `${profile.directorNotes}\n\n### TRANSCRIPT\n${tag} ${slideText}`;
 }
@@ -76,12 +76,29 @@ export async function generateSlideAudio(
 
       return { audioBuffer, durationEstimateMs: durationMs };
     } catch (err: any) {
-      // Expanded catch block to handle rate limits and generic service failures
-      const isRetryable = err.message?.includes('500') || 
-                          err.message?.includes('503') || 
-                          err.message?.includes('429') || 
-                          err.message?.includes('audio tokens');
-                          
+      const msg: string = err?.message ?? String(err);
+      const code: string = err?.code ?? '';
+      const isRetryable =
+        msg.includes('500') ||
+        msg.includes('502') ||
+        msg.includes('503') ||
+        msg.includes('504') ||
+        msg.includes('429') ||
+        msg.includes('audio tokens') ||
+        msg.includes('ETIMEDOUT') ||
+        msg.includes('ECONNRESET') ||
+        msg.includes('ECONNREFUSED') ||
+        msg.includes('ENOTFOUND') ||
+        msg.includes('fetch failed') ||
+        msg.includes('socket hang up') ||
+        msg.includes('network') ||
+        msg.includes('timeout') ||
+        msg.includes('abort') ||
+        code === 'ETIMEDOUT' ||
+        code === 'ECONNRESET' ||
+        code === 'ECONNREFUSED' ||
+        code === 'ENOTFOUND';
+
       if (attempt < MAX_TTS_RETRIES && isRetryable) {
         console.warn(`[TTS] Attempt ${attempt} failed with retryable error. Retrying...`);
         await new Promise(res => setTimeout(res, 1500 * attempt));

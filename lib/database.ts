@@ -26,6 +26,13 @@ export async function query<T extends QueryResultRow = any>(text: string, params
   }
 }
 
+const JOB_COLUMNS = new Set([
+  'account_id', 'topic', 'niche', 'format_template', 'status',
+  'inngest_run_id', 'imageBatchName', 'audioBatchName', 'script',
+  'shot_image_urls', 'shot_audio_urls', 'video_url', 'thumbnail_url',
+  'youtube_video_id', 'error_message', 'variant',
+]);
+
 export const db = {
   getJob: async (id: string) => {
     const res = await query(
@@ -38,7 +45,7 @@ export const db = {
     const res = await query(
       `SELECT * FROM slideshow_jobs
        WHERE account_id = $1
-         AND status != 'published'
+         AND status NOT IN ('published', 'failed')
        ORDER BY created_at DESC
        LIMIT 1`,
       [accountId]
@@ -56,10 +63,14 @@ export const db = {
   updateJob: async (id: string, updates: Record<string, any>) => {
     const keys = Object.keys(updates);
     if (keys.length === 0) return;
-    
+
+    for (const k of keys) {
+      if (!JOB_COLUMNS.has(k)) throw new Error(`Invalid column: ${k}`);
+    }
+
     const setClause = keys.map((k, i) => `"${k}" = $${i + 2}`).join(', ');
     const values = keys.map(k => updates[k]);
-    
+
     await query(
       `UPDATE slideshow_jobs SET ${setClause}, updated_at = NOW() WHERE id = $1`,
       [id, ...values]
