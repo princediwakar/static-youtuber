@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { CF_AI_IMAGE_MODEL } from './constants';
 
-const CACHE_DIR = path.join(process.cwd(), 'cache', 'flux');
+const CACHE_DIR = path.join('/tmp', 'cache', 'flux');
 
 function ensureCacheDir(): void {
   if (!existsSync(CACHE_DIR)) {
