@@ -33,6 +33,16 @@ const JOB_COLUMNS = new Set([
   'youtube_video_id', 'error_message', 'variant',
 ]);
 
+// JSONB columns require explicit JSON.stringify — pg does NOT auto-serialize
+// JS arrays/objects to JSON, it would emit PostgreSQL array/record literals.
+const JSONB_COLUMNS = new Set(['script', 'shot_image_urls', 'shot_audio_urls']);
+
+function serializeJsonbValue(v: unknown): unknown {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string') return v; // already serialized
+  return JSON.stringify(v);
+}
+
 export const db = {
   getJob: async (id: string) => {
     const res = await query(
@@ -56,7 +66,7 @@ export const db = {
     const res = await query(
       `INSERT INTO slideshow_jobs (account_id, topic, niche, format_template, script, status, variant)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [data.account_id, data.topic, data.niche, data.format_template, data.script, data.status, data.variant || null]
+      [data.account_id, data.topic, data.niche, data.format_template, serializeJsonbValue(data.script), data.status, data.variant || null]
     );
     return res.rows[0].id;
   },
@@ -69,7 +79,7 @@ export const db = {
     }
 
     const setClause = keys.map((k, i) => `"${k}" = $${i + 2}`).join(', ');
-    const values = keys.map(k => updates[k]);
+    const values = keys.map(k => JSONB_COLUMNS.has(k) ? serializeJsonbValue(updates[k]) : updates[k]);
 
     await query(
       `UPDATE slideshow_jobs SET ${setClause}, updated_at = NOW() WHERE id = $1`,
