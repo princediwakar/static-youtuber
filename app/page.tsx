@@ -150,8 +150,7 @@ export default async function DashboardPage() {
             <div className="empty-icon">🎬</div>
             <p className="empty-title">No jobs yet</p>
             <p className="empty-sub">
-              Trigger the pipeline via <code>POST /api/cron</code> or wait for the
-              scheduled cron-job.org run.
+              Trigger the pipeline via Inngest or wait for the daily scheduled run.
             </p>
           </div>
         ) : (

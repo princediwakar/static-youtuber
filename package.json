@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "trigger": "bash -c 'export $(grep \"^CRON_SECRET=\" .env.local | sed \"s/ #.*//\" | xargs); curl -s -X POST \"${NEXT_PUBLIC_APP_URL:-http://localhost:3000}/api/cron\" -H \"Authorization: Bearer $CRON_SECRET\" -H \"Content-Type: application/json\" -d \"{}\"'",
-    "trigger:prod": "bash -c 'export $(grep \"^CRON_SECRET=\" .env.local | sed \"s/ #.*//\" | xargs); curl -s -X POST \"https://staticyoutuber.vercel.app/api/cron\" -H \"Authorization: Bearer $CRON_SECRET\" -H \"Content-Type: application/json\" -d \"{}\"'"
+    "trigger": "npx tsx scripts/trigger.ts"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

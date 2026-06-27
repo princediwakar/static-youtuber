@@ -13,6 +13,17 @@ export const ACCOUNT_NICHE: Record<string, string> = {
   ssc_shots: 'Urban Survival',
 };
 
+// Optimal publish hour per niche (UTC).
+// Staggered across the US daytime window so each channel hits a different
+// sweet spot: videos are indexed by the algorithm 2-3 hours before peak
+// evening viewing (7-10 PM local) and no two pipelines contend for resources.
+export const NICHE_PUBLISH_HOUR_UTC: Record<string, number> = {
+  'Financial Forensics': 15,  // 11 AM EST — finance audience peaks midday + lunch scroll
+  'Stoic Philosophy':    17,  //  1 PM EST — self-improvement, indexed by afternoon reflection window
+  'Urban Survival':      19,  //  3 PM EST — broad US male audience, indexed by evening peak
+  'SaaS & AI Tools':     21,  //  5 PM EST — tech audience scrolls after work / pre-dinner
+};
+
 // ─── Format templates ───────────────────────────────────────────────────────────
 export const FORMAT_TEMPLATES = ['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST'] as const;
 export type FormatTemplate = typeof FORMAT_TEMPLATES[number];

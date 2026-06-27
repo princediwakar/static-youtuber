@@ -23,6 +23,7 @@ import {
   MODAL_RENDER_URL,
   NICHES,
   ACCOUNT_NICHE,
+  NICHE_PUBLISH_HOUR_UTC,
 } from '@/lib/constants';
 import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
@@ -376,18 +377,31 @@ export const generateShort = inngest.createFunction(
 );
 
 // ── Channel Scheduler ──────────────────────────────────────────────────────────
+// Each niche fires at its optimal UTC hour (staggered across the US daytime
+// window). The cron runs at all 4 hours; on each tick, only the niche whose
+// publish hour matches the current hour gets triggered.
+//
+//   Financial Forensics → 15:00 UTC (11 AM EST)
+//   Stoic Philosophy    → 17:00 UTC ( 1 PM EST)
+//   Urban Survival      → 19:00 UTC ( 3 PM EST)
+//   SaaS & AI Tools     → 21:00 UTC ( 5 PM EST)
 export const channelScheduler = inngest.createFunction(
   {
     id: 'channel-scheduler',
     retries: 1,
     triggers: [
-      { cron: '0 14 * * *' }, // Once daily at 14:00 UTC (7 AM PST / 10 AM EST)
+      { cron: '0 15 * * *' },
+      { cron: '0 17 * * *' },
+      { cron: '0 19 * * *' },
+      { cron: '0 21 * * *' },
     ],
     onFailure: async ({ error }) => {
       console.error(`[CRITICAL] Channel scheduler failed: ${error.message}`);
     },
   },
   async ({ step }) => {
+    const currentHour = new Date().getUTCHours();
+
     const channels = await step.run('get-channels', async () => {
       const result = await query<{ id: string }>(
         "SELECT id FROM accounts WHERE status = 'active'"
@@ -395,13 +409,19 @@ export const channelScheduler = inngest.createFunction(
       return result.rows.map(r => ({ account_id: r.id, niche: ACCOUNT_NICHE[r.id] }));
     });
 
+    // Only trigger channels whose niche is scheduled for this hour
+    const dueChannels = channels.filter(c => NICHE_PUBLISH_HOUR_UTC[c.niche] === currentHour);
+
+    if (dueChannels.length === 0) {
+      console.log(`[Scheduler] No channels scheduled for ${currentHour}:00 UTC`);
+      return { accountsTriggered: 0, accountsSkipped: channels.length };
+    }
+
     let triggered = 0;
     let skipped = 0;
 
-    for (const channel of channels) {
+    for (const channel of dueChannels) {
       const shouldRun = await step.run(`check-throttle-${channel.account_id}`, async () => {
-        // Strict throttle: 1 video per day, per channel.
-        // YouTube needs 24h to test seed audience before the next publish.
         const recent = await query<{ id: string }>(
           `SELECT id FROM slideshow_jobs
            WHERE account_id = $1
@@ -425,7 +445,13 @@ export const channelScheduler = inngest.createFunction(
       }
     }
 
-    return { accountsTriggered: triggered, accountsSkipped: skipped };
+    // Log channels not due at this hour (informational)
+    const notDue = channels.filter(c => NICHE_PUBLISH_HOUR_UTC[c.niche] !== currentHour);
+    for (const c of notDue) {
+      console.log(`[Scheduler] ${c.account_id} (${c.niche}) scheduled for ${NICHE_PUBLISH_HOUR_UTC[c.niche]}:00 UTC, skipping at ${currentHour}:00`);
+    }
+
+    return { accountsTriggered: triggered, accountsSkipped: skipped + notDue.length };
   }
 );
 
