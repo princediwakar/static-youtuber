@@ -178,7 +178,7 @@ export const generateShort = inngest.createFunction(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               jobId,
-              shots: script.shots.map((shot, i) => ({
+              shots: (script.shots as Array<{ caption_text: string }>).map((shot, i) => ({
                 image_url: imageUrls[i],
                 audio_url: audioUrls[i],
                 caption_text: shot.caption_text,
