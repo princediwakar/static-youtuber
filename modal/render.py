@@ -1,291 +1,272 @@
-"""
-Modal service: Slideshow video renderer.
-
-Mirrors lib/videoAssembler.ts — downloads Cloudinary assets, builds per-shot
-MP4 clips with alternating Ken Burns zoompan, assembles with gapless concat,
-mixes background music with sidechain compression, uploads final video to
-Cloudinary, and returns the MP4 URL.
-
-Deploy:
-    modal deploy modal/render.py
-
-Set Cloudinary secrets before deploying:
-    modal secret create cloudinary \\
-        CLOUDINARY_CLOUD_NAME=your_cloud_name \\
-        CLOUDINARY_API_KEY=your_api_key \\
-        CLOUDINARY_API_SECRET=your_api_secret
-"""
-
-import os
-import shutil
-import subprocess
-import tempfile
-import concurrent.futures
-from pathlib import Path
-
 import modal
-import requests
-import cloudinary
-import cloudinary.uploader
+import os
+import subprocess
+import json
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
-# ─── Constants (mirrors lib/constants.ts) ─────────────────────────────────
-
-VIDEO_WIDTH = 1080
-VIDEO_HEIGHT = 1920
-VIDEO_FPS = 25
-FFMPEG_CRF = "23"
-FFMPEG_PRESET = "medium"
-FFMPEG_AUDIO_BITRATE = "128k"
-
-ZOOMPAN_ZOOM_IN_START = 1.0
-ZOOMPAN_ZOOM_IN_END = 1.12
-ZOOMPAN_ZOOM_OUT_START = 1.12
-ZOOMPAN_ZOOM_OUT_END = 1.0
-ZOOMPAN_SPEED = 0.0006
-CLOUDINARY_FOLDER = "ai-slideshow"
-
-# ─── Modal image ─────────────────────────────────────────────────────────
-
+# ------------------------------------------------------------------------
+# 1. ENVIRONMENT DEFINITION
+# We build a custom Debian image packed with FFmpeg and Whisper.
+# We also download the Montserrat font directly into the container's font path.
+# ------------------------------------------------------------------------
 image = (
-    modal.Image.debian_slim()
-    .apt_install("ffmpeg")
-    .pip_install("cloudinary", "requests", "fastapi")
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg", "fontconfig", "curl")
+    .pip_install(
+        "openai-whisper",
+        "whisper-timestamped",
+        "requests",
+        "cloudinary",
+        "fastapi"
+    )
+    .run_commands(
+        "mkdir -p /usr/share/fonts/truetype/montserrat",
+        "curl -L -o /usr/share/fonts/truetype/montserrat/Montserrat-Bold.ttf 'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf'",
+        "fc-cache -f -v"
+    )
 )
 
 app = modal.App("slideshow-render", image=image)
 
+# ------------------------------------------------------------------------
+# 2. HELPER: ASS TIMESTAMPS
+# Converts seconds (float) to ASS format: H:MM:SS.cs
+# ------------------------------------------------------------------------
+def format_ass_time(seconds: float) -> str:
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    centisecs = int(round((seconds % 1) * 100))
+    # Cap centiseconds at 99 to prevent ASS parsing errors
+    if centisecs == 100:
+        centisecs = 99
+    return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
 
-# ─── Helpers ─────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------
+# 3. GPU WORKER: WHISPER ALIGNMENT -> KINETIC TYPOGRAPHY
+# Uses the T4 GPU to generate an Advanced SubStation Alpha (.ass) file
+# ------------------------------------------------------------------------
+@app.function(gpu="T4")
+def generate_ass_subtitles(audio_path: str, caption_text: str, shot_index: int) -> str:
+    import whisper_timestamped as whisper
+    
+    # Load model (Modal caches this across warm invocations)
+    model = whisper.load_model("base", device="cuda")
+    
+    # Transcribe with forced alignment
+    # We pass the expected caption_text as the initial prompt to guide the model
+    results = whisper.transcribe(model, audio_path, language="en", initial_prompt=caption_text)
+    
+    ass_path = f"/tmp/shot_{shot_index}.ass"
+    
+    # ASS File Header for 1080x1920
+    ass_content = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "PlayResX: 1080",
+        "PlayResY: 1920",
+        "WrapStyle: 1",  # Smart word wrapping
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        # Style definition: Montserrat, 72px, White text, Black outline/shadow, Centered (Alignment 5 or 8)
+        "Style: Default,Montserrat,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,4,5,100,100,600,1",
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
+    ]
+    
+    # Kinetic Typography Logic:
+    # We display the full caption for the duration of the shot, but highlight 
+    # the currently spoken word in Gold (\c&H00D7FF&) and scale it up (\fscx120\fscy120).
+    
+    words_data = []
+    if 'segments' in results and len(results['segments']) > 0:
+        for segment in results['segments']:
+            for w in segment.get('words', []):
+                words_data.append(w)
+                
+    # Fallback if Whisper returns empty (extremely rare, but saves the pipeline)
+    if not words_data:
+        ass_content.append(f"Dialogue: 0,0:00:00.00,0:00:10.00,Default,,0,0,0,,{caption_text}")
+        with open(ass_path, "w") as f:
+            f.write("\n".join(ass_content))
+        return ass_path
 
-def download_file(url: str, dest: str) -> None:
-    r = requests.get(url, timeout=120)
-    r.raise_for_status()
-    with open(dest, "wb") as f:
-        f.write(r.content)
+    # Build the karaoke-style ASS lines
+    for i, current_word in enumerate(words_data):
+        start_time = format_ass_time(current_word['start'])
+        # If it's the last word, hold it for an extra 0.5s to prevent abrupt cutoff
+        end_time = format_ass_time(current_word['end'] if i < len(words_data) - 1 else current_word['end'] + 0.5)
+        
+        line_text = ""
+        for j, w in enumerate(words_data):
+            clean_word = w['text'].strip()
+            if j == i:
+                # Active word: Gold (BGR: 00D7FF) + 120% scale
+                line_text += f"{{\\c&H00D7FF&}}{{\\fscx120\\fscy120}}{clean_word}{{\\fscx100\\fscy100}}{{\\c&HFFFFFF&}} "
+            else:
+                # Inactive word: White
+                line_text += f"{clean_word} "
+                
+        # Append the event line
+        ass_content.append(f"Dialogue: 0,{start_time},{end_time},Default,,0,0,0,,{line_text.strip()}")
 
+    with open(ass_path, "w") as f:
+        f.write("\n".join(ass_content))
+        
+    return ass_path
 
-def run_ffmpeg(cmd: list[str]) -> None:
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print("[ffmpeg stdout]", result.stdout)
-        print("[ffmpeg stderr]", result.stderr)
-        raise RuntimeError(f"FFmpeg exited {result.returncode}")
+# ------------------------------------------------------------------------
+# 4. CPU WORKER: ASSET DOWNLOAD & FFMPEG ASSEMBLY
+# Uses 8 CPU cores. This orchestrates the downloads, calls the GPU for ASS, 
+# renders individual shots, concats them, and ducks the audio.
+# ------------------------------------------------------------------------
+@app.function(cpu=8.0, timeout=600)
+def render_video(job_id: str, shots: list, music_url: str, callback_url: str):
+    import cloudinary.uploader
+    import requests
+    
+    print(f"[{job_id}] Starting render for {len(shots)} shots.")
+    work_dir = f"/tmp/{job_id}"
+    os.makedirs(work_dir, exist_ok=True)
+    
+    # 1. Download all assets in parallel
+    def download_asset(url, filename):
+        urllib.request.urlretrieve(url, filename)
+        return filename
 
+    download_tasks = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        for i, shot in enumerate(shots):
+            img_path = f"{work_dir}/img_{i}.jpg"
+            aud_path = f"{work_dir}/aud_{i}.mp3"
+            download_tasks.append(executor.submit(download_asset, shot["image_url"], img_path))
+            download_tasks.append(executor.submit(download_asset, shot["audio_url"], aud_path))
+        
+        bg_music_path = f"{work_dir}/bg_music.mp3"
+        download_tasks.append(executor.submit(download_asset, music_url, bg_music_path))
+        
+        # Wait for all downloads
+        for task in download_tasks:
+            task.result()
 
-# ─── Pipeline stages ─────────────────────────────────────────────────────
+    # 2. Process Shots (Whisper ASS + Ken Burns Render)
+    rendered_shots = []
+    for i, shot in enumerate(shots):
+        img_path = f"{work_dir}/img_{i}.jpg"
+        aud_path = f"{work_dir}/aud_{i}.mp3"
+        
+        # Dispatch to GPU for subtitle generation
+        ass_path = generate_ass_subtitles.remote(aud_path, shot["caption_text"], i)
+        
+        # Alternating zoom direction based on shot index
+        zoom_expr = "zoom+0.0006" if i % 2 == 0 else "zoom-0.0006"
+        scale_expr = "1.0" if i % 2 == 0 else "1.12"
+        
+        out_shot = f"{work_dir}/shot_rendered_{i}.mp4"
+        
+        # The PCM/Static fix is here: -ar 44100 -ac 2 forces uniform audio across all MP3s
+        ffmpeg_shot_cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1", "-i", img_path,
+            "-i", aud_path,
+            "-vf", f"scale=1080:1920,zoompan=z='if(eq(mod(on,2),0),{scale_expr},{zoom_expr})':d=10000:s=1080x1920,ass='{ass_path}'",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+            "-shortest",
+            out_shot
+        ]
+        subprocess.run(ffmpeg_shot_cmd, check=True)
+        rendered_shots.append(out_shot)
 
-def build_shot_clip(
-    image_path: str,
-    audio_path: str,
-    output_path: str,
-    shot_index: int,
-) -> None:
-    """Still image + audio → MP4 with Ken Burns zoompan."""
-    if shot_index % 2 == 0:
-        zoom_expr = f"min({ZOOMPAN_ZOOM_IN_START}+{ZOOMPAN_SPEED}*on,{ZOOMPAN_ZOOM_IN_END})"
-    else:
-        zoom_expr = f"max({ZOOMPAN_ZOOM_OUT_END},{ZOOMPAN_ZOOM_OUT_START}-{ZOOMPAN_SPEED}*on)"
+    # 3. Concat all rendered shots
+    concat_list_path = f"{work_dir}/concat_list.txt"
+    with open(concat_list_path, "w") as f:
+        for s in rendered_shots:
+            f.write(f"file '{s}'\n")
+            
+    concat_out = f"{work_dir}/concat_out.mp4"
+    subprocess.run([
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
+        "-c", "copy", concat_out
+    ], check=True)
 
-    zoompan = (
-        f"zoompan=z='{zoom_expr}':"
-        "x='iw/2-(iw/zoom/2)':"
-        "y='ih/2-(ih/zoom/2)':"
-        "d=99999:"
-        f"s={VIDEO_WIDTH}x{VIDEO_HEIGHT}:"
-        f"fps={VIDEO_FPS}"
+    # 4. Final Mix: Sidechain Compression (The Audio Routing Fix)
+    final_out = f"{work_dir}/final_{job_id}.mp4"
+    
+    # [0:a] = Concatenated Voice
+    # [1:a] = Background Music (looped and volumed)
+    # The output of sidechaincompress (ducked music) is explicitly mixed BACK with the voice via amix
+    filter_complex = (
+        "[1:a]volume=0.35[bg_vol]; "
+        "[bg_vol][0:a]sidechaincompress=threshold=-28dB:ratio=4:attack=5:release=50[bg_ducked]; "
+        "[0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
     )
-
-    run_ffmpeg([
+    
+    subprocess.run([
         "ffmpeg", "-y",
-        "-loop", "1", "-i", image_path,
-        "-i", audio_path,
-        "-filter_complex", f"[0:v]{zoompan}[v]",
-        "-map", "[v]", "-map", "1:a",
-        "-c:v", "libx264", "-crf", FFMPEG_CRF, "-preset", FFMPEG_PRESET,
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", FFMPEG_AUDIO_BITRATE,
-        "-ar", "44100", "-ac", "2",
-        "-shortest", "-movflags", "+faststart",
-        output_path,
-    ])
+        "-i", concat_out,
+        "-stream_loop", "-1", "-i", bg_music_path,
+        "-filter_complex", filter_complex,
+        "-map", "0:v",
+        "-map", "[aout]",
+        "-c:v", "copy",
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+        "-shortest",
+        final_out
+    ], check=True)
 
-
-def assemble_clips(clip_paths: list[str], output_path: str) -> None:
-    """Assemble clips with concat filter (gapless audio, video re-encode)."""
-    if len(clip_paths) == 1:
-        shutil.copy2(clip_paths[0], output_path)
-        return
-
-    inputs: list[str] = []
-    for p in clip_paths:
-        inputs.extend(["-i", p])
-
-    n = len(clip_paths)
-    filter_inputs = "".join(f"[{i}:v][{i}:a]" for i in range(n))
-    filter_graph = f"{filter_inputs}concat=n={n}:v=1:a=1[v][a]"
-
-    run_ffmpeg([
-        "ffmpeg", "-y",
-        *inputs,
-        "-filter_complex", filter_graph,
-        "-map", "[v]", "-map", "[a]",
-        "-c:v", "libx264", "-crf", FFMPEG_CRF, "-preset", FFMPEG_PRESET,
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", FFMPEG_AUDIO_BITRATE,
-        "-movflags", "+faststart",
-        output_path,
-    ])
-
-
-def mix_music(video_path: str, music_path: str, output_path: str) -> None:
-    """Mix background music with sidechain compression (audio ducking)."""
-    run_ffmpeg([
-        "ffmpeg", "-y",
-        "-i", video_path,
-        "-stream_loop", "-1", "-i", music_path,
-        "-filter_complex",
-        "[1:a]volume=0.35[bg_vol];"
-        "[bg_vol][0:a]sidechaincompress=threshold=0.04:ratio=4:attack=5:release=50[bg_ducked];"
-        "[0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]",
-        "-map", "0:v", "-map", "[aout]", "-c:v", "copy",
-        "-c:a", "aac", "-b:a", FFMPEG_AUDIO_BITRATE,
-        "-shortest", "-movflags", "+faststart",
-        output_path,
-    ])
-
-
-# Map account IDs to their Cloudinary credential suffixes.
-# Each account requires three Modal secrets:
-#   CLOUDINARY_CLOUD_NAME_{SUFFIX}
-#   CLOUDINARY_API_KEY_{SUFFIX}
-#   CLOUDINARY_API_SECRET_{SUFFIX}
-ACCOUNT_CRED_SUFFIXES = {
-    "tech_shots": "TECH_SHOTS",
-    "finance_shots": "FINANCE_SHOTS",
-    "stoic_shots": "STOIC_SHOTS",
-    "survival_shots": "SURVIVAL_SHOTS",
-}
-
-
-def upload_video(file_path: str, job_id: str, account_id: str) -> str:
-    """Upload final MP4 to Cloudinary, return secure URL.
-
-    Selects the correct Cloudinary account credentials based on account_id.
-    Credentials are stored in Modal secrets as:
-        CLOUDINARY_CLOUD_NAME_{SUFFIX}
-        CLOUDINARY_API_KEY_{SUFFIX}
-        CLOUDINARY_API_SECRET_{SUFFIX}
-    """
-    suffix = ACCOUNT_CRED_SUFFIXES[account_id]
-
-    cloudinary.config(
-        cloud_name=os.environ[f"CLOUDINARY_CLOUD_NAME_{suffix}"],
-        api_key=os.environ[f"CLOUDINARY_API_KEY_{suffix}"],
-        api_secret=os.environ[f"CLOUDINARY_API_SECRET_{suffix}"],
-    )
-    result = cloudinary.uploader.upload(
-        str(file_path),
-        folder=f"{CLOUDINARY_FOLDER}/{job_id}",
-        public_id="final",
+    # 5. Upload to Cloudinary
+    # (Assuming CLOUDINARY_URL environment variable is set via Modal Secrets)
+    upload_result = cloudinary.uploader.upload(
+        final_out, 
         resource_type="video",
-        tags=["ai-slideshow", "modal-render"],
-        overwrite=True,
-        invalidate=True,
+        folder="ai-slideshow/rendered"
     )
-    return result["secure_url"]
+    
+    video_url = upload_result['secure_url']
+    print(f"[{job_id}] Render complete. URL: {video_url}")
 
-
-# ─── Web endpoint ────────────────────────────────────────────────────────
-
-@app.function(
-    secrets=[modal.Secret.from_name("cloudinary")],
-    timeout=600,
-)
-@modal.fastapi_endpoint(method="POST")
-def render(payload: dict):
-    """
-    Render a slideshow video from Cloudinary-hosted assets.
-
-    Expected payload:
-        imageUrls   — list of Cloudinary image URLs
-        audioUrls   — list of Cloudinary raw audio URLs (PCM, matching imageUrls length)
-        musicUrl    — Cloudinary URL for background music MP3
-        jobId       — unique job identifier
-        accountId   — account ID for selecting the correct Cloudinary credentials
-        callbackUrl — (optional) URL to POST result to after render completes
-    Returns:
-        { "mp4Url": "https://res.cloudinary.com/..." }
-    """
-    image_urls: list[str] = payload["imageUrls"]
-    audio_urls: list[str] = payload["audioUrls"]
-    music_url: str = payload["musicUrl"]
-    job_id: str = payload["jobId"]
-    account_id: str = payload["accountId"]
-
-    n_shots = len(image_urls)
-    if len(audio_urls) != n_shots:
-        return {"error": f"Mismatch: {n_shots} images vs {len(audio_urls)} audio clips"}
-
-    with tempfile.TemporaryDirectory() as work_dir:
-        work = Path(work_dir)
-
-        # ── Download all assets in parallel ─────────────────────────────
-        image_paths = [work / f"shot-{i}.png" for i in range(n_shots)]
-        audio_paths = [work / f"audio-{i}.pcm" for i in range(n_shots)]
-        music_path = work / "music.mp3"
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
-            futures = []
-            for i, url in enumerate(image_urls):
-                futures.append(pool.submit(download_file, url, str(image_paths[i])))
-            for i, url in enumerate(audio_urls):
-                futures.append(pool.submit(download_file, url, str(audio_paths[i])))
-            futures.append(pool.submit(download_file, music_url, str(music_path)))
-            for f in futures:
-                f.result()
-
-        print(f"[render] Downloaded {n_shots * 2 + 1} assets for job {job_id}")
-
-        # ── Build per-shot clips (sequential — FFmpeg is CPU-bound) ─────
-        clip_paths: list[str] = []
-        for i in range(n_shots):
-            clip_path = work / f"clip-{i}.mp4"
-            direction = "IN" if i % 2 == 0 else "OUT"
-            print(f"[render] Building clip {i + 1}/{n_shots} (zoom {direction})…")
-            build_shot_clip(
-                str(image_paths[i]),
-                str(audio_paths[i]),
-                str(clip_path),
-                i,
+    # 6. Close the loop: Fire the webhook back to Next.js / Inngest
+    if callback_url:
+        print(f"[{job_id}] Firing callback to {callback_url}")
+        try:
+            response = requests.post(
+                callback_url,
+                json={"jobId": job_id, "videoUrl": video_url},
+                timeout=15
             )
-            clip_paths.append(str(clip_path))
+            response.raise_for_status()
+            print(f"[{job_id}] Callback successful.")
+        except Exception as e:
+            print(f"[{job_id}] CRITICAL: Callback failed: {e}")
 
-        # ── Assemble with concat filter ─────────────────────────────────
-        assembled = work / "assembled.mp4"
-        print(f"[render] Assembling {n_shots} clips…")
-        assemble_clips(clip_paths, str(assembled))
+    return {
+        "jobId": job_id,
+        "videoUrl": video_url
+    }
 
-        # ── Mix background music (sidechain compression) ────────────────
-        final = work / "final.mp4"
-        print("[render] Mixing background music…")
-        mix_music(str(assembled), str(music_path), str(final))
+# ------------------------------------------------------------------------
+# 5. WEBHOOK ENDPOINT
+# Your Next.js app POSTs to this endpoint. It triggers the CPU worker asynchronously.
+# ------------------------------------------------------------------------
+from fastapi import Request
 
-        # ── Upload to Cloudinary ────────────────────────────────────────
-        print("[render] Uploading final video to Cloudinary…")
-        mp4_url = upload_video(str(final), job_id, account_id)
+@app.function(secrets=[modal.Secret.from_name("cloudinary")])
+@modal.fastapi_endpoint(method="POST")
+async def trigger_render(request: Request):
+    payload = await request.json()
+    job_id = payload.get("jobId")
+    shots = payload.get("shots")
+    music_url = payload.get("music_url")
+    callback_url = payload.get("callback_url")
+    
+    if not all([job_id, shots, music_url, callback_url]):
+        return {"error": "Missing required fields"}
 
-        # ── Callback to pipeline webhook ────────────────────────────────
-        callback_url = payload.get("callbackUrl")
-        if callback_url:
-            try:
-                cb_resp = requests.post(
-                    callback_url,
-                    json={"jobId": job_id, "mp4Url": mp4_url},
-                    timeout=30,
-                )
-                print(f"[render] Webhook callback: {cb_resp.status_code}")
-            except Exception as exc:
-                print(f"[render] Webhook callback failed (non-fatal): {exc}")
-
-        print(f"[render] Done: {mp4_url}")
-        return {"mp4Url": mp4_url}
+    # Spawn the heavy render asynchronously so the HTTP request completes immediately
+    render_video.spawn(job_id, shots, music_url, callback_url)
+    
+    return {"status": "Render queued on Modal", "jobId": job_id}

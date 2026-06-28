@@ -160,6 +160,9 @@ AUDIO PACING & TTS MANIPULATION (spoken_text):
 - Use em-dashes (—) to force dramatic pauses before key facts.
 - The final shot (is_conclusion: true) MUST end with a period (.), exclamation (!), or question mark (?). Never an em-dash.
 
+CRITICAL RULE FOR CAPTION VS SPOKEN TEXT:
+- The words in caption_text and spoken_text MUST BE 100% IDENTICAL. You may only alter the punctuation (adding commas/em-dashes to spoken_text for pacing). Do not summarize, rephrase, or shorten caption_text. If spoken_text has 12 words, caption_text must have those exact same 12 words in the exact same order.
+
 VISUAL PROMPTS (FLUX.1):
 ${aestheticInstruction}
 - Write a highly descriptive, cinematic paragraph using natural language. FLUX.1 uses a T5 encoder; it understands spatial relationships (e.g., "in the foreground," "on the left") and complex sentences. DO NOT use comma-separated tags.
@@ -180,7 +183,7 @@ JSON SCHEMA TO FOLLOW:
       "id": 1,
       "visual_prompt": "cinematic paragraph describing the scene...",
       "spoken_text": "Text manipulated for TTS pacing.",
-      "caption_text": "Clean text for screen. ABSOLUTE MINIMUM 3 WORDS. Max 12 words.",
+      "caption_text": "MUST contain the EXACT same words as spoken_text in the EXACT same order. Only punctuation may differ. Never summarize. Min 3 words, max 12 words.",
       "is_conclusion": false
     }
   ],

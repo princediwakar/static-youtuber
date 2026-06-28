@@ -4,7 +4,6 @@ import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
 import { generateImage } from '@/lib/cloudflareAi';
 import { generateSpeech } from '@/lib/edgeTts';
 import { selectMusicTrack } from '@/lib/musicSelector';
-import { burnCaption } from '@/lib/imageGenerator';
 import {
   uploadSlideImage,
   uploadSlideAudio,
@@ -116,10 +115,9 @@ export const generateShort = inngest.createFunction(
           generateSpeech(ttsText, voice),
         ]);
 
-        // AUDIO gets the punctuated tts_text — IMAGE gets the clean caption_text
-        const captionedBuffer = await burnCaption(rawImageBuffer, shot.caption_text);
+        // Raw image — captions are now rendered on Modal via ASS/FFmpeg subtitle burning
         const [imageUrl, audioUrl] = await Promise.all([
-          uploadSlideImage(captionedBuffer, jobId, i, creds),
+          uploadSlideImage(rawImageBuffer, jobId, i, creds),
           uploadSlideAudio(rawAudioBuffer, jobId, i, creds),
         ]);
 
@@ -179,15 +177,14 @@ export const generateShort = inngest.createFunction(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              imageUrls,
-              audioUrls,
-              musicUrl,
               jobId,
-              accountId,
-              fps: 25,
-              width: 1080,
-              height: 1920,
-              callbackUrl: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/webhooks/modal`,
+              shots: script.shots.map((shot, i) => ({
+                image_url: imageUrls[i],
+                audio_url: audioUrls[i],
+                caption_text: shot.caption_text,
+              })),
+              music_url: musicUrl,
+              callback_url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/webhooks/modal`,
             }),
             signal: controller.signal,
           });
@@ -195,13 +192,15 @@ export const generateShort = inngest.createFunction(
           clearTimeout(timeout);
 
           if (response.ok) {
-            const { mp4Url } = await response.json();
-            if (mp4Url) {
-              console.log(`[Pipeline] Modal returned video: ${mp4Url}`);
-              return mp4Url;
+            const body = await response.json();
+            if (body.mp4Url) {
+              console.log(`[Pipeline] Modal returned video: ${body.mp4Url}`);
+              return body.mp4Url;
             }
+            console.log(`[Pipeline] Modal queued render (async), awaiting webhook callback`);
+          } else {
+            console.warn(`[Pipeline] Modal returned ${response.status}, falling back to local assembler`);
           }
-          console.warn(`[Pipeline] Modal returned ${response.status}, falling back to local assembler`);
         } catch (e: any) {
           clearTimeout(timeout);
           if (e.name === 'AbortError') {
