@@ -3,7 +3,8 @@
 export interface Shot {
   id: number;
   visual_prompt: string;
-  tts_text: string;
+  tts_text: string;        // Heavily punctuated version for Edge TTS
+  caption_text: string;    // Clean, 12-word max version for on-screen rendering
   audio_instruction?: '[serious]' | '[curious]' | '[urgent]' | '[measured]' | '[grave]';
   is_conclusion: boolean;
   duration_seconds?: number;

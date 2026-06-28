@@ -105,7 +105,6 @@ export const generateShort = inngest.createFunction(
 
         const shot = script.shots[i];
         const creds = await getAccountCredentials(accountId);
-        const captionText = shot.tts_text.replace(/\[.*?\]\s*/g, '').trim();
         const voice = EDGE_TTS_VOICES[niche] ?? 'en-US-AriaNeural';
         const ttsText = shot.audio_instruction
           ? `${shot.audio_instruction} ${shot.tts_text}`
@@ -117,8 +116,8 @@ export const generateShort = inngest.createFunction(
           generateSpeech(ttsText, voice),
         ]);
 
-        // Post-processing: caption burn depends on image buffer, uploads are independent
-        const captionedBuffer = await burnCaption(rawImageBuffer, captionText);
+        // AUDIO gets the punctuated tts_text — IMAGE gets the clean caption_text
+        const captionedBuffer = await burnCaption(rawImageBuffer, shot.caption_text);
         const [imageUrl, audioUrl] = await Promise.all([
           uploadSlideImage(captionedBuffer, jobId, i, creds),
           uploadSlideAudio(rawAudioBuffer, jobId, i, creds),

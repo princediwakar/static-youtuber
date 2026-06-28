@@ -1,42 +1,17 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+// Auto-replenishment has been intentionally removed.
+//
+// Reason: DeepSeek cannot generate factually accurate `research_context` without web access.
+// Auto-generated topics hallucinate facts, producing garbage scripts that fail the quality gate.
+//
+// Replacement workflow:
+//   1. Research topics manually (or use Perplexity/Tavily in the future)
+//   2. Add them to scripts/seed-topics.ts with accurate research_context
+//   3. Run: npx ts-node --compiler-options '{"module":"commonjs","moduleResolution":"node"}' scripts/seed-topics.ts
+//
+// See Option B in CLAUDE.md if you want to build an agentic researcher later.
 
-import { generateTopics } from '../lib/topicGenerator';
+console.error('ERROR: Auto-replenishment has been removed. Use scripts/seed-topics.ts instead.');
+console.error('See scripts/regenerate-topics.ts for the rationale and migration guide.');
+process.exit(1);
 
-const PAIRS: [string, string][] = [
-  ['SaaS & AI Tools', 'tech_shots'],
-  ['Financial Forensics', 'finance_shots'],
-  ['Stoic Philosophy', 'stoic_shots'],
-  ['Urban Survival', 'survival_shots'],
-];
-
-async function main() {
-  for (const [niche, accountId] of PAIRS) {
-    console.log(`Generating topics for ${niche} (${accountId})...`);
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        await generateTopics(niche, accountId);
-        console.log(`  Done.`);
-        break;
-      } catch (err: any) {
-        if (attempt < 4 && (err?.status === 503 || err?.message?.includes('503') || err?.message?.includes('UNAVAILABLE'))) {
-          const wait = 5000 * (attempt + 1);
-          console.log(`  503 — retrying in ${wait / 1000}s...`);
-          await new Promise(r => setTimeout(r, wait));
-          continue;
-        }
-        throw err;
-      }
-    }
-  }
-  console.log('\nAll 4 niches regenerated.');
-}
-
-main().catch((err) => {
-  console.error('Failed:', err);
-  process.exit(1);
-});
+export {};
