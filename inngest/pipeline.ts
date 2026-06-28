@@ -8,7 +8,6 @@ import {
   uploadSlideImage,
   uploadSlideAudio,
   uploadMusicTrack,
-  uploadVideo,
   uploadThumbnail,
   cleanupJobArtifacts
 } from '@/lib/cloudinary';
@@ -27,7 +26,6 @@ import {
 import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
 import { generateThumbnail } from '@/lib/thumbnailGenerator';
-import { assembleVideo } from '@/lib/videoAssembler';
 import { syncAnalytics, recordPublishedVideo } from '@/lib/analyticsSync';
 
 export const generateShort = inngest.createFunction(
@@ -169,51 +167,51 @@ export const generateShort = inngest.createFunction(
       const thumbnailUrl = await uploadThumbnail(thumbBuffer, jobId, creds);
       await db.updateJob(jobId, { thumbnail_url: thumbnailUrl });
 
-      if (useModal) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 90_000);
-
-        try {
-          const response = await fetch(MODAL_RENDER_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jobId,
-              shots: (script.shots as Array<{ caption_text: string }>).map((shot, i) => ({
-                image_url: imageUrls[i],
-                audio_url: audioUrls[i],
-                caption_text: shot.caption_text,
-              })),
-              music_url: musicUrl,
-              callback_url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/webhooks/modal`,
-            }),
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeout);
-
-          if (response.ok) {
-            const body = await response.json();
-            if (body.mp4Url) {
-              console.log(`[Pipeline] Modal returned video: ${body.mp4Url}`);
-              return body.mp4Url;
-            }
-            console.log(`[Pipeline] Modal queued render (async), awaiting webhook callback`);
-          } else {
-            console.warn(`[Pipeline] Modal returned ${response.status}, falling back to local assembler`);
-          }
-        } catch (e: any) {
-          clearTimeout(timeout);
-          if (e.name === 'AbortError') {
-            console.warn('[Pipeline] Modal timed out after 90s — will await webhook');
-          } else {
-            console.warn(`[Pipeline] Modal unreachable: ${e}, will await webhook`);
-          }
-        }
+      if (!useModal) {
+        throw new Error('MODAL_RENDER_URL is not configured — cannot render video');
       }
 
-      const videoBuffer = await assembleVideo(imageUrls, audioUrls, musicUrl, jobId);
-      return uploadVideo(videoBuffer, jobId, creds);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90_000);
+
+      try {
+        const response = await fetch(MODAL_RENDER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId,
+            shots: (script.shots as Array<{ caption_text: string }>).map((shot, i) => ({
+              image_url: imageUrls[i],
+              audio_url: audioUrls[i],
+              caption_text: shot.caption_text,
+            })),
+            music_url: musicUrl,
+            callback_url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/webhooks/modal`,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const body = await response.json();
+          if (body.mp4Url) {
+            console.log(`[Pipeline] Modal returned video: ${body.mp4Url}`);
+            return body.mp4Url;
+          }
+          console.log(`[Pipeline] Modal queued render (async), awaiting webhook callback`);
+        } else {
+          const errorBody = await response.text().catch(() => '');
+          throw new Error(`Modal returned HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+        }
+      } catch (e: any) {
+        clearTimeout(timeout);
+        if (e.name === 'AbortError') {
+          console.warn('[Pipeline] Modal timed out after 90s — will await webhook');
+        } else {
+          throw e;
+        }
+      }
     });
 
     // ── Step 4b: Wait for Modal webhook if render was sent to Modal ──────────
@@ -226,13 +224,10 @@ export const generateShort = inngest.createFunction(
         match: 'data.jobId',
       }).catch(() => null);
 
-      resolvedVideoUrl = modalResult?.data?.mp4Url;
-      if (!resolvedVideoUrl) {
-        console.warn(`[Pipeline] Modal webhook never arrived, falling back to local assembler`);
-        const videoBuffer = await assembleVideo(imageUrls, audioUrls, musicUrl, jobId);
-        const creds = await getAccountCredentials(accountId);
-        resolvedVideoUrl = await uploadVideo(videoBuffer, jobId, creds);
+      if (!modalResult?.data?.mp4Url) {
+        throw new Error('Modal render did not complete within 10 minutes — webhook never arrived');
       }
+      resolvedVideoUrl = modalResult.data.mp4Url;
     }
 
     // ── Step 5: Publish ──────────────────────────────────────────────────────
