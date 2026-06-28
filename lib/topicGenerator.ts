@@ -22,10 +22,7 @@ const ShotSchema = z.object({
   id: z.number(),
   visual_prompt: z.string()
     .min(30, 'Image prompt must be at least 30 characters')
-    .max(600, 'Image prompt must be ≤600 chars')
-    .refine(val => !/\btext\b/.test(val.toLowerCase()), {
-      message: 'Image prompt must not contain the word "text"',
-    }),
+    .max(600, 'Image prompt must be ≤600 chars'),
   spoken_text: z.string()
     .min(3, 'spoken_text must not be empty')
     .refine(t => !/\[.*?\]/.test(t), 'No director tags in spoken_text'),
@@ -171,7 +168,7 @@ ${aestheticInstruction}
 
 JSON SCHEMA TO FOLLOW:
 {
-  "fact_check_and_sources": [ { "claim": "fact", "source": "context" } ],
+  "fact_check_and_sources": [ { "claim": "fact", "source": "context" } ], // CRITICAL: MUST CONTAIN AT LEAST 3 ITEMS.
   "visual_world": "MUST EXACTLY MATCH THE VISUAL WORLD SPECIFIED ABOVE",
   "format_template": "${formatTemplate}",
   "title": "5-100 chars, no period",
@@ -181,9 +178,9 @@ JSON SCHEMA TO FOLLOW:
   "shots": [
     {
       "id": 1,
-      "visual_prompt": "A cinematic natural-language description of the frame. No comma-separated tags.",
+      "visual_prompt": "cinematic paragraph describing the scene...",
       "spoken_text": "Text manipulated for TTS pacing.",
-      "caption_text": "Clean text for screen. Max 12 words.",
+      "caption_text": "Clean text for screen. ABSOLUTE MINIMUM 3 WORDS. Max 12 words.",
       "is_conclusion": false
     }
   ],
