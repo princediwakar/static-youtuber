@@ -16,22 +16,29 @@ import {
 } from './constants';
 import type { FormatTemplate } from './constants';
 
-const BANNED_END_PUNCTUATION = ['.', '!', '?', ':', ';', ','];
 
 const ShotSchema = z.object({
   id: z.number(),
   visual_prompt: z.string()
     .min(30, 'Image prompt must be at least 30 characters')
     .max(600, 'Image prompt must be ≤600 chars'),
-  spoken_text: z.string()
-    .min(3, 'spoken_text must not be empty')
-    .refine(t => !/\[.*?\]/.test(t), 'No director tags in spoken_text'),
-  caption_text: z.string()
-    .refine(t => t.split(' ').length <= 12, 'Soft cap: 12 words max per shot')
-    .refine(t => t.split(' ').length >= 3, 'Min 3 words per shot')
-    .refine(val => val.trim() === val, 'No leading/trailing whitespace'),
+  raw_text: z.string()
+    .min(3, 'raw_text must not be empty')
+    .refine(t => !/\[.*?\]/.test(t), 'No director tags in raw_text'),
   audio_instruction: z.enum(['[serious]', '[curious]', '[urgent]', '[measured]', '[grave]']).optional(),
   is_conclusion: z.boolean().default(false),
+}).transform((data) => {
+  // spoken_text: includes commas/em-dashes for TTS pacing
+  // caption_text: strips pacing punctuation for clean on-screen display
+  const spoken = data.raw_text;
+  const caption = data.raw_text.replace(/[,—]/g, '').trim();
+  return { ...data, spoken_text: spoken, caption_text: caption };
+}).refine(data => data.caption_text.split(' ').length <= 12, {
+  message: 'Soft cap: 12 words max per shot',
+}).refine(data => data.caption_text.split(' ').length >= 3, {
+  message: 'Min 3 words per shot',
+}).refine(data => data.caption_text.trim() === data.caption_text, {
+  message: 'No leading/trailing whitespace',
 });
 
 const SlideshowScriptSchema = z.object({
@@ -44,12 +51,6 @@ const SlideshowScriptSchema = z.object({
   title: z.string().min(5).max(100),
   description: z.string().min(30).max(500),
   tags: z.array(z.string()).min(5).max(12),
-  hook_intro: z.string()
-    .min(3)
-    .max(40)
-    .refine(val => !BANNED_END_PUNCTUATION.some(p => val.trim().endsWith(p)), {
-      message: 'hook_intro must not end with punctuation',
-    }),
   shots: z.array(ShotSchema).min(12).max(18),
   thumbnailPrompt: z.string().min(30).max(500),
 }).refine(data => data.shots.filter(s => s.is_conclusion).length === 1, {
@@ -106,7 +107,7 @@ export function pickFormatTemplate(niche: string): FormatTemplate {
 // ─── PASS 1: NARRATIVE GENERATION ─────────────────────────────────────────────
 async function generateNarrative(topic: string, researchContext: string, toneInstruction: string): Promise<string> {
   const systemPrompt = `You are a master storyteller and investigative journalist. 
-Your job is to write a highly compelling, fact-dense, 150-word narrative script.
+Your job is to write a highly compelling, fact-dense, 200-220 word narrative script.
 
 TONE MANDATE:
 ${toneInstruction}
@@ -152,16 +153,14 @@ Your job is to take a completed narrative script and slice it into exactly ${sho
 FORMAT: ${formatTemplate}
 VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'vector'}
 
-AUDIO PACING & TTS MANIPULATION (spoken_text):
+AUDIO PACING & TTS MANIPULATION (raw_text):
 - TTS engines read punctuation as silence.
-- Use commas (,) to force 200ms pauses ONLY where naturally appropriate (e.g., separating clauses, lists, or dramatic beats). NEVER place a comma between a subject and its verb.
+- Include commas (,) to force 200ms pauses ONLY where naturally appropriate (e.g., separating clauses, lists, or dramatic beats). NEVER place a comma between a subject and its verb.
   - BAD: "The disciplined man, uses the rubble..."
   - GOOD: "The disciplined man uses the rubble..."
 - Use em-dashes (—) to force dramatic pauses before key facts.
 - The final shot (is_conclusion: true) MUST end with a period (.), exclamation (!), or question mark (?). Never an em-dash.
-
-CRITICAL RULE FOR CAPTION VS SPOKEN TEXT:
-- The words in caption_text and spoken_text MUST BE 100% IDENTICAL. You may only alter the punctuation (adding commas/em-dashes to spoken_text for pacing). Do not summarize, rephrase, or shorten caption_text. If spoken_text has 12 words, caption_text must have those exact same 12 words in the exact same order.
+- The on-screen caption will be derived automatically by stripping commas and em-dashes from raw_text. You do NOT need to provide a separate caption field.
 
 VISUAL PROMPTS (FLUX.1):
 ${aestheticInstruction}
@@ -177,13 +176,11 @@ JSON SCHEMA TO FOLLOW:
   "title": "5-100 chars, no period",
   "description": "Video description",
   "tags": ["lowercase", "hyphenated"],
-  "hook_intro": "first 3-5 words of shot 1 caption_text, no punctuation",
   "shots": [
     {
       "id": 1,
       "visual_prompt": "cinematic paragraph describing the scene...",
-      "spoken_text": "Text manipulated for TTS pacing.",
-      "caption_text": "MUST contain the EXACT same words as spoken_text in the EXACT same order. Only punctuation may differ. Never summarize. Min 3 words, max 12 words.",
+      "raw_text": "Text with commas and em-dashes for TTS pacing. The on-screen caption will be derived automatically from this.",
       "is_conclusion": false
     }
   ],
@@ -208,6 +205,72 @@ Slice this narrative into the exact JSON schema.`;
   );
 
   return extractJson(raw);
+}
+
+// ─── SELF-HEALING SHOT MUTATOR ──────────────────────────────────────────────────
+// If a shot's raw_text has >12 words, split it into two shots at the midpoint.
+// This keeps the LLM creative while TypeScript enforces the formatting constraints
+// deterministically. If splitting exceeds 18 shots, merge the shortest adjacent pair.
+function healShots(raw: any): any {
+  const MAX_WORDS = 12;
+  const MAX_SHOTS = 18;
+
+  let shots: any[] = raw.shots ?? [];
+  if (!Array.isArray(shots)) return raw;
+
+  // Pass 1: split oversized shots
+  const healed: any[] = [];
+  for (const shot of shots) {
+    const words: string[] = (shot.raw_text ?? '').split(/\s+/);
+    if (words.length > MAX_WORDS) {
+      const mid = Math.floor(words.length / 2);
+      const firstHalf = words.slice(0, mid).join(' ');
+      const secondHalf = words.slice(mid).join(' ');
+
+      healed.push({
+        ...shot,
+        raw_text: firstHalf,
+        is_conclusion: false,
+      });
+      healed.push({
+        ...shot,
+        raw_text: secondHalf,
+        is_conclusion: shot.is_conclusion === true,
+      });
+    } else {
+      healed.push(shot);
+    }
+  }
+
+  // Pass 2: if splitting blew past the max, merge shortest adjacent pair
+  while (healed.length > MAX_SHOTS) {
+    let minIdx = 0;
+    let minTotal = Infinity;
+    for (let i = 0; i < healed.length - 1; i++) {
+      const a = (healed[i].raw_text ?? '').split(/\s+/).length;
+      const b = (healed[i + 1].raw_text ?? '').split(/\s+/).length;
+      if (a + b < minTotal) {
+        minTotal = a + b;
+        minIdx = i;
+      }
+    }
+    // Merge the pair
+    const mergedRaw = [healed[minIdx].raw_text, healed[minIdx + 1].raw_text].filter(Boolean).join(' ');
+    const merged = {
+      ...healed[minIdx],
+      raw_text: mergedRaw,
+      is_conclusion: healed[minIdx + 1].is_conclusion === true || healed[minIdx].is_conclusion === true,
+    };
+    healed.splice(minIdx, 2, merged);
+  }
+
+  // Pass 3: re-index and ensure last shot is the conclusion
+  healed.forEach((s, i) => {
+    s.id = i + 1;
+    s.is_conclusion = i === healed.length - 1;
+  });
+
+  return { ...raw, shots: healed };
 }
 
 // ─── QUALITY GATE ────────────────────────────────────────────────────────────
@@ -273,17 +336,20 @@ export async function generateScript(
       console.log(`[TopicGenerator] Running Pass 2 (Chunking), attempt ${attempt + 1}`);
       
       const parsed = await chunkScriptToJSON(
-        narrative, 
-        reserved.topic, 
-        reserved.research_context, 
-        niche, 
-        aesthetic.instruction, 
+        narrative,
+        reserved.topic,
+        reserved.research_context,
+        niche,
+        aesthetic.instruction,
         formatTemplate
       );
-      
+
+      // Self-heal: split oversized shots, merge if >18, re-index — all in TypeScript
+      const healed = healShots(parsed);
+
       let validated: z.infer<typeof SlideshowScriptSchema>;
       try {
-        validated = SlideshowScriptSchema.parse(parsed);
+        validated = SlideshowScriptSchema.parse(healed);
       } catch (zodErr) {
         if (zodErr instanceof z.ZodError) {
           if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
@@ -300,6 +366,9 @@ export async function generateScript(
 
       const score = await scoreScript(validated, reserved.research_context, niche, profile.minQualityScore);
       if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
+        // Derive hook_intro deterministically: first 4 words of the first caption, no punctuation
+        const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
+        const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
         return {
           script: {
             title: validated.title,
@@ -311,13 +380,13 @@ export async function generateScript(
             shots: validated.shots.map(shot => ({
               id: shot.id,
               visual_prompt: `${aesthetic.imagePrefix}${shot.visual_prompt} | Avoid: ${aesthetic.imageNegative}`,
-              tts_text: shot.spoken_text,     // Maps to your existing pipeline TTS call
-              caption_text: shot.caption_text, // Maps to your imageGenerator burn step
+              tts_text: shot.spoken_text,     // derived from raw_text via Zod transform
+              caption_text: shot.caption_text, // raw_text minus commas/em-dashes via Zod transform
               audio_instruction: shot.audio_instruction,
               is_conclusion: shot.is_conclusion,
             })),
             thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt} | Avoid: ${aesthetic.imageNegative}`,
-            hook_intro: validated.hook_intro,
+            hook_intro,
           },
           topic: reserved.topic,
         };
