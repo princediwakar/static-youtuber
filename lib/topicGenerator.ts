@@ -49,7 +49,7 @@ const SlideshowScriptSchema = z.object({
   title: z.string().min(5).max(100),
   description: z.string().min(30).max(500),
   tags: z.array(z.string()).min(5).max(12),
-  shots: z.array(ShotSchema).min(12).max(18),
+  shots: z.array(ShotSchema).min(12).max(25),
   thumbnailPrompt: z.string().min(30).max(500),
 }).refine(data => data.shots.filter(s => s.is_conclusion).length === 1, {
   message: 'Exactly one shot must be marked as the conclusion',
@@ -105,7 +105,7 @@ export function pickFormatTemplate(niche: string): FormatTemplate {
 // ─── PASS 1: NARRATIVE GENERATION ─────────────────────────────────────────────
 async function generateNarrative(topic: string, researchContext: string, toneInstruction: string): Promise<string> {
   const systemPrompt = `You are a master storyteller and investigative journalist. 
-Your job is to write a highly compelling, fact-dense, 200-220 word narrative script.
+Your job is to write a highly compelling, fact-dense, 150-170 word narrative script.
 
 TONE MANDATE:
 ${toneInstruction}
@@ -206,73 +206,45 @@ Slice this narrative into the exact JSON schema.`;
 }
 
 // ─── SELF-HEALING SHOT MUTATOR ──────────────────────────────────────────────────
-// If a shot's raw_text has >12 words, split it into two shots at the midpoint.
-// This keeps the LLM creative while TypeScript enforces the formatting constraints
-// deterministically. If splitting exceeds 18 shots, merge the shortest adjacent pair.
+// Chunk oversized shots into 11-word segments with a 1-word buffer below the 12-word Zod cap.
 function healShots(raw: any): any {
-  const MAX_WORDS = 12;
-  const MAX_SHOTS = 18;
+  const MAX_WORDS = 11;
 
   let shots: any[] = raw.shots ?? [];
   if (!Array.isArray(shots)) return raw;
 
-  // Pass 1: split oversized shots
   const healed: any[] = [];
-  for (const shot of shots) {
-    const words: string[] = (shot.raw_text ?? '').split(/\s+/);
-    if (words.length > MAX_WORDS) {
-      const mid = Math.floor(words.length / 2);
-      const firstHalf = words.slice(0, mid).join(' ');
-      const secondHalf = words.slice(mid).join(' ');
 
-      healed.push({
-        ...shot,
-        raw_text: firstHalf,
-        is_conclusion: false,
-      });
-      healed.push({
-        ...shot,
-        raw_text: secondHalf,
-        is_conclusion: shot.is_conclusion === true,
-      });
+  for (const shot of shots) {
+    const text = (shot.raw_text ?? '').trim();
+    const words = text.split(/\s+/);
+
+    if (words.length > MAX_WORDS) {
+      let currentChunk: string[] = [];
+      for (const word of words) {
+        currentChunk.push(word);
+        if (currentChunk.length >= MAX_WORDS) {
+          healed.push({
+            ...shot,
+            raw_text: currentChunk.join(' '),
+            is_conclusion: false,
+          });
+          currentChunk = [];
+        }
+      }
+      if (currentChunk.length > 0) {
+        healed.push({
+          ...shot,
+          raw_text: currentChunk.join(' '),
+          is_conclusion: shot.is_conclusion === true,
+        });
+      }
     } else {
       healed.push(shot);
     }
   }
 
-// Pass 2: if splitting blew past the max, merge shortest adjacent pair 
-  // ONLY IF the resulting merge is <= MAX_WORDS.
-  while (healed.length > MAX_SHOTS) {
-    let minIdx = -1;
-    let minTotal = Infinity;
-    
-    for (let i = 0; i < healed.length - 1; i++) {
-      const a = (healed[i].raw_text ?? '').split(/\s+/).length;
-      const b = (healed[i + 1].raw_text ?? '').split(/\s+/).length;
-      
-      // Only consider pairs that won't blow up the Zod validation
-      if (a + b < minTotal && (a + b) <= MAX_WORDS) {
-        minTotal = a + b;
-        minIdx = i;
-      }
-    }
-
-    // If no valid merges exist, break out. We'd rather let Zod fail 
-    // and trigger a clean retry than create an invalid schema or delete narrative context.
-    if (minIdx === -1) {
-      break; 
-    }
-
-    // Merge the pair
-    const mergedRaw = [healed[minIdx].raw_text, healed[minIdx + 1].raw_text].filter(Boolean).join(' ');
-    const merged = {
-      ...healed[minIdx],
-      raw_text: mergedRaw,
-      is_conclusion: healed[minIdx + 1].is_conclusion === true || healed[minIdx].is_conclusion === true,
-    };
-    healed.splice(minIdx, 2, merged);
-  }
-  // Pass 3: re-index and ensure last shot is the conclusion
+  // Re-index and ensure only the final shot is the conclusion
   healed.forEach((s, i) => {
     s.id = i + 1;
     s.is_conclusion = i === healed.length - 1;
