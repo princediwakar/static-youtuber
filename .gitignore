@@ -45,3 +45,6 @@ next-env.d.ts
 
 # neon cli state
 /.neon
+
+# local pipeline output
+/output-*.mp4
