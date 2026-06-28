@@ -7,11 +7,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
-import { query } from '../lib/database';
-// Ensure the path below matches where you saved the data file
-import { SEEDS } from '../data/seed-data'; 
-
 async function main() {
+  // Dynamic imports — ES module hoisting would run static imports
+  // before dotenv.config(), so DATABASE_URL would be empty.
+  const [{ query, warmup }, { SEEDS }] = await Promise.all([
+    import('../lib/database'),
+    import('./seed-data'),
+  ]);
+
+  // Wake the Neon compute before firing inserts
+  console.log('Warming up database connection...');
+  await warmup();
+  console.log('Connected.\n');
+
   let inserted = 0;
   let skipped = 0;
 
@@ -20,9 +28,9 @@ async function main() {
     for (const data of topics) {
       try {
         const res = await query(
-          `INSERT INTO slideshow_topics (topic, research_context, niche, account_id) 
-           VALUES ($1, $2, $3, $4) 
-           ON CONFLICT (topic, account_id) DO UPDATE 
+          `INSERT INTO slideshow_topics (topic, research_context, niche, account_id)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (topic, account_id) DO UPDATE
            SET research_context = EXCLUDED.research_context`,
           [data.title, data.research_context, niche, accountId]
         );

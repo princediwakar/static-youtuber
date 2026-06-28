@@ -16,14 +16,32 @@ export async function query<T extends QueryResultRow = any>(text: string, params
   try {
     return await pool.query<T>(text, params);
   } catch (error: any) {
-    // Retry once on connection errors — Neon pooler can drop idle connections
     if (error?.code === 'ECONNRESET' || error?.message?.includes('Connection terminated')) {
       console.warn('[DB] Connection lost, retrying...');
       return await pool.query<T>(text, params);
     }
+    // Neon cold start — retry with backoff (compute needs ~3–10s to wake)
+    if (error?.code === 'ECONNREFUSED') {
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        const delay = attempt * 3000;
+        console.warn(`[DB] Compute cold (attempt ${attempt}/5), waiting ${delay / 1000}s...`);
+        await new Promise(r => setTimeout(r, delay));
+        try {
+          return await pool.query<T>(text, params);
+        } catch (retryError: any) {
+          if (retryError?.code !== 'ECONNREFUSED') throw retryError;
+        }
+      }
+      throw error; // exhausted retries — surface the original error
+    }
     console.error('[DB] Query failed:', { text, error });
     throw error;
   }
+}
+
+// Warm up the pool on cold start — call before any batch operation
+export async function warmup(): Promise<void> {
+  await query('SELECT 1');
 }
 
 const JOB_COLUMNS = new Set([
