@@ -92,7 +92,6 @@ async function buildShotClip(
       .input(imagePath)
       .inputOptions(['-loop 1'])
       .input(audioPath)
-      .inputOptions(['-f', 'wav'])
       .videoFilter(zoompanFilter)
       .outputOptions([
         '-c:v libx264',
@@ -101,6 +100,8 @@ async function buildShotClip(
         '-pix_fmt yuv420p',
         '-c:a aac',
         `-b:a ${FFMPEG_AUDIO_BITRATE}`,
+        '-ar 44100',
+        '-ac 2',
         '-shortest',
         '-movflags +faststart',
       ])
@@ -184,10 +185,11 @@ async function mixBackgroundMusic(
       .input(musicPath)
       .inputOptions(['-stream_loop', '-1'])
       .complexFilter([
-        '[1:a]asplit[mus1][mus2];[0:a][mus1]sidechaincompress=threshold=0.04:ratio=4:attack=5:release=50[spoken_ducked];[spoken_ducked][mus2]amix=inputs=2:duration=first:dropout_transition=2'
+        '[1:a]volume=0.35[bg_vol];[bg_vol][0:a]sidechaincompress=threshold=0.04:ratio=4:attack=5:release=50[bg_ducked];[0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]'
       ])
       .outputOptions([
         '-map 0:v',
+        '-map [aout]',
         '-c:v copy',
         '-c:a aac',
         `-b:a ${FFMPEG_AUDIO_BITRATE}`,

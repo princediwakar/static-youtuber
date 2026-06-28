@@ -36,7 +36,7 @@ VIDEO_FPS = 25
 FFMPEG_CRF = "23"
 FFMPEG_PRESET = "medium"
 FFMPEG_AUDIO_BITRATE = "128k"
-TTS_SAMPLE_RATE = 24000
+
 ZOOMPAN_ZOOM_IN_START = 1.0
 ZOOMPAN_ZOOM_IN_END = 1.12
 ZOOMPAN_ZOOM_OUT_START = 1.12
@@ -80,7 +80,7 @@ def build_shot_clip(
     output_path: str,
     shot_index: int,
 ) -> None:
-    """Still image + raw PCM audio → MP4 with Ken Burns zoompan."""
+    """Still image + audio → MP4 with Ken Burns zoompan."""
     if shot_index % 2 == 0:
         zoom_expr = f"min({ZOOMPAN_ZOOM_IN_START}+{ZOOMPAN_SPEED}*on,{ZOOMPAN_ZOOM_IN_END})"
     else:
@@ -98,12 +98,13 @@ def build_shot_clip(
     run_ffmpeg([
         "ffmpeg", "-y",
         "-loop", "1", "-i", image_path,
-        "-f", "s16le", "-ar", str(TTS_SAMPLE_RATE), "-ac", "1", "-i", audio_path,
+        "-i", audio_path,
         "-filter_complex", f"[0:v]{zoompan}[v]",
         "-map", "[v]", "-map", "1:a",
         "-c:v", "libx264", "-crf", FFMPEG_CRF, "-preset", FFMPEG_PRESET,
         "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", FFMPEG_AUDIO_BITRATE,
+        "-ar", "44100", "-ac", "2",
         "-shortest", "-movflags", "+faststart",
         output_path,
     ])
@@ -143,10 +144,10 @@ def mix_music(video_path: str, music_path: str, output_path: str) -> None:
         "-i", video_path,
         "-stream_loop", "-1", "-i", music_path,
         "-filter_complex",
-        "[1:a]asplit[mus1][mus2];"
-        "[0:a][mus1]sidechaincompress=threshold=0.04:ratio=4:attack=5:release=50[ducked];"
-        "[ducked][mus2]amix=inputs=2:duration=first:dropout_transition=2",
-        "-map", "0:v", "-c:v", "copy",
+        "[1:a]volume=0.35[bg_vol];"
+        "[bg_vol][0:a]sidechaincompress=threshold=0.04:ratio=4:attack=5:release=50[bg_ducked];"
+        "[0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]",
+        "-map", "0:v", "-map", "[aout]", "-c:v", "copy",
         "-c:a", "aac", "-b:a", FFMPEG_AUDIO_BITRATE,
         "-shortest", "-movflags", "+faststart",
         output_path,
