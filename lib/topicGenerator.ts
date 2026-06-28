@@ -9,8 +9,6 @@ import {
   NICHE_PROFILES,
   DEFAULT_NICHE_PROFILE,
   QUALITY_GATE_MAX_RETRIES,
-  CAPTION_MAX_CHARS,
-  CAPTION_MAX_CHARS_PER_LINE,
   FORMAT_TEMPLATE_WEIGHTS,
   TEMPLATE_SHOT_COUNTS,
 } from './constants';
@@ -242,18 +240,29 @@ function healShots(raw: any): any {
     }
   }
 
-  // Pass 2: if splitting blew past the max, merge shortest adjacent pair
+// Pass 2: if splitting blew past the max, merge shortest adjacent pair 
+  // ONLY IF the resulting merge is <= MAX_WORDS.
   while (healed.length > MAX_SHOTS) {
-    let minIdx = 0;
+    let minIdx = -1;
     let minTotal = Infinity;
+    
     for (let i = 0; i < healed.length - 1; i++) {
       const a = (healed[i].raw_text ?? '').split(/\s+/).length;
       const b = (healed[i + 1].raw_text ?? '').split(/\s+/).length;
-      if (a + b < minTotal) {
+      
+      // Only consider pairs that won't blow up the Zod validation
+      if (a + b < minTotal && (a + b) <= MAX_WORDS) {
         minTotal = a + b;
         minIdx = i;
       }
     }
+
+    // If no valid merges exist, break out. We'd rather let Zod fail 
+    // and trigger a clean retry than create an invalid schema or delete narrative context.
+    if (minIdx === -1) {
+      break; 
+    }
+
     // Merge the pair
     const mergedRaw = [healed[minIdx].raw_text, healed[minIdx + 1].raw_text].filter(Boolean).join(' ');
     const merged = {
@@ -263,7 +272,6 @@ function healShots(raw: any): any {
     };
     healed.splice(minIdx, 2, merged);
   }
-
   // Pass 3: re-index and ensure last shot is the conclusion
   healed.forEach((s, i) => {
     s.id = i + 1;
