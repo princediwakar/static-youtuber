@@ -60,6 +60,7 @@ export const generateShort = inngest.createFunction(
   async ({ step, event }) => {
     const accountId: string = event.data.accountId;
     const explicitJobId: string | undefined = event.data.jobId;
+    const skipPublish: boolean = event.data.skipPublish === true;
 
     // ── Step 1: Generate Script / Resume ─────────────────────────────────────
     const { script, jobId, format_template, niche, variant, topic } = await step.run('generate-script', async () => {
@@ -235,50 +236,52 @@ export const generateShort = inngest.createFunction(
     }
 
     // ── Step 5: Publish ──────────────────────────────────────────────────────
-    await step.run('publish', async () => {
-      const job = await db.getJob(jobId);
-      if (job?.status === 'published') return;
+    if (!skipPublish) {
+      await step.run('publish', async () => {
+        const job = await db.getJob(jobId);
+        if (job?.status === 'published') return;
 
-      const creds = await getAccountCredentials(accountId);
+        const creds = await getAccountCredentials(accountId);
 
-      const jobRecord = await query('SELECT thumbnail_url FROM slideshow_jobs WHERE id = $1', [jobId]);
+        const jobRecord = await query('SELECT thumbnail_url FROM slideshow_jobs WHERE id = $1', [jobId]);
 
-      let thumbRes;
-      for (let t = 0; t < 3; t++) {
-        thumbRes = await fetch(jobRecord.rows[0].thumbnail_url);
-        if (thumbRes.ok) break;
-        await new Promise(res => setTimeout(res, 1000));
-      }
+        let thumbRes;
+        for (let t = 0; t < 3; t++) {
+          thumbRes = await fetch(jobRecord.rows[0].thumbnail_url);
+          if (thumbRes.ok) break;
+          await new Promise(res => setTimeout(res, 1000));
+        }
 
-      if (!thumbRes || !thumbRes.ok) throw new Error('Failed to fetch thumbnail for YouTube upload after retries');
+        if (!thumbRes || !thumbRes.ok) throw new Error('Failed to fetch thumbnail for YouTube upload after retries');
 
-      const thumbBuffer = Buffer.from(await thumbRes.arrayBuffer());
-      const result = await uploadToYouTube(resolvedVideoUrl, thumbBuffer, script, creds);
+        const thumbBuffer = Buffer.from(await thumbRes.arrayBuffer());
+        const result = await uploadToYouTube(resolvedVideoUrl, thumbBuffer, script, creds);
 
-      await query(
-        `INSERT INTO slideshow_uploads (job_id, youtube_video_id, title, description, tags, variant)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [jobId, result.youtubeVideoId, result.title, result.description, JSON.stringify(script.tags), variant]
-      );
+        await query(
+          `INSERT INTO slideshow_uploads (job_id, youtube_video_id, title, description, tags, variant)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [jobId, result.youtubeVideoId, result.title, result.description, JSON.stringify(script.tags), variant]
+        );
 
-      const topicRes = await query<{ id: number }>(
-        'SELECT id FROM slideshow_topics WHERE topic = $1 AND account_id = $2',
-        [topic, accountId]
-      );
-      if (topicRes.rows.length > 0) {
-        const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
-        await recordPublishedVideo({
-          topicId: topicRes.rows[0].id,
-          youtubeId: result.youtubeVideoId,
-          aestheticId: profile.aestheticId,
-          format: format_template,
-          qualityScore: 7,
-        });
-      }
+        const topicRes = await query<{ id: number }>(
+          'SELECT id FROM slideshow_topics WHERE topic = $1 AND account_id = $2',
+          [topic, accountId]
+        );
+        if (topicRes.rows.length > 0) {
+          const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
+          await recordPublishedVideo({
+            topicId: topicRes.rows[0].id,
+            youtubeId: result.youtubeVideoId,
+            aestheticId: profile.aestheticId,
+            format: format_template,
+            qualityScore: 7,
+          });
+        }
 
-      await db.updateJob(jobId, { status: 'published', video_url: resolvedVideoUrl, youtube_video_id: result.youtubeVideoId });
-      await cleanupJobArtifacts(jobId, creds);
-    });
+        await db.updateJob(jobId, { status: 'published', video_url: resolvedVideoUrl, youtube_video_id: result.youtubeVideoId });
+        await cleanupJobArtifacts(jobId, creds);
+      });
+    }
   }
 );
 
