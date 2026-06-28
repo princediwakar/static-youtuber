@@ -43,6 +43,7 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
   if (cleaned !== shot.text) {
     warnings.push(`Shot ${shot.index}: contained director tags — stripped before caption render.`);
   }
+  
   const words = cleaned.split(/\s+/);
 
   const overflowWords = words.filter(w => w.length > CAPTION_MAX_CHARS_PER_LINE);
@@ -57,9 +58,7 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
     errors.push(`Shot ${shot.index}: ${cleaned.length} chars — exceeds ${CAPTION_MAX_CHARS} char limit.`);
   }
 
-  if (!/[.!?]$/.test(cleaned.trimEnd())) {
-    errors.push(`Shot ${shot.index}: does not end with sentence-ending punctuation (. ! ?) — likely a truncated fragment.`);
-  }
+  // DELETED: The strict [.!?] punctuation check. Narrative chunks will end in commas, em-dashes, or mid-thought.
 
   if (words.length > 14) {
     errors.push(`Shot ${shot.index}: ${words.length} words — too long. Max is 14.`);
