@@ -289,37 +289,37 @@ export type Aesthetic = {
   imageNegative: string;
 };
 
-// FLUX.1 [schnell] optimized image prefixes — keyword-dense, comma-separated tags, not prose.
-// FLUX is a distilled model that interprets prompts literally. Each prefix includes the 7
-// required tag categories: subject, environment, lighting, camera, color palette, texture, atmosphere.
+// FLUX.1 [schnell] optimized image prefixes — natural language paragraphs, not comma tags.
+// FLUX uses a T5-XXL text encoder that understands syntax, spatial relationships, and composition.
+// These prefixes establish a "base reality" that Pass 2 appends its subject description to.
 export const AESTHETICS: Record<string, Aesthetic> = {
   dossier: {
     id: 'dossier',
-    instruction: 'All images must feel like a premium, dark, cinematic classified dossier.',
-    imagePrefix: 'black and white photography, high contrast, film grain texture, declassified document, blueprint blueprint-style, dramatic shadows, chiaroscuro lighting, vintage archival, ',
-    thumbnailPrefix: 'black and white photography, declassified document, high contrast, film grain, dramatic shadows, no text, no watermark, ',
-    imageNegative: 'text, watermark, logo, blurry, low quality, unrealistic anatomy, modern style, color photo, bright colors',
+    instruction: 'Write a highly descriptive, cinematic paragraph. Treat the image as a classified, high-contrast archival document.',
+    imagePrefix: 'A striking, high-contrast black and white cinematic photograph resembling a declassified archival document. The scene features dramatic chiaroscuro lighting, deep shadows, and heavy vintage film grain. There are absolutely no written words or text anywhere in the environment. ',
+    thumbnailPrefix: 'A striking black and white cinematic photograph resembling a declassified document with dramatic shadows and heavy film grain. The composition includes vast, completely empty dark space specifically designed for a text overlay. There is no existing text in the image. ',
+    imageNegative: 'text, typography, watermark, logo, blurry, low quality, unrealistic anatomy, modern style, color photo, bright colors',
   },
   vector: {
     id: 'vector',
-    instruction: 'All images must feel like a premium, high-budget UI/UX product demo (like Apple keynotes or high-end SaaS explainers).',
-    imagePrefix: '2D vector flat art, clean UI mockup, isometric perspective, bold limited color palette, geometric shapes, dramatic studio lighting, smooth matte texture, no text, ',
-    thumbnailPrefix: '2D vector flat art, clean SaaS UI style, bold colors, high contrast, isometric perspective, no text, no watermark, ',
-    imageNegative: 'text, watermark, logo, blurry, low quality, photorealistic, 3D render, stock photo, cluttered',
+    instruction: 'Write a highly descriptive, structural paragraph. Treat the image as a premium, high-budget UI/UX product demo.',
+    imagePrefix: 'A pristine, high-budget 2D vector flat art illustration shot from an isometric perspective. The scene uses a bold, limited color palette, geometric shapes, dramatic studio lighting, and smooth matte textures. The environment is entirely devoid of text, labels, or UI typography to leave room for overlays. ',
+    thumbnailPrefix: 'A pristine 2D vector flat art illustration with a bold color palette and isometric perspective. The composition is radically asymmetrical, leaving vast empty negative space perfectly suited for a bold thumbnail text overlay. No existing text or logos. ',
+    imageNegative: 'text, typography, watermark, logo, blurry, low quality, photorealistic, 3D render, stock photo, cluttered',
   },
   'dark-cinematic': {
     id: 'dark-cinematic',
-    instruction: 'All images must feel like a dark, moody cinematic frame — dramatic chiaroscuro, ancient textures, and powerful solitary figures.',
-    imagePrefix: 'cinematic photography, dramatic chiaroscuro, marble statue texture, storm cloud sky, solitary figure, wide landscape, desaturated deep blacks, film grain, ',
-    thumbnailPrefix: 'dark cinematic, dramatic chiaroscuro, solitary figure, storm clouds, high contrast, film grain, no text, no watermark, ',
-    imageNegative: 'text, watermark, logo, blurry, bright colors, cheerful, cartoon, modern technology, crowded scenes, selfie style',
+    instruction: 'Write a highly descriptive, cinematic paragraph. Treat the image as an epic, moody frame from a philosophical epic.',
+    imagePrefix: 'A dark, moody cinematic photograph utilizing dramatic chiaroscuro lighting. The scene is defined by deep desaturated blacks, rich textures like rough marble or worn stone, and an epic, solitary atmosphere under a brooding sky. The composition is completely free of any text, symbols, or modern artifacts. ',
+    thumbnailPrefix: 'A dark, moody cinematic photograph with dramatic lighting, deep shadows, and a solitary atmosphere. The framing leaves massive, completely empty dark space for bold thumbnail text overlays. There are absolutely no written words in the image. ',
+    imageNegative: 'text, typography, watermark, logo, blurry, bright colors, cheerful, cartoon, modern technology, crowded scenes, selfie style',
   },
   tactical: {
     id: 'tactical',
-    instruction: 'All images must feel like hyper-realistic tactical photography — gear close-ups, high-stakes scenarios, and functional minimalism.',
-    imagePrefix: 'hyper-realistic tactical photography, matte black gear, dramatic practical lighting, shallow depth of field, moody urban environment, rough texture, atmospheric haze, ',
-    thumbnailPrefix: 'hyper-realistic tactical gear, dramatic moody lighting, shallow depth of field, high contrast, no text, no watermark, ',
-    imageNegative: 'text, watermark, logo, blurry, low quality, cartoon, illustration, bright cheerful colors, cluttered background, AI-generated look',
+    instruction: 'Write a highly descriptive, cinematic paragraph. Treat the image as a hyper-realistic, high-stakes operational photograph.',
+    imagePrefix: 'A hyper-realistic, gritty tactical photograph shot with a shallow depth of field. The scene features matte black surfaces, dramatic practical lighting, and a moody urban or survival environment filled with atmospheric haze. The environment contains no text, no branding, and no signage of any kind. ',
+    thumbnailPrefix: 'A hyper-realistic tactical photograph with dramatic moody lighting and shallow depth of field. The composition pushes the main subject to the edge, featuring stark negative space perfectly suited for large text overlays. Absolutely no text or logos exist in the scene. ',
+    imageNegative: 'text, typography, watermark, logo, blurry, low quality, cartoon, illustration, bright cheerful colors, cluttered background, AI-generated look',
   },
 };
 

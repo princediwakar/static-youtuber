@@ -153,26 +153,26 @@ async function chunkScriptToJSON(
 Your job is to take a completed narrative script and slice it into exactly ${shotCounts.min}-${shotCounts.max} shots, formatted as strict JSON.
 
 FORMAT: ${formatTemplate}
+VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'vector'}
 
-AUDIO PACING & TTS MANIPULATION:
-You are generating TWO text fields per shot:
-1. caption_text: Clean, correctly capitalized text for on-screen reading (max 12 words, max 3 lines).
-2. spoken_text: Text heavily manipulated for a Text-To-Speech (TTS) engine. 
-   - TTS engines read punctuation as silence. 
-   - Use commas (,) aggressively to force 200ms pauses. 
-   - Use em-dashes (—) to force dramatic pauses before key facts.
-   - Spell complex names phonetically if needed. 
-   - Example caption_text: "In 2014, a junior trader at a Japanese brokerage firm intended to sell 1 share."
-   - Example spoken_text: "In 2014, a junior trader, at a Japanese brokerage firm, intended to sell 1 share—"
+AUDIO PACING & TTS MANIPULATION (spoken_text):
+- TTS engines read punctuation as silence.
+- Use commas (,) to force 200ms pauses ONLY where naturally appropriate (e.g., separating clauses, lists, or dramatic beats). NEVER place a comma between a subject and its verb.
+  - BAD: "The disciplined man, uses the rubble..."
+  - GOOD: "The disciplined man uses the rubble..."
+- Use em-dashes (—) to force dramatic pauses before key facts.
+- The final shot (is_conclusion: true) MUST end with a period (.), exclamation (!), or question mark (?). Never an em-dash.
 
 VISUAL PROMPTS (FLUX.1):
 ${aestheticInstruction}
-Output comma-separated descriptive tags, NOT narrative prose. Every prompt must have 7 categories: Subject, Environment, Lighting, Camera, Color palette, Texture, Atmosphere. Never use the word "text".
+- Write a highly descriptive, cinematic paragraph using natural language. FLUX.1 uses a T5 encoder; it understands spatial relationships (e.g., "in the foreground," "on the left") and complex sentences. DO NOT use comma-separated tags.
+- Describe exactly what is in the frame, where it is located, and the specific lighting.
+- CRITICAL: The image will have text overlaid on it later. You must explicitly describe the environment as having NO written words, NO signs, and NO text of any kind.
 
 JSON SCHEMA TO FOLLOW:
 {
   "fact_check_and_sources": [ { "claim": "fact", "source": "context" } ],
-  "visual_world": "vector" | "dossier" | "dark-cinematic" | "tactical",
+  "visual_world": "MUST EXACTLY MATCH THE VISUAL WORLD SPECIFIED ABOVE",
   "format_template": "${formatTemplate}",
   "title": "5-100 chars, no period",
   "description": "Video description",
@@ -181,8 +181,8 @@ JSON SCHEMA TO FOLLOW:
   "shots": [
     {
       "id": 1,
-      "visual_prompt": "comma separated tags...",
-      "spoken_text": "Text manipulated with commas and em-dashes for TTS pacing.",
+      "visual_prompt": "A cinematic natural-language description of the frame. No comma-separated tags.",
+      "spoken_text": "Text manipulated for TTS pacing.",
       "caption_text": "Clean text for screen. Max 12 words.",
       "is_conclusion": false
     }
