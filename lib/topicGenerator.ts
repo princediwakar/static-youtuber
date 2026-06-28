@@ -206,45 +206,100 @@ Slice this narrative into the exact JSON schema.`;
 }
 
 // ─── SELF-HEALING SHOT MUTATOR ──────────────────────────────────────────────────
-// Chunk oversized shots into 11-word segments with a 1-word buffer below the 12-word Zod cap.
+// Two-dimensional mutator: slices on word count AND character count simultaneously.
+// The caption validator enforces 80 chars total / 26 chars per line (3 × 26 = 78).
+// Zod enforces 3–12 words per shot. This mutator satisfies both constraints.
 function healShots(raw: any): any {
-  const MAX_WORDS = 11;
+  const MAX_WORDS = 11; // Buffer for 12-word cap
+  const MIN_WORDS = 3;  // Matches Zod minimum
+  const MAX_CHARS = 75; // Buffer for 80-char cap and 3-line wrap (3 * 26 = 78)
 
   let shots: any[] = raw.shots ?? [];
   if (!Array.isArray(shots)) return raw;
+
+  // --- HELPER: 2D Text Partitioner ---
+  function splitTextIntoValidChunks(text: string): string[] {
+    const words = text.split(/\s+/);
+    if (words.length === 0) return [];
+
+    const chunks: string[][] = [];
+    let currentChunk: string[] = [];
+
+    // Pass 1: Greedy slice on Words OR Chars
+    for (const word of words) {
+      const testChunk = [...currentChunk, word];
+      const testText = testChunk.join(' ');
+
+      // Break if we exceed the word count OR the character count
+      if (testChunk.length > MAX_WORDS || testText.length > MAX_CHARS) {
+        if (currentChunk.length > 0) chunks.push(currentChunk);
+        currentChunk = [word];
+      } else {
+        currentChunk = testChunk;
+      }
+    }
+    if (currentChunk.length > 0) chunks.push(currentChunk);
+
+    // Pass 2: Heal Orphans (Chunks with < 3 words)
+    // Walk backward. If a chunk is too small, merge it with the previous
+    // chunk and split them evenly to balance the load.
+    for (let i = chunks.length - 1; i > 0; i--) {
+      if (chunks[i].length < MIN_WORDS) {
+        const combined = [...chunks[i - 1], ...chunks[i]];
+        const mid = Math.floor(combined.length / 2);
+
+        chunks[i - 1] = combined.slice(0, mid);
+        chunks[i] = combined.slice(mid);
+      }
+    }
+
+    return chunks.map(c => c.join(' '));
+  }
+  // -----------------------------------
 
   const healed: any[] = [];
 
   for (const shot of shots) {
     const text = (shot.raw_text ?? '').trim();
-    const words = text.split(/\s+/);
 
-    if (words.length > MAX_WORDS) {
-      let currentChunk: string[] = [];
-      for (const word of words) {
-        currentChunk.push(word);
-        if (currentChunk.length >= MAX_WORDS) {
-          healed.push({
-            ...shot,
-            raw_text: currentChunk.join(' '),
-            is_conclusion: false,
-          });
-          currentChunk = [];
-        }
-      }
-      if (currentChunk.length > 0) {
+    // If the text naturally passes both constraints, keep it.
+    if (text.split(/\s+/).length <= MAX_WORDS && text.length <= MAX_CHARS) {
+      healed.push(shot);
+    } else {
+      // Otherwise, run it through the 2D partitioner
+      const validChunks = splitTextIntoValidChunks(text);
+
+      for (let i = 0; i < validChunks.length; i++) {
         healed.push({
           ...shot,
-          raw_text: currentChunk.join(' '),
-          is_conclusion: shot.is_conclusion === true,
+          raw_text: validChunks[i],
+          is_conclusion: false,
         });
       }
-    } else {
-      healed.push(shot);
+      // Restore conclusion to the final piece
+      healed[healed.length - 1].is_conclusion = shot.is_conclusion === true;
     }
   }
 
-  // Re-index and ensure only the final shot is the conclusion
+  // Pass 3: Under-sized Shot Forward Merge (Edge Case)
+  // If the LLM natively generated a 1-word shot, merge it forward or backward
+  for (let i = healed.length - 1; i >= 0; i--) {
+    const words = healed[i].raw_text.split(/\s+/);
+    if (words.length < MIN_WORDS) {
+      if (i > 0) {
+        // Merge backward
+        const combinedText = `${healed[i - 1].raw_text} ${healed[i].raw_text}`;
+        // Only keep the merge if it doesn't break the character limit
+        if (combinedText.length <= MAX_CHARS) {
+          healed[i - 1].raw_text = combinedText;
+          healed[i - 1].is_conclusion = healed[i].is_conclusion || healed[i - 1].is_conclusion;
+          healed.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  // Final Pass: Re-index IDs and ensure exactly one conclusion at the very end
   healed.forEach((s, i) => {
     s.id = i + 1;
     s.is_conclusion = i === healed.length - 1;
