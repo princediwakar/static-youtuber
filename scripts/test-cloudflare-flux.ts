@@ -20,13 +20,20 @@ function loadEnv() {
 
 async function main() {
   const env = loadEnv();
-  const token = env.CLOUDFLARE_AI_API_TOKEN;
-  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+  // Randomly pick from available account pairs (bare, _1, _2)
+  const pairs: { token: string; accountId: string }[] = [];
+  for (const suffix of ['', '_1', '_2']) {
+    const token = env[`CLOUDFLARE_AI_API_TOKEN${suffix}`];
+    const accountId = env[`CLOUDFLARE_ACCOUNT_ID${suffix}`];
+    if (token && accountId) pairs.push({ token, accountId });
+  }
 
-  if (!token || !accountId) {
+  if (pairs.length === 0) {
     console.error('Missing CLOUDFLARE_AI_API_TOKEN or CLOUDFLARE_ACCOUNT_ID in .env.local');
     process.exit(1);
   }
+
+  const { token, accountId } = pairs[Math.floor(Math.random() * pairs.length)];
 
   console.log(`Account ID: ${accountId}  Token length: ${token.length}`);
 

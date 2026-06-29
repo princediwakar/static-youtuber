@@ -20,6 +20,20 @@ function contentHash(prompt: string, width: number, height: number, steps: numbe
   return createHash('sha256').update(`${prompt}|${width}|${height}|${steps}`).digest('hex').slice(0, 16);
 }
 
+function resolveAccount(): { token: string; accountId: string } {
+  const pairs: { token: string; accountId: string }[] = [];
+
+  // Collect all valid account pairs
+  for (const suffix of ['', '_1', '_2']) {
+    const token = process.env[`CLOUDFLARE_AI_API_TOKEN${suffix}`];
+    const accountId = process.env[`CLOUDFLARE_ACCOUNT_ID${suffix}`];
+    if (token && accountId) pairs.push({ token, accountId });
+  }
+
+  if (pairs.length === 0) throw new Error('No CLOUDFLARE_AI_API_TOKEN / CLOUDFLARE_ACCOUNT_ID pair is set');
+  return pairs[Math.floor(Math.random() * pairs.length)];
+}
+
 export async function generateImage(
   prompt: string,
   width: number,
@@ -27,9 +41,7 @@ export async function generateImage(
   steps: number = 4,
   retries: number = 3,
 ): Promise<Buffer> {
-  const token = process.env.CLOUDFLARE_AI_API_TOKEN;
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  if (!token || !accountId) throw new Error('CLOUDFLARE_AI_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not set');
+  const { token, accountId } = resolveAccount();
 
   ensureCacheDir();
 
