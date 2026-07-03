@@ -154,17 +154,21 @@ FORMAT: ${formatTemplate}
 VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'vector'}
 
 VOICEOVER & PACING (CRITICAL):
-- You are writing a script for a professional voice actor.
-- Write naturally for the ear. Use commas (,) and em-dashes (—) exactly where a human would naturally pause for breath or dramatic effect.
-- Do not over-punctuate. If a sentence flows quickly, leave it bare. 
-- TTS engines interpret punctuation as silence. Use this to your advantage to build tension before key facts.
+- Write naturally for the ear. Use commas (,) and em-dashes (—) exactly where a human would naturally pause.
+- NEVER spell out numbers. Use digits (e.g., "4.5 million", "$1.4 billion", "2009"). Digits are visual anchors that grab attention. TTS engines read them flawlessly.
+- SEMANTIC CHUNKING: Never end a shot mid-thought on an article (a, an, the), preposition (on, in, to), or conjunction (and, but).
+  BAD: "He lost it all on a" -> "bad bet."
+  GOOD: "He lost it all—" -> "on a single, bad bet."
+- TTS engines interpret punctuation as silence. Use this to build tension before key facts.
 - The on-screen captions will be generated directly from this text. Ensure each shot contains a complete, coherent micro-thought that makes sense visually on its own.
 - The final shot (is_conclusion: true) MUST end with terminal punctuation (., !, or ?).
-- Mid-sequence shots (is_conclusion: false) should ideally end at natural breath points (commas or mid-sentence flow) to pull the viewer into the next shot. Do not force periods at the end of every shot if the thought continues.
+- Mid-sequence shots (is_conclusion: false) should end at natural breath points (commas or mid-sentence flow) to pull the viewer into the next shot. Do not force periods if the thought continues.
 
 VISUAL PROMPTS (FLUX.1):
 ${aestheticInstruction}
 - Write a highly descriptive, cinematic paragraph using natural language.
+- KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Even if a sentence spans two shots, advance the camera. Change the angle (e.g., "wide shot" to "extreme macro close-up"), change the lighting, or shift the focus to a new object. Never let the viewer stare at the same composition.
+- NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS. Duplicate prompts are a generation failure. Each shot must have a unique visual_prompt.
 - Describe exactly what is in the frame, where it is located, and the specific lighting.
 - CRITICAL: The image will have text overlaid on it later. You must explicitly describe the environment as having NO written words, NO signs, and NO text of any kind.
 
