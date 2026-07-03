@@ -29,9 +29,14 @@ const ShotSchema = z.object({
   is_conclusion: z.boolean().default(false),
 }).transform((data) => {
   // spoken_text: includes commas/em-dashes for TTS pacing
-  // caption_text: strips pacing punctuation for clean on-screen display
+  // caption_text: strips pacing punctuation for clean on-screen display.
+  // Non-conclusion shots also strip sentence-ending punctuation — the
+  // sentence continues into the next shot and a period would look broken.
   const spoken = data.raw_text;
-  const caption = data.raw_text.replace(/[,—]/g, '').trim();
+  let caption = data.raw_text.replace(/[,—]/g, '').trim();
+  if (!data.is_conclusion) {
+    caption = caption.replace(/[.!?]$/, '').trim();
+  }
   return { ...data, spoken_text: spoken, caption_text: caption };
 }).refine(data => data.caption_text.split(' ').length <= 12, {
   message: 'Soft cap: 12 words max per shot',
@@ -159,8 +164,9 @@ AUDIO PACING & TTS MANIPULATION (raw_text):
   - BAD: "The disciplined man, uses the rubble..."
   - GOOD: "The disciplined man uses the rubble..."
 - Use em-dashes (—) to force dramatic pauses before key facts.
-- The final shot (is_conclusion: true) MUST end with a period (.), exclamation (!), or question mark (?). Never an em-dash.
-- The on-screen caption will be derived automatically by stripping commas and em-dashes from raw_text. You do NOT need to provide a separate caption field.
+- The final shot (is_conclusion: true) MUST end with a period (.), exclamation (!), or question mark (?).
+- CRITICAL: All other shots (is_conclusion: false) must NOT end with ., !, or ?. End mid-thought — the caption will be displayed as a continuation, not a finished sentence. Use a comma, em-dash, or no punctuation at the end.
+- The on-screen caption will be derived automatically by stripping commas, em-dashes, and sentence-ending punctuation from raw_text. You do NOT need to provide a separate caption field.
 
 VISUAL PROMPTS (FLUX.1):
 ${aestheticInstruction}

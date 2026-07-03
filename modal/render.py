@@ -168,12 +168,14 @@ def render_video(job_id: str, shots: list, music_url: str, callback_url: str):
         
         out_shot = f"{work_dir}/shot_rendered_{i}.mp4"
         
-        # The PCM/Static fix is here: -ar 44100 -ac 2 forces uniform audio across all MP3s
+        # The PCM/Static fix is here: -ar 44100 -ac 2 forces uniform audio across all MP3s.
+        # silenceremove trims TTS-inherent leading silence (the "pause between slides").
         ffmpeg_shot_cmd = [
             "ffmpeg", "-y",
             "-loop", "1", "-i", img_path,
             "-i", aud_path,
             "-vf", f"scale=1080:1920,zoompan=z='if(eq(mod(on,2),0),{scale_expr},{zoom_expr})':d=10000:s=1080x1920,ass='{ass_path}'",
+            "-af", "silenceremove=start_periods=1:start_silence=0.1:start_threshold=-50dB",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
             "-shortest",
