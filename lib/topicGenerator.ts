@@ -11,6 +11,8 @@ import {
   QUALITY_GATE_MAX_RETRIES,
   FORMAT_TEMPLATE_WEIGHTS,
   TEMPLATE_SHOT_COUNTS,
+  CAPTION_MAX_CHARS_PER_LINE,
+  CAPTION_MAX_CHARS,
 } from './constants';
 import type { FormatTemplate } from './constants';
 
@@ -207,12 +209,31 @@ Slice this narrative into the exact JSON schema.`;
 
 // ─── SELF-HEALING SHOT MUTATOR ──────────────────────────────────────────────────
 // Two-dimensional mutator: slices on word count AND character count simultaneously.
-// The caption validator enforces 80 chars total / 26 chars per line (3 × 26 = 78).
+// Simulates word-wrapping to count rendered caption lines (mirrors captionValidator.ts).
+function countCaptionLines(text: string): number {
+  const words = text.split(/\s+/);
+  let lines = 0;
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > CAPTION_MAX_CHARS_PER_LINE) {
+      if (current) lines++;
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines++;
+  return lines;
+}
+
+// The caption validator enforces 80 chars total / 26 chars per line (max 3 lines).
 // Zod enforces 3–12 words per shot. This mutator satisfies both constraints.
 function healShots(raw: any): any {
-  const MAX_WORDS = 11; // Buffer for 12-word cap
-  const MIN_WORDS = 3;  // Matches Zod minimum
-  const MAX_CHARS = 75; // Buffer for 80-char cap and 3-line wrap (3 * 26 = 78)
+  const MAX_WORDS = 11;  // Buffer for 12-word cap
+  const MIN_WORDS = 3;    // Matches Zod minimum
+  const MAX_LINES = 3;    // Caption render constraint — must not wrap to 4 lines
 
   let shots: any[] = raw.shots ?? [];
   if (!Array.isArray(shots)) return raw;
@@ -225,13 +246,17 @@ function healShots(raw: any): any {
     const chunks: string[][] = [];
     let currentChunk: string[] = [];
 
-    // Pass 1: Greedy slice on Words OR Chars
+    // Pass 1: Greedy slice on Words, Chars, or rendered caption lines
     for (const word of words) {
       const testChunk = [...currentChunk, word];
       const testText = testChunk.join(' ');
 
-      // Break if we exceed the word count OR the character count
-      if (testChunk.length > MAX_WORDS || testText.length > MAX_CHARS) {
+      // Break if any caption constraint would be violated
+      const tooManyWords = testChunk.length > MAX_WORDS;
+      const tooManyChars = testText.length > CAPTION_MAX_CHARS;
+      const tooManyLines = countCaptionLines(testText) > MAX_LINES;
+
+      if (tooManyWords || tooManyChars || tooManyLines) {
         if (currentChunk.length > 0) chunks.push(currentChunk);
         currentChunk = [word];
       } else {
@@ -262,8 +287,8 @@ function healShots(raw: any): any {
   for (const shot of shots) {
     const text = (shot.raw_text ?? '').trim();
 
-    // If the text naturally passes both constraints, keep it.
-    if (text.split(/\s+/).length <= MAX_WORDS && text.length <= MAX_CHARS) {
+    // If the text naturally passes all caption constraints, keep it.
+    if (text.split(/\s+/).length <= MAX_WORDS && text.length <= CAPTION_MAX_CHARS && countCaptionLines(text) <= MAX_LINES) {
       healed.push(shot);
     } else {
       // Otherwise, run it through the 2D partitioner
@@ -289,8 +314,8 @@ function healShots(raw: any): any {
       if (i > 0) {
         // Merge backward
         const combinedText = `${healed[i - 1].raw_text} ${healed[i].raw_text}`;
-        // Only keep the merge if it doesn't break the character limit
-        if (combinedText.length <= MAX_CHARS) {
+        // Only keep the merge if it doesn't break any caption constraint
+        if (combinedText.length <= CAPTION_MAX_CHARS && countCaptionLines(combinedText) <= MAX_LINES) {
           healed[i - 1].raw_text = combinedText;
           healed[i - 1].is_conclusion = healed[i].is_conclusion || healed[i - 1].is_conclusion;
           healed.splice(i, 1);
@@ -397,6 +422,17 @@ export async function generateScript(
       if (!captionValidation.valid) {
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
         throw new Error(`Caption validation failed:\n${captionValidation.errors.join('\n')}`);
+      }
+
+      // Enforce template shot count after healing (healShots can inflate count)
+      const shotCount = validated.shots.length;
+      const { min: tcMin, max: tcMax } = TEMPLATE_SHOT_COUNTS[formatTemplate];
+      if (shotCount < tcMin || shotCount > tcMax) {
+        if (attempt < QUALITY_GATE_MAX_RETRIES) {
+          console.warn(`[TopicGenerator] Shot count ${shotCount} outside template range [${tcMin}-${tcMax}], retrying...`);
+          continue;
+        }
+        throw new Error(`Shot count ${shotCount} outside template range [${tcMin}-${tcMax}] after all retries`);
       }
 
       const score = await scoreScript(validated, reserved.research_context, niche, profile.minQualityScore);

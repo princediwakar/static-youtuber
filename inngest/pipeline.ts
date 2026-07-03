@@ -172,7 +172,7 @@ export const generateShort = inngest.createFunction(
       }
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90_000);
+      const timeout = setTimeout(() => controller.abort(), 280_000);  // just under Vercel's 300s max
 
       try {
         const response = await fetch(MODAL_RENDER_URL, {
@@ -195,11 +195,15 @@ export const generateShort = inngest.createFunction(
 
         if (response.ok) {
           const body = await response.json();
-          if (body.mp4Url) {
-            console.log(`[Pipeline] Modal returned video: ${body.mp4Url}`);
-            return body.mp4Url;
+          // Modal now returns videoUrl directly (sync render)
+          if (body.videoUrl || body.mp4Url) {
+            const url = body.videoUrl || body.mp4Url;
+            console.log(`[Pipeline] Modal returned video: ${url}`);
+            await db.updateJob(jobId, { video_url: url, status: 'assembled' });
+            return url;
           }
-          console.log(`[Pipeline] Modal queued render (async), awaiting webhook callback`);
+          // Fallback: Modal queued async (legacy), await webhook
+          console.log(`[Pipeline] Modal returned without video URL, falling back to webhook`);
         } else {
           const errorBody = await response.text().catch(() => '');
           throw new Error(`Modal returned HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
@@ -207,7 +211,7 @@ export const generateShort = inngest.createFunction(
       } catch (e: any) {
         clearTimeout(timeout);
         if (e.name === 'AbortError') {
-          console.warn('[Pipeline] Modal timed out after 90s — will await webhook');
+          console.warn('[Pipeline] Modal timed out after 280s — will await webhook');
         } else {
           throw e;
         }

@@ -47,16 +47,21 @@ def format_ass_time(seconds: float) -> str:
 # 3. GPU WORKER: WHISPER ALIGNMENT -> KINETIC TYPOGRAPHY
 # Uses the T4 GPU to generate an Advanced SubStation Alpha (.ass) file
 # ------------------------------------------------------------------------
-@app.function(gpu="T4")
+@app.function()  # CPU only — runs in same container as render_video via .local()
 def generate_ass_subtitles(audio_path: str, caption_text: str, shot_index: int) -> str:
-    import whisper_timestamped as whisper
-    
-    # Load model (Modal caches this across warm invocations)
-    model = whisper.load_model("base", device="cuda")
-    
-    # Transcribe with forced alignment
-    # We pass the expected caption_text as the initial prompt to guide the model
-    results = whisper.transcribe(model, audio_path, language="en", initial_prompt=caption_text)
+    try:
+        import whisper_timestamped as whisper
+        
+        # Load model (Modal caches this across warm invocations)
+        model = whisper.load_model("base")  # CPU
+        
+        # Transcribe with forced alignment
+        # We pass the expected caption_text as the initial prompt to guide the model
+        results = whisper.transcribe(model, audio_path, language="en", initial_prompt=caption_text)
+        print(f"[Whisper] Shot {shot_index}: transcription complete")
+    except Exception as e:
+        print(f"[Whisper] Shot {shot_index} alignment failed: {e} — falling back to static captions")
+        results = None
     
     ass_path = f"/tmp/shot_{shot_index}.ass"
     
@@ -77,12 +82,8 @@ def generate_ass_subtitles(audio_path: str, caption_text: str, shot_index: int) 
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     ]
     
-    # Kinetic Typography Logic:
-    # We display the full caption for the duration of the shot, but highlight 
-    # the currently spoken word in Gold (\c&H00D7FF&) and scale it up (\fscx120\fscy120).
-    
     words_data = []
-    if 'segments' in results and len(results['segments']) > 0:
+    if results and 'segments' in results and len(results['segments']) > 0:
         for segment in results['segments']:
             for w in segment.get('words', []):
                 words_data.append(w)
@@ -123,7 +124,7 @@ def generate_ass_subtitles(audio_path: str, caption_text: str, shot_index: int) 
 # Uses 8 CPU cores. This orchestrates the downloads, calls the GPU for ASS, 
 # renders individual shots, concats them, and ducks the audio.
 # ------------------------------------------------------------------------
-@app.function(cpu=8.0, timeout=600)
+@app.function(cpu=8.0, timeout=600, secrets=[modal.Secret.from_name("cloudinary")])
 def render_video(job_id: str, shots: list, music_url: str, callback_url: str):
     import cloudinary.uploader
     import requests
@@ -158,8 +159,8 @@ def render_video(job_id: str, shots: list, music_url: str, callback_url: str):
         img_path = f"{work_dir}/img_{i}.jpg"
         aud_path = f"{work_dir}/aud_{i}.mp3"
         
-        # Dispatch to GPU for subtitle generation
-        ass_path = generate_ass_subtitles.remote(aud_path, shot["caption_text"], i)
+        # Generate ASS subtitles locally (same container = shared filesystem)
+        ass_path = generate_ass_subtitles.local(aud_path, shot["caption_text"], i)
         
         # Alternating zoom direction based on shot index
         zoom_expr = "zoom+0.0006" if i % 2 == 0 else "zoom-0.0006"
@@ -219,7 +220,20 @@ def render_video(job_id: str, shots: list, music_url: str, callback_url: str):
     ], check=True)
 
     # 5. Upload to Cloudinary
-    # (Assuming CLOUDINARY_URL environment variable is set via Modal Secrets)
+    # Modal secret stores per-channel credentials. Pick first available.
+    suffixes = ["TECH_SHOTS", "FINANCE_SHOTS", "SURVIVAL_SHOTS", "STOIC_SHOTS"]
+    cloud_name = api_key = api_secret = None
+    for sfx in suffixes:
+        cloud_name = os.environ.get(f"CLOUDINARY_CLOUD_NAME_{sfx}")
+        api_key = os.environ.get(f"CLOUDINARY_API_KEY_{sfx}")
+        api_secret = os.environ.get(f"CLOUDINARY_API_SECRET_{sfx}")
+        if cloud_name and api_key and api_secret:
+            break
+    
+    if api_key and api_secret and cloud_name:
+        cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
+    else:
+        raise Exception(f"No Cloudinary credentials found among suffixes: {suffixes}")
     upload_result = cloudinary.uploader.upload(
         final_out, 
         resource_type="video",
@@ -235,7 +249,7 @@ def render_video(job_id: str, shots: list, music_url: str, callback_url: str):
         try:
             response = requests.post(
                 callback_url,
-                json={"jobId": job_id, "videoUrl": video_url},
+                json={"jobId": job_id, "mp4Url": video_url},
                 timeout=15
             )
             response.raise_for_status()
@@ -266,7 +280,14 @@ async def trigger_render(request: Request):
     if not all([job_id, shots, music_url, callback_url]):
         return {"error": "Missing required fields"}
 
-    # Spawn the heavy render asynchronously so the HTTP request completes immediately
-    render_video.spawn(job_id, shots, music_url, callback_url)
+    # Run render synchronously and return the result directly (no webhook dependency)
+    try:
+        result = render_video.remote(job_id, shots, music_url, callback_url)
+    except Exception as e:
+        print(f"[trigger_render] render_video.remote() failed: {e}")
+        return {"error": str(e), "jobId": job_id}
     
-    return {"status": "Render queued on Modal", "jobId": job_id}
+    if isinstance(result, dict) and result.get("error"):
+        return {"error": result["error"], "jobId": job_id}
+    
+    return result
