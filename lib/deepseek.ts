@@ -1,7 +1,7 @@
 // Path: lib/deepseek.ts
 import { DEEPSEEK_TEXT_MODEL } from './constants';
 
-const DEEPSEEK_BASE = 'https://api.deepseek.com/v1/chat/completions';
+const DEEPSEEK_BASE = 'https://api.deepseek.com/chat/completions';
 
 export async function chatCompletion(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
@@ -23,32 +23,41 @@ export async function chatCompletion(
     body.response_format = { type: 'json_object' };
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  // DeepSeek JSON mode occasionally returns empty content (documented caveat).
+  // Retry once with a slightly different temperature to shake the latent space.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
 
-  try {
-    const res = await fetch(DEEPSEEK_BASE, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+    try {
+      const res = await fetch(DEEPSEEK_BASE, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(attempt === 0 ? body : { ...body, temperature: (temperature + 0.15) % 1 }),
+        signal: controller.signal,
+      });
 
-    if (!res.ok) {
-      const errorBody = await res.text().catch(() => 'unknown');
-      throw new Error(`DeepSeek API error ${res.status}: ${errorBody.slice(0, 500)}`);
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => 'unknown');
+        throw new Error(`DeepSeek API error ${res.status}: ${errorBody.slice(0, 500)}`);
+      }
+
+      const json = await res.json();
+      const content = json.choices?.[0]?.message?.content;
+      if (content) return content;
+
+      if (attempt === 0) {
+        console.warn('[DeepSeek] Empty content on attempt 1, retrying with jittered temperature...');
+      }
+    } finally {
+      clearTimeout(timer);
     }
-
-    const json = await res.json();
-    const content = json.choices?.[0]?.message?.content;
-    if (!content) throw new Error('DeepSeek returned empty content');
-    return content;
-  } finally {
-    clearTimeout(timer);
   }
+
+  throw new Error('DeepSeek returned empty content on both attempts');
 }
 
 export function extractJson(raw: string): unknown {
