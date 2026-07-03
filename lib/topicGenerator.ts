@@ -102,7 +102,12 @@ export function pickFormatTemplate(niche: string): FormatTemplate {
 // ─── PASS 1: NARRATIVE GENERATION ─────────────────────────────────────────────
 async function generateNarrative(topic: string, researchContext: string, toneInstruction: string): Promise<string> {
   const systemPrompt = `You are a master storyteller and investigative journalist.
-Your job is to write a highly compelling, fact-dense, 150-170 word narrative script.
+Your job is to write a highly compelling, fact-dense narrative script for a YouTube Short.
+
+LENGTH MANDATE (CRITICAL):
+- ABSOLUTE MAXIMUM OF 125 WORDS.
+- If you write 126 words, the video will exceed 60 seconds and fail completely.
+- Be ruthless with your editing. Cut the filler.
 
 TONE MANDATE:
 ${toneInstruction}

@@ -154,12 +154,16 @@ def render_video(job_id: str, shots: list, music_url: str, callback_url: str):
         aud_path = f"{work_dir}/aud_{i}.mp3"
 
         trimmed_aud_path = f"{work_dir}/aud_trimmed_{i}.mp3"
-        
-        # FIX: Added apad=pad_dur=0.5 to keep the audio stream alive past the final spoken word.
-        # This gives FFmpeg's -shortest flag time to render the final subtitle frame.
+
+        is_last_shot = (i == len(shots) - 1)
+
+        audio_filter = "silenceremove=start_periods=1:start_silence=0.05:start_threshold=-45dB:stop_periods=-1:stop_silence=0.05:stop_threshold=-45dB"
+        if is_last_shot:
+            audio_filter += ",apad=pad_dur=0.5"
+
         subprocess.run([
             "ffmpeg", "-y", "-i", aud_path,
-            "-af", "silenceremove=start_periods=1:start_silence=0.1:start_threshold=-50dB:stop_periods=-1:stop_silence=0.1:stop_threshold=-50dB,apad=pad_dur=0.5",
+            "-af", audio_filter,
             "-c:a", "libmp3lame", "-b:a", "128k",
             trimmed_aud_path
         ], check=True, capture_output=True)
