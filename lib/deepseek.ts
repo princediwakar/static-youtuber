@@ -17,6 +17,10 @@ export async function chatCompletion(
     messages,
     temperature,
     max_tokens: maxTokens,
+    // deepseek-v4-pro defaults to thinking ENABLED, which burns max_tokens
+    // budget on internal reasoning — leaving zero tokens for the response.
+    // Must explicitly disable for non-reasoning workloads (JSON mode, prose).
+    thinking: { type: 'disabled' },
   };
 
   if (responseJson) {
