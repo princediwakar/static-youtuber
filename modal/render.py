@@ -105,8 +105,10 @@ def generate_ass_subtitles(audio_path: str, caption_text: str, shot_index: int) 
         for j, w in enumerate(words_data):
             clean_word = w['text'].strip()
             if j == i:
-                # Active word: Gold (BGR: 00D7FF) + 120% scale
-                line_text += f"{{\\c&H00D7FF&}}{{\\fscx120\\fscy120}}{clean_word}{{\\fscx100\\fscy100}}{{\\c&HFFFFFF&}} "
+                # Active word: Gold color + bold. No scale change — scaling
+                # causes text reflow between highlight events (the wider word
+                # pushes line breaks around), producing jitter and gaps.
+                line_text += f"{{\\c&H00D7FF&}}{{\\b1}}{clean_word}{{\\b0}}{{\\c&HFFFFFF&}} "
             else:
                 # Inactive word: White
                 line_text += f"{clean_word} "

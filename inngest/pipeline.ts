@@ -237,6 +237,12 @@ export const generateShort = inngest.createFunction(
     // ── Step 5: Publish ──────────────────────────────────────────────────────
     if (!skipPublish) {
       await step.run('publish', async () => {
+        // Safety net: never publish from local dev, regardless of event data
+        if (process.env.INNGEST_DEV === '1') {
+          console.log('[Pipeline] Skipping publish — INNGEST_DEV is set (local dev)');
+          return;
+        }
+
         const job = await db.getJob(jobId);
         if (job?.status === 'published') return;
 

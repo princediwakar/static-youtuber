@@ -72,6 +72,7 @@ const QualityScoreSchema = z.object({
   pacing: z.number().min(0).max(10),
   visual_entropy: z.number().min(0).max(10),
   visual_coherence: z.number().min(0).max(10),
+  caption_flow: z.number().min(0).max(10),
   overall: z.number().min(0).max(10),
   issues: z.array(z.string()),
   approved: z.boolean(),
@@ -111,7 +112,7 @@ export function pickFormatTemplate(niche: string): FormatTemplate {
 
 // ─── PASS 1: NARRATIVE GENERATION ─────────────────────────────────────────────
 async function generateNarrative(topic: string, researchContext: string, toneInstruction: string): Promise<string> {
-  const systemPrompt = `You are a master storyteller and investigative journalist. 
+  const systemPrompt = `You are a master storyteller and investigative journalist.
 Your job is to write a highly compelling, fact-dense, 150-170 word narrative script.
 
 TONE MANDATE:
@@ -124,8 +125,13 @@ STORYTELLING RULES:
 4. End with a devastating conclusion. The final sentence must recontextualize the whole story.
 5. NO CTAs. No "subscribe", "like", or "thanks for watching".
 
+CAPTION READABILITY (these words appear on screen):
+- Every sentence is a visual unit. Keep them short — 8 to 14 words max. No run-ons.
+- Write for the ear AND the eye. If a sentence looks like a wall of text on a phone screen, break it.
+- Avoid parentheticals and nested clauses. Subject → verb → object. Clean and direct.
+
 OUTPUT:
-Output pure prose. NO JSON. NO formatting. Just the story. Write for the human ear.`;
+Output pure prose. NO JSON. NO formatting. Just the story.`;
 
   const userPrompt = `TOPIC: ${topic}\n\nRESEARCH CONTEXT (TREAT AS ABSOLUTE FACT):\n${researchContext}`;
 
@@ -157,6 +163,14 @@ Your job is to take a completed narrative script and slice it into exactly ${sho
 
 FORMAT: ${formatTemplate}
 VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'vector'}
+
+CAPTION READABILITY (EVERYTHING BELOW IS CRITICAL):
+- Each caption is displayed on screen for 3-5 seconds. The viewer must be able to read it in that time.
+- Captions MUST read as coherent thought fragments. When read in sequence shot after shot, they must flow like natural speech. A viewer should never think "that looked broken."
+- Never split a caption mid-clause unless it creates a deliberate dramatic cliffhanger. Prefer splitting at natural pause points: between sentences, between clauses, or after a comma/em-dash.
+- Each caption should feel like a complete micro-statement — something that makes sense on its own while clearly leading into the next one.
+- BAD split (mid-clause): "The engineers discovered that" / "the safety interlock had been removed"
+- GOOD split (natural boundary): "The engineers discovered something horrifying" / "the safety interlock had been completely removed"
 
 AUDIO PACING & TTS MANIPULATION (raw_text):
 - TTS engines read punctuation as silence.
@@ -365,9 +379,10 @@ SCORING RUBRIC (0-10):
 - pacing (0-10): Will the TTS delivery (spoken_text) sound natural with the punctuation?
 - visual_entropy (0-10): Are images varied?
 - visual_coherence (0-10): Are images cohesive?
+- caption_flow (0-10): If you read just the captions in sequence, do they read as natural, coherent sentences? Are there any awkward mid-clause breaks? Does each caption lead smoothly into the next?
 
 Output JSON:
-{ "specificity": 0, "hook_strength": 0, "information_density": 0, "tone_calibration": 0, "pacing": 0, "visual_entropy": 0, "visual_coherence": 0, "overall": 0, "issues": ["string"], "approved": boolean }`;
+{ "specificity": 0, "hook_strength": 0, "information_density": 0, "tone_calibration": 0, "pacing": 0, "visual_entropy": 0, "visual_coherence": 0, "caption_flow": 0, "overall": 0, "issues": ["string"], "approved": boolean }`;
 
   const raw = await chatCompletion(
     [{ role: 'user', content: prompt }],
