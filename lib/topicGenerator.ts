@@ -445,16 +445,54 @@ export async function generateScript(
         throw new Error(`Caption validation failed:\n${captionValidation.errors.join('\n')}`);
       }
 
-      // Enforce template shot count after healing (healShots can inflate count)
-      const shotCount = validated.shots.length;
+      // Enforce template shot count after healing (healShots can inflate count).
+      // Merge shortest adjacent shots rather than retrying — LLM produces the
+      // same narrative each time so retries would just fail identically.
+      let shotCount = validated.shots.length;
       const { min: tcMin, max: tcMax } = TEMPLATE_SHOT_COUNTS[formatTemplate];
-      if (shotCount < tcMin || shotCount > tcMax) {
-        if (attempt < QUALITY_GATE_MAX_RETRIES) {
-          console.warn(`[TopicGenerator] Shot count ${shotCount} outside template range [${tcMin}-${tcMax}], retrying...`);
-          continue;
+      while (shotCount > tcMax) {
+        // Find the shortest adjacent pair and merge them
+        let bestIdx = 0;
+        let bestLen = Infinity;
+        for (let i = 0; i < validated.shots.length - 1; i++) {
+          const combinedLen = validated.shots[i].caption_text.length + validated.shots[i + 1].caption_text.length;
+          if (combinedLen < bestLen) {
+            bestLen = combinedLen;
+            bestIdx = i;
+          }
         }
-        throw new Error(`Shot count ${shotCount} outside template range [${tcMin}-${tcMax}] after all retries`);
+        const a = validated.shots[bestIdx];
+        const b = validated.shots[bestIdx + 1];
+        const mergedRaw = `${a.raw_text} ${b.raw_text}`;
+        const mergedCaption = mergedRaw.replace(/[,—]/g, '').trim();
+        const captionFits = mergedCaption.length <= CAPTION_MAX_CHARS && countCaptionLines(mergedCaption) <= 3;
+        if (!captionFits) {
+          console.warn(`[TopicGenerator] Force-merged shots ${bestIdx + 1}-${bestIdx + 2} (combined caption exceeds limits)`);
+        }
+        validated.shots.splice(bestIdx, 2, {
+          ...a,
+          raw_text: mergedRaw,
+          caption_text: mergedCaption,
+        });
+        shotCount = validated.shots.length;
       }
+      if (shotCount < tcMin) {
+        // Shouldn't happen often, but if we're below min, retry with LLM
+        console.warn(`[TopicGenerator] Shot count ${shotCount} below template min [${tcMin}-${tcMax}], retrying...`);
+        continue;
+      }
+
+      // Re-index after possible merges and re-derive derived fields
+      validated.shots.forEach((s, i) => {
+        s.id = i + 1;
+        s.is_conclusion = i === validated.shots.length - 1;
+        s.spoken_text = s.raw_text;
+        let caption = s.raw_text.replace(/[,—]/g, '').trim();
+        if (!s.is_conclusion) {
+          caption = caption.replace(/[.!?]$/, '').trim();
+        }
+        s.caption_text = caption;
+      });
 
       const score = await scoreScript(validated, reserved.research_context, niche, profile.minQualityScore);
       if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {

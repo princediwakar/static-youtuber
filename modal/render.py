@@ -160,24 +160,32 @@ def render_video(job_id: str, shots: list, music_url: str, callback_url: str):
     for i, shot in enumerate(shots):
         img_path = f"{work_dir}/img_{i}.jpg"
         aud_path = f"{work_dir}/aud_{i}.mp3"
-        
-        # Generate ASS subtitles locally (same container = shared filesystem)
-        ass_path = generate_ass_subtitles.local(aud_path, shot["caption_text"], i)
-        
+
+        # Pre-trim TTS silence BEFORE Whisper so ASS timestamps match the
+        # audio that actually plays. Trailing silence is the root cause of
+        # captions continuing to display while voice has already stopped.
+        trimmed_aud_path = f"{work_dir}/aud_trimmed_{i}.mp3"
+        subprocess.run([
+            "ffmpeg", "-y", "-i", aud_path,
+            "-af", "silenceremove=start_periods=1:start_silence=0.1:start_threshold=-50dB:stop_periods=-1:stop_silence=0.1:stop_threshold=-50dB",
+            "-c:a", "libmp3lame", "-b:a", "128k",
+            trimmed_aud_path
+        ], check=True, capture_output=True)
+
+        # Whisper on the pre-trimmed audio — timestamps now match the actual render audio
+        ass_path = generate_ass_subtitles.local(trimmed_aud_path, shot["caption_text"], i)
+
         # Alternating zoom direction based on shot index
         zoom_expr = "zoom+0.0006" if i % 2 == 0 else "zoom-0.0006"
         scale_expr = "1.0" if i % 2 == 0 else "1.12"
-        
+
         out_shot = f"{work_dir}/shot_rendered_{i}.mp4"
-        
-        # The PCM/Static fix is here: -ar 44100 -ac 2 forces uniform audio across all MP3s.
-        # silenceremove trims TTS-inherent leading silence (the "pause between slides").
+
         ffmpeg_shot_cmd = [
             "ffmpeg", "-y",
             "-loop", "1", "-i", img_path,
-            "-i", aud_path,
+            "-i", trimmed_aud_path,
             "-vf", f"scale=1080:1920,zoompan=z='if(eq(mod(on,2),0),{scale_expr},{zoom_expr})':d=10000:s=1080x1920,ass='{ass_path}'",
-            "-af", "silenceremove=start_periods=1:start_silence=0.1:start_threshold=-50dB",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
             "-shortest",
