@@ -50,7 +50,7 @@ export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: nu
 };
 
 // ─── Model config ─────────────────────────────────────────────────────────────
-export const DEEPSEEK_TEXT_MODEL = 'deepseek-v4-pro'; // deepseek-chat deprecated 2026-07-24
+export const DEEPSEEK_TEXT_MODEL = process.env.DEEPSEEK_TEXT_MODEL || 'deepseek-v4-pro'; // deepseek-chat deprecated 2026-07-24
 export const CF_AI_IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
 export const CF_AI_SLIDE_WIDTH = 576;
 export const CF_AI_SLIDE_HEIGHT = 1024;
