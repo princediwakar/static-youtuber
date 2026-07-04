@@ -11,8 +11,11 @@ const nextConfig: NextConfig = {
     'google-auth-library',
     'pg',
   ],
-  // Use empty turbopack config to keep Turbopack happy
-  turbopack: {},
+  turbopack: {
+    resolveAlias: {
+      'edge-tts': 'edge-tts/out/index.js',
+    },
+  },
 };
 
 export default nextConfig;
