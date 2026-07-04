@@ -37,7 +37,7 @@ export const FORMAT_TEMPLATES = ['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST'] as const
 export type FormatTemplate = typeof FORMAT_TEMPLATES[number];
 
 export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, number>> = {
-  'SaaS & AI Tools':       { RAPID_FIRE: 0.8, SLOW_BURN: 0,   THE_LIST: 0.2 },
+  'SaaS & AI Tools':       { RAPID_FIRE: 0.1, SLOW_BURN: 0.7, THE_LIST: 0.2 },
   'Financial Forensics':   { RAPID_FIRE: 0.8, SLOW_BURN: 0.2, THE_LIST: 0   },
   'Stoic Philosophy':      { RAPID_FIRE: 0,   SLOW_BURN: 0.7, THE_LIST: 0.3 },
   'Urban Survival':        { RAPID_FIRE: 0,   SLOW_BURN: 0.6, THE_LIST: 0.4 },
@@ -64,8 +64,8 @@ export type TTSVoiceProfile = {
 
 export const TTS_VOICE_PROFILES: Record<string, TTSVoiceProfile> = {
   'SaaS & AI Tools': {
-    fallbackVoice: 'en-US-AvaNeural',
-    directorNotes: 'Crisp pacing, clean software tool explanation rhythm.',
+    fallbackVoice: 'en-US-BrianNeural',
+    directorNotes: 'Measured narrative pacing. Documentary storytelling. Build tension through the facts, not the voice.',
   },
   'Financial Forensics': {
     fallbackVoice: 'en-US-BrianNeural',
@@ -131,17 +131,20 @@ export type NicheProfile = {
 
 export const NICHE_PROFILES: Record<string, NicheProfile> = {
   'SaaS & AI Tools': {
-    aestheticId: 'vector',
-    toneInstruction: `Your tone is crisp, confident, and instructive — like a top-tier tech YouTuber
-explaining how a specific tool solves a specific business problem. Zero fluff.
-Name the exact software, the exact workflow, and the exact outcome. Build value
-through specificity: what does the tool replace, how much time/money does it save,
-what's the concrete before-and-after.
+    aestheticId: 'dossier',
+    toneInstruction: `You are a master storyteller chronicling the raw human drama behind billion-dollar startups.
+Every story is about a real person who made a single bet that paid off — or nearly destroyed them.
+Paint the founder as a character: Where did they come from? What was their obsession?
+What was the moment everything hinged on one decision?
 
-NEVER use words like "revolutionary", "game-changing", or "insane".
-NEVER sound like a sales pitch. Let the utility do the persuasion.
-Every shot must convey one actionable piece of information.`,
-    minQualityScore: 6,
+Ground every story in concrete reality. Name exact dates, dollar amounts, and pivotal moments.
+Build tension through the stakes: how close they came to failure, the competitor they beat,
+the investor who said no. End with the outcome — the valuation, the exit, the lesson.
+
+NEVER use words like "disrupt", "innovate", or "unicorn".
+NEVER sound like a cheerleader. Let the facts tell the story.
+Every shot must advance the narrative, not just list features.`,
+    minQualityScore: 7,
   },
   'Financial Forensics': {
     aestheticId: 'dossier',

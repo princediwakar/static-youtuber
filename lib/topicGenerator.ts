@@ -156,7 +156,7 @@ async function chunkScriptToJSON(
 Your job is to take a completed narrative script and slice it into exactly ${shotCounts.min}-${shotCounts.max} shots, formatted as strict JSON.
 
 FORMAT: ${formatTemplate}
-VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'vector'}
+VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'dossier'}
 
 VOICEOVER & PACING (CRITICAL):
 - CRITICAL — VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or rephrase a single word of the narrative below. Every shot's "text" must be an exact, verbatim, contiguous substring of the narrative — you are only choosing WHERE to cut it into shots, never changing the wording, spelling, or punctuation. All shots get re-joined in order into ONE continuous voiceover; any paraphrasing here will desync the captions, the audio, and the on-screen timing.
