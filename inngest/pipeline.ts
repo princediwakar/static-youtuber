@@ -1,8 +1,9 @@
 // Path: inngest/pipeline.ts
 import { inngest } from './client';
 import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
+import type { Shot } from '@/lib/types';
 import { generateImage } from '@/lib/cloudflareAi';
-import { generateSpeech } from '@/lib/edgeTts';
+import { generateNarrativeSpeech } from '@/lib/edgeTts';
 import { selectMusicTrack } from '@/lib/musicSelector';
 import {
   uploadSlideImage,
@@ -89,54 +90,70 @@ export const generateShort = inngest.createFunction(
       return { script, jobId, format_template, niche, variant, topic };
     });
 
-    // ── Step 2: Generate Images + Audio per shot (parallelized, memoized) ────
+    // ── Step 2a: Generate Images per shot (parallelized, memoized) ───────────
+    // Images stay per-shot: they're the slow/rate-limited part and each one
+    // is an independent artifact, so per-shot crash recovery still pays off here.
     const imageUrls: string[] = new Array(script.shots.length);
-    const audioUrls: string[] = new Array(script.shots.length);
 
     for (let i = 0; i < script.shots.length; i++) {
-      const result = await step.run(`process-shot-${i}`, async () => {
-        // MEMOIZATION: If this shot was already processed in a prior run, return cached URLs
+      const result = await step.run(`process-shot-image-${i}`, async () => {
         const job = await db.getJob(jobId);
-        if (job?.shot_image_urls?.[i] && job?.shot_audio_urls?.[i]) {
-          return { imageUrl: job.shot_image_urls[i], audioUrl: job.shot_audio_urls[i] };
+        if (job?.shot_image_urls?.[i]) {
+          return { imageUrl: job.shot_image_urls[i] };
         }
 
         const shot = script.shots[i];
         const creds = await getAccountCredentials(accountId);
-        const voice = EDGE_TTS_VOICES[niche] ?? 'en-US-AriaNeural';
-        const ttsText = shot.audio_instruction
-          ? `${shot.audio_instruction} ${shot.tts_text}`
-          : shot.tts_text;
 
-        // PARALLEL: Image gen and TTS share no state — run concurrently
-        const [rawImageBuffer, rawAudioBuffer] = await Promise.all([
-          generateImage(shot.visual_prompt, CF_AI_SLIDE_WIDTH, CF_AI_SLIDE_HEIGHT),
-          generateSpeech(ttsText, voice),
-        ]);
+        const rawImageBuffer = await generateImage(shot.visual_prompt, CF_AI_SLIDE_WIDTH, CF_AI_SLIDE_HEIGHT);
+        const imageUrl = await uploadSlideImage(rawImageBuffer, jobId, i, creds);
 
-        // Raw image — captions are now rendered on Modal via ASS/FFmpeg subtitle burning
-        const [imageUrl, audioUrl] = await Promise.all([
-          uploadSlideImage(rawImageBuffer, jobId, i, creds),
-          uploadSlideAudio(rawAudioBuffer, jobId, i, creds),
-        ]);
-
-        // Persist URLs immediately so crash recovery doesn't lose completed work
+        // Persist immediately so crash recovery doesn't lose completed work
         const currentJob = await db.getJob(jobId);
         const updatedImageUrls = [...(currentJob?.shot_image_urls ?? [])];
-        const updatedAudioUrls = [...(currentJob?.shot_audio_urls ?? [])];
         updatedImageUrls[i] = imageUrl;
-        updatedAudioUrls[i] = audioUrl;
-        await db.updateJob(jobId, {
-          shot_image_urls: updatedImageUrls,
-          shot_audio_urls: updatedAudioUrls,
-        });
+        await db.updateJob(jobId, { shot_image_urls: updatedImageUrls });
 
-        return { imageUrl, audioUrl };
+        return { imageUrl };
       });
 
       imageUrls[i] = result.imageUrl;
-      audioUrls[i] = result.audioUrl;
     }
+
+    // ── Step 2b: Generate ONE continuous narration track for the whole script ─
+    // This replaces the old per-shot generateSpeech() calls. EdgeTTS treats
+    // every call as a standalone utterance and bakes a start/end "settle"
+    // cadence into the audio — synthesizing 12-25 of those and concatenating
+    // them is what produced the dead air between shots. Reading the whole
+    // narrative in one call means natural pauses only happen where the text
+    // actually has punctuation, and modal/render.py uses Whisper alignment
+    // on this single track to figure out where each shot should cut.
+    //
+    // NOTE: shot.audio_instruction (e.g. "[urgent]") is intentionally NOT
+    // included here. Concatenating those tags into one continuous string
+    // would both risk EdgeTTS reading them aloud as literal words AND break
+    // the word-count alignment render.py relies on. If your EDGE_TTS_URL
+    // wrapper genuinely supports inline tone directives, this can be revisited
+    // by embedding the tag inline and adjusting the word-count math to skip it.
+    const narrationAudioUrl = await step.run('generate-narration', async () => {
+      const job = await db.getJob(jobId);
+      if (job?.narration_audio_url) return job.narration_audio_url;
+
+      const creds = await getAccountCredentials(accountId);
+      const voice = EDGE_TTS_VOICES[niche] ?? 'en-US-AriaNeural';
+
+      const { audioBuffer } = await generateNarrativeSpeech(script.shots, voice);
+      // Reusing uploadSlideAudio with a fixed index — consider adding a
+      // dedicated uploadNarrationAudio() helper if you want a cleaner
+      // Cloudinary path than "audio_0".
+      const url = await uploadSlideAudio(audioBuffer, jobId, 0, creds);
+
+      await db.updateJob(jobId, { narration_audio_url: url });
+      return url;
+    });
+    // Requires a `narration_audio_url` column on the jobs table (the old
+    // `shot_audio_urls` column is no longer written to and can stay unused
+    // or be dropped later).
 
     await step.run('update-assets-ready', async () => {
       await db.updateJob(jobId, { status: 'assets_ready' });
@@ -180,11 +197,15 @@ export const generateShort = inngest.createFunction(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             jobId,
-            shots: (script.shots as Array<{ caption_text: string }>).map((shot, i) => ({
+            // NEW CONTRACT: no per-shot audio_url anymore. "text" must be the
+            // exact, verbatim wording that was spoken (tts_text === caption_text
+            // in the current script shape) — render.py uses it to re-derive
+            // each shot's timing from the single narration track via word counts.
+            shots: script.shots.map((shot: Shot, i: number) => ({
               image_url: imageUrls[i],
-              audio_url: audioUrls[i],
-              caption_text: shot.caption_text,
+              text: shot.tts_text,
             })),
+            audio_url: narrationAudioUrl,
             music_url: musicUrl,
             callback_url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/webhooks/modal`,
           }),

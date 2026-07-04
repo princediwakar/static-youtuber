@@ -159,6 +159,7 @@ FORMAT: ${formatTemplate}
 VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'vector'}
 
 VOICEOVER & PACING (CRITICAL):
+- CRITICAL — VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or rephrase a single word of the narrative below. Every shot's "text" must be an exact, verbatim, contiguous substring of the narrative — you are only choosing WHERE to cut it into shots, never changing the wording, spelling, or punctuation. All shots get re-joined in order into ONE continuous voiceover; any paraphrasing here will desync the captions, the audio, and the on-screen timing.
 - Write naturally for the ear. Use commas (,) and em-dashes (—) exactly where a human would naturally pause.
 - NEVER spell out numbers. Use digits (e.g., "4.5 million", "$1.4 billion", "2009"). Digits are visual anchors that grab attention. TTS engines read them flawlessly.
 - SEMANTIC CHUNKING: Never end a shot mid-thought on an article (a, an, the), preposition (on, in, to), or conjunction (and, but).
@@ -323,6 +324,45 @@ function healShots(raw: any): any {
   return { ...raw, shots: healed };
 }
 
+// ─── NARRATIVE / SHOT ALIGNMENT GUARD ────────────────────────────────────────
+// The render pipeline now TTS's the whole narrative as ONE continuous clip
+// and re-derives each shot's start/end timestamps by Whisper-aligning the
+// audio, then walking the shot texts' word counts across it. That only works
+// if joining the shots' `text` fields back together reproduces (very
+// closely) the narrative that was actually spoken. Pass 2 is instructed to
+// slice verbatim rather than paraphrase, but LLMs drift — this is the
+// safety net that catches it and forces a retry instead of shipping a
+// script whose captions/cuts will be misaligned with the audio.
+function normalizeForComparison(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[.,!?;:—-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function shotsMatchNarrative(narrative: string, shots: { text: string }[]): { ok: boolean; ratio: number } {
+  const narrativeWords = normalizeForComparison(narrative);
+  const shotWords = normalizeForComparison(shots.map(s => s.text).join(' '));
+
+  if (narrativeWords.length === 0) return { ok: false, ratio: 0 };
+
+  // Greedy in-order match: what fraction of the narrative's words show up,
+  // in the same order, across the joined shot text.
+  let ni = 0;
+  let matched = 0;
+  for (const word of shotWords) {
+    while (ni < narrativeWords.length && narrativeWords[ni] !== word) ni++;
+    if (ni < narrativeWords.length) {
+      matched++;
+      ni++;
+    }
+  }
+
+  const ratio = matched / narrativeWords.length;
+  return { ok: ratio >= 0.85, ratio };
+}
+
 // ─── QUALITY GATE ────────────────────────────────────────────────────────────
 async function scoreScript(
   script: z.infer<typeof SlideshowScriptSchema>,
@@ -411,6 +451,13 @@ export async function generateScript(
         throw new Error(`Caption validation failed:\n${captionValidation.errors.join('\n')}`);
       }
 
+      const narrativeMatch = shotsMatchNarrative(narrative, validated.shots);
+      if (!narrativeMatch.ok) {
+        console.warn(`[TopicGenerator] Shot text drifted from narrative (verbatim match ratio ${narrativeMatch.ratio.toFixed(2)}), retrying...`);
+        if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
+        throw new Error(`Shots diverged too far from the source narrative (verbatim match ratio ${narrativeMatch.ratio.toFixed(2)}). The chunking pass likely paraphrased instead of slicing, which would desync audio/captions/cuts in the renderer.`);
+      }
+
       // NOTE: Removed the force-merge loop that destroyed caption boundaries. 
       // The viewer's ability to read the text overrides an arbitrary shot count.
 
@@ -421,7 +468,7 @@ export async function generateScript(
         return {
           script: {
             title: validated.title,
-            description: `${validated.description}\n\n[Aesthetic: ${aesthetic.id}]`,
+            description: `${validated.description}`,
             visual_world: validated.visual_world,
             format_template: validated.format_template,
             fact_check_and_sources: validated.fact_check_and_sources.map(f => `${f.claim} → ${f.source}`).join('\n'),

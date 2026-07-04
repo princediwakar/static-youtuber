@@ -1,4 +1,4 @@
-// Path: lib/edgeTts.ts
+// lib/edgeTts.ts
 import { EDGE_TTS_URL, EDGE_TTS_API_KEY } from './constants';
 
 async function callEdgeTts(text: string, voice: string, retries: number = 3): Promise<Buffer> {
@@ -51,6 +51,46 @@ async function callEdgeTts(text: string, voice: string, retries: number = 3): Pr
   throw new Error('EdgeTTS generation failed after all retries');
 }
 
+/**
+ * LEGACY: synthesizes a single, isolated line of text.
+ *
+ * Do NOT use this per-shot in the video render pipeline anymore. EdgeTTS
+ * treats every call as one complete utterance and bakes sentence-boundary
+ * prosody (a settle/pause at the start and end) into the audio itself.
+ * Calling this once per shot and concatenating the clips is what produces
+ * "dead air" between shots — trimming silence afterwards can't undo the
+ * cadence that was synthesized in. Keep this around only for standalone
+ * use cases (e.g. previewing a single line), not for full-video narration.
+ */
 export async function generateSpeech(text: string, voice: string): Promise<Buffer> {
   return callEdgeTts(text, voice);
+}
+
+/**
+ * Synthesizes the ENTIRE narration as one continuous clip so EdgeTTS reads
+ * it as a single flowing utterance — natural pauses only where the text
+ * actually has punctuation (commas, em-dashes, periods), no artificial
+ * per-shot restart cadence.
+ *
+ * Shots are expected to be verbatim, contiguous slices of the narrative
+ * (see the "verbatim slicing" instruction added to the Pass 2 prompt and
+ * the shotsMatchNarrative() guard in topicGenerator.ts) — rejoining them
+ * with a single space should reproduce the original narrative almost
+ * exactly, which is what keeps the word-count-based shot/timestamp
+ * alignment in modal/render.py accurate.
+ *
+ * shotWordCounts is returned so the render step can slice the single
+ * Whisper-aligned word timeline back into per-shot start/end timestamps
+ * without re-running alignment per shot.
+ */
+export async function generateNarrativeSpeech(
+  shots: { text: string }[],
+  voice: string,
+): Promise<{ audioBuffer: Buffer; fullText: string; shotWordCounts: number[] }> {
+  const fullText = shots.map(s => s.text.trim()).join(' ');
+  const shotWordCounts = shots.map(s => s.text.trim().split(/\s+/).filter(Boolean).length);
+
+  const audioBuffer = await callEdgeTts(fullText, voice);
+
+  return { audioBuffer, fullText, shotWordCounts };
 }
