@@ -56,63 +56,94 @@ def align_narration(audio_path: str, full_text: str) -> list:
 
 def slice_words_by_shot(words: list, shots: list) -> list:
     boundaries = []
-    word_idx = 0
-    n = len(words)
-
-    if n == 0:
-        total_duration = max(len(shots) * 2.0, 10.0)
-        share = total_duration / max(len(shots), 1)
-        for i in range(len(shots)):
-            boundaries.append([i * share, (i + 1) * share, []])
-        return boundaries
-
-    total_audio_duration = words[-1]['end']
-    last_end_time = 0.0
-
-    for i, shot in enumerate(shots):
-        target_words = re.findall(r'[a-z0-9]+', shot["text"].lower())
-        if not target_words:
-            target_words = ["placeholder"]
-
-        slice_words = []
-        match_count = 0
-
-        while word_idx < n:
-            w = words[word_idx]
-            slice_words.append(w)
-            clean_w = re.sub(r'[^a-z0-9]', '', w['text'].lower())
-
-            if clean_w and clean_w in target_words:
-                match_count += 1
-
-            word_idx += 1
-
-            if match_count >= len(target_words) * 0.75:
-                break
-
-        if not slice_words:
-            start_time = last_end_time
-            est_duration = max(len(target_words) * 0.35, 1.5)
-            end_time = min(start_time + est_duration, total_audio_duration)
+    
+    target_words = []
+    for s_idx, shot in enumerate(shots):
+        for w_text in shot["text"].split():
+            target_words.append({
+                "text": w_text,
+                "clean": re.sub(r'[^a-z0-9]', '', w_text.lower()),
+                "shot_idx": s_idx
+            })
+            
+    w_idx = 0
+    t_idx = 0
+    
+    while t_idx < len(target_words) and w_idx < len(words):
+        t_clean = target_words[t_idx]["clean"]
+        w_clean = re.sub(r'[^a-z0-9]', '', words[w_idx]["text"].lower())
+        
+        if t_clean == w_clean:
+            target_words[t_idx]["start"] = words[w_idx]["start"]
+            target_words[t_idx]["end"] = words[w_idx]["end"]
+            t_idx += 1
+            w_idx += 1
         else:
-            start_time = max(slice_words[0]['start'], last_end_time)
-            end_time = max(slice_words[-1]['end'], start_time + 0.5)
+            match_found = False
+            for lookahead in range(1, 4):
+                if w_idx + lookahead < len(words):
+                    lw_clean = re.sub(r'[^a-z0-9]', '', words[w_idx + lookahead]["text"].lower())
+                    if t_clean == lw_clean:
+                        w_idx += lookahead
+                        target_words[t_idx]["start"] = words[w_idx]["start"]
+                        target_words[t_idx]["end"] = words[w_idx]["end"]
+                        t_idx += 1
+                        w_idx += 1
+                        match_found = True
+                        break
+            if not match_found:
+                t_idx += 1
 
-        boundaries.append([start_time, end_time, slice_words])
-        last_end_time = end_time
+    for i in range(len(target_words)):
+        if "start" not in target_words[i]:
+            prev_t = 0.0
+            for j in range(i-1, -1, -1):
+                if "end" in target_words[j]:
+                    prev_t = target_words[j]["end"]
+                    break
+            
+            next_t = words[-1]["end"] if words else 0.0
+            next_idx = len(target_words)
+            for j in range(i+1, len(target_words)):
+                if "start" in target_words[j]:
+                    next_t = target_words[j]["start"]
+                    next_idx = j
+                    break
+            
+            missing_count = next_idx - i
+            duration = max(0.1, next_t - prev_t)
+            chunk = duration / (missing_count + 1)
+            
+            for k in range(missing_count):
+                target_words[i+k]["start"] = prev_t + chunk * (k + 1) - (chunk * 0.8)
+                target_words[i+k]["end"] = prev_t + chunk * (k + 1)
 
+    for s_idx in range(len(shots)):
+        shot_words = [tw for tw in target_words if tw["shot_idx"] == s_idx]
+        if not shot_words:
+            start_t = boundaries[-1][1] if boundaries else 0.0
+            end_t = start_t + 1.0
+        else:
+            start_t = shot_words[0]["start"]
+            end_t = shot_words[-1]["end"]
+            
+        boundaries.append([start_t, end_t, shot_words])
+        
     for i in range(len(boundaries) - 1):
-        boundaries[i][1] = boundaries[i + 1][0]
-
+        boundaries[i][1] = boundaries[i+1][0]
+        
     if boundaries:
-        boundaries[-1][1] = max(total_audio_duration, boundaries[-1][0] + 0.5)
-
+        # Add padding to the video track so it outlasts the audio track.
+        # ffmpeg's '-shortest' will cleanly slice it to match the exact audio duration.
+        total_audio_duration = (words[-1]["end"] if words else 10.0) + 10.0
+        boundaries[-1][1] = max(total_audio_duration, boundaries[-1][0] + 1.0)
+        
     return boundaries
 
 
 def build_continuous_ass(shot_boundaries: list) -> str:
     """
-    Kinetic .ass subtitles. Scales highlighted words up (\fscx130\fscy130)
+    Kinetic .ass subtitles. Scales highlighted words up (\\fscx130\\fscy130)
     and colors them gold so they pop — replacing the old imageGenerator.ts
     burnCaption logic directly in the video stream.
     """
@@ -142,7 +173,7 @@ def build_continuous_ass(shot_boundaries: list) -> str:
 
             line_text = ""
             for j, w in enumerate(words_data):
-                clean_word = re.sub(r'[,.—!?]', '', w['text']).strip()
+                clean_word = w['text'].strip()
                 if j == i:
                     line_text += f"{{\\fscx130\\fscy130\\c&H00D7FF&}}{{\\b1}}{clean_word}{{\\b0}}{{\\fscx100\\fscy100\\c&HFFFFFF&}} "
                 else:
