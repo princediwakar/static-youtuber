@@ -20,8 +20,7 @@ THUMBNAIL COMPOSITION RULES (critical — follow exactly):
 - Leave the lower 40% of the image relatively dark and simple — text will overlay here.
 - Strong visual emotion: awe, surprise, or tension communicated through composition.
 - Bold, saturated colors. No muted or pastel palettes.
-- NO text, watermarks, logos, or lettering anywhere in the image.
-- Avoid: ${aesthetic.imageNegative}`;
+- NO text, watermarks, logos, or lettering anywhere in the image.`;
 }
 
 // ─── Caption renderer ─────────────────────────────────────────────────────────

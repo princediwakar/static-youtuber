@@ -4,7 +4,7 @@ import { NonRetriableError } from 'inngest';
 import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
 import type { Shot } from '@/lib/types';
 import { generateImage } from '@/lib/cloudflareAi';
-import { generateNarrativeSpeech } from '@/lib/edgeTts';
+import { generateNarrativeSpeech } from '@/lib/audioEngine';
 import { selectMusicTrack } from '@/lib/musicSelector';
 import {
   uploadSlideImage,
@@ -17,7 +17,6 @@ import { db, query } from '@/lib/database';
 import {
   CF_AI_SLIDE_WIDTH,
   CF_AI_SLIDE_HEIGHT,
-  EDGE_TTS_VOICES,
   NICHE_PROFILES,
   DEFAULT_NICHE_PROFILE,
   MODAL_RENDER_URL,
@@ -126,43 +125,21 @@ export const generateShort = inngest.createFunction(
       await db.updateJob(jobId, { shot_image_urls: imageUrls });
     });
 
-    // ── Step 2b: Generate ONE continuous narration track for the whole script ─
-    // This replaces the old per-shot generateSpeech() calls. EdgeTTS treats
-    // every call as a standalone utterance and bakes a start/end "settle"
-    // cadence into the audio — synthesizing 12-25 of those and concatenating
-    // them is what produced the dead air between shots. Reading the whole
-    // narrative in one call means natural pauses only happen where the text
-    // actually has punctuation, and modal/render.py uses Whisper alignment
-    // on this single track to figure out where each shot should cut.
-    //
-    // NOTE: shot.audio_instruction (e.g. "[urgent]") is intentionally NOT
-    // included here. Concatenating those tags into one continuous string
-    // would both risk EdgeTTS reading them aloud as literal words AND break
-    // the word-count alignment render.py relies on. If your EDGE_TTS_URL
-    // wrapper genuinely supports inline tone directives, this can be revisited
-    // by embedding the tag inline and adjusting the word-count math to skip it.
+    // ── Step 2b: Generate ONE continuous narration track ────────────────────
     const narrationAudioUrl = await step.run('generate-narration', async () => {
       const job = await db.getJob(jobId);
       if (job?.narration_audio_url) return job.narration_audio_url;
 
       const creds = await getAccountCredentials(accountId);
-      const voice = EDGE_TTS_VOICES[niche] ?? 'en-US-AriaNeural';
+      const fullText = script.shots.map((s: Shot) => s.tts_text).join(' ');
 
-      const { audioBuffer } = await generateNarrativeSpeech(
-        script.shots.map((s: Shot) => ({ text: s.tts_text })),
-        voice,
-      );
-      // Reusing uploadSlideAudio with a fixed index — consider adding a
-      // dedicated uploadNarrationAudio() helper if you want a cleaner
-      // Cloudinary path than "audio_0".
+      const { audioBuffer, engine } = await generateNarrativeSpeech(fullText, niche);
+      console.log(`[Pipeline] Narration generated via ${engine}`);
+
       const url = await uploadSlideAudio(audioBuffer, jobId, 0, creds);
-
       await db.updateJob(jobId, { narration_audio_url: url });
       return url;
     });
-    // Requires a `narration_audio_url` column on the jobs table (the old
-    // `shot_audio_urls` column is no longer written to and can stay unused
-    // or be dropped later).
 
     await step.run('update-assets-ready', async () => {
       await db.updateJob(jobId, { status: 'assets_ready' });
@@ -206,9 +183,10 @@ export const generateShort = inngest.createFunction(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             jobId,
+            accountId,
             shots: script.shots.map((shot: Shot, i: number) => ({
               image_url: imageUrls[i],
-              text: shot.tts_text,
+              text: shot.caption_text,
             })),
             audio_url: narrationAudioUrl,
             music_url: musicUrl,

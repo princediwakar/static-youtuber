@@ -52,111 +52,44 @@ export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: nu
 // ─── Model config ─────────────────────────────────────────────────────────────
 export const DEEPSEEK_TEXT_MODEL = process.env.DEEPSEEK_TEXT_MODEL || 'deepseek-v4-pro'; // deepseek-chat deprecated 2026-07-24
 export const CF_AI_IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
-export const CF_AI_SLIDE_WIDTH = 576;
-export const CF_AI_SLIDE_HEIGHT = 1024;
+export const CF_AI_SLIDE_WIDTH = 768;
+export const CF_AI_SLIDE_HEIGHT = 1344;
 export const FISH_AUDIO_MODEL = 's2.1-pro-free';
 
-// Edge TTS (self-hosted on EC2)
+// Edge TTS fallback (self-hosted on EC2)
 export const EDGE_TTS_URL = process.env.EDGE_TTS_URL || 'http://localhost:5050';
 export const EDGE_TTS_API_KEY = process.env.EDGE_TTS_API_KEY || 'your_api_key_here';
-
-export const EDGE_TTS_VOICES: Record<string, string> = {
-  'SaaS & AI Tools':       'en-US-AriaNeural',
-  'Financial Forensics':   'en-US-GuyNeural',
-  'Stoic Philosophy':      'en-US-ChristopherNeural',
-  'Urban Survival':        'en-US-EricNeural',
-};
 
 // Default Fish Audio reference_id (Generic Female / English).
 // Swap per niche if different voices are desired.
 const FISH_VOICE_GENERIC_FEMALE = 'fb6c0e1ea91e427fb9a93b9bbf0a1e4d';
 
+export type TTSVoiceProfile = {
+  referenceId: string;
+  fallbackVoice: string;
+  directorNotes: string;
+};
+
 export const TTS_VOICE_PROFILES: Record<string, TTSVoiceProfile> = {
   'SaaS & AI Tools': {
     referenceId: FISH_VOICE_GENERIC_FEMALE,
-    directorNotes: `
-# AUDIO PROFILE: Tech Reviewer
-## "SaaS & AI Tools"
-
-### THE SCENE
-A sharp, fast-paced product demo. The narrator knows the software inside out
-and is explaining how it solves a real business problem. No filler, no hype —
-just crisp, clear, authoritative instruction.
-
-### DIRECTOR'S NOTES
-Style: Crisp and confident — like a respected tech YouTuber doing a software
-walkthrough. Pace is brisk. Enunciate product names clearly. Never sound
-salesy. Let the utility of the tool speak for itself.
-
-Pacing: Fast but controlled. Each shot reads in 2-4 seconds. Slight beat
-before the key benefit or feature name.
-
-Accent: Clear, neutral international English.`,
+    fallbackVoice: 'en-US-AriaNeural',
+    directorNotes: 'Style: Crisp and confident. Pace is brisk. Enunciate product names clearly. Never sound salesy. Let the utility of the tool speak for itself.',
   },
   'Financial Forensics': {
     referenceId: FISH_VOICE_GENERIC_FEMALE,
-    directorNotes: `
-# AUDIO PROFILE: Investigative Journalist
-## "Financial Forensics"
-
-### THE SCENE
-A quiet, serious recording booth. The narrator is breaking down a massive
-corporate collapse or market manipulation. The facts are damning. The delivery
-is controlled but urgent — like a journalist who has seen the documents and
-can barely contain their disbelief.
-
-### DIRECTOR'S NOTES
-Style: Grave and precise — like an investigative journalist narrating a
-long-form exposé. Build tension through the scale of the numbers and the
-specificity of the wrongdoing. Never sensational. Let the facts indict.
-
-Pacing: Measured and deliberate. Key dollar amounts and dates get a brief
-beat. Each shot reads in 2-4 seconds. The listener should feel the weight
-of the money involved.
-
-Accent: Clear, neutral international English.`,
+    fallbackVoice: 'en-US-GuyNeural',
+    directorNotes: 'Style: Grave and precise. Build tension through the scale of the numbers. Never sensational. Let the facts indict.',
   },
   'Stoic Philosophy': {
     referenceId: FISH_VOICE_GENERIC_FEMALE,
-    directorNotes: `
-# AUDIO PROFILE: Stoic Narrator
-## "Stoic Philosophy"
-
-### THE SCENE
-A solitary, dimly lit space. The narrator speaks with the weight of someone
-who has endured and emerged stronger. Every word is intentional. There is no
-rushing — the silence between sentences is as powerful as the sentences.
-
-### DIRECTOR'S NOTES
-Style: Deep, measured, and resonant — like a philosopher-warrior reflecting
-after battle. Gritty but controlled. Speak slowly. Let the words land. The
-listener should feel both challenged and strengthened.
-
-Pacing: Slower than the other niches. Each shot reads in 3-5 seconds.
-Pause before moral conclusions. The final line should hang in the air.
-
-Accent: Clear, deep international English with gravitas.`,
+    fallbackVoice: 'en-US-ChristopherNeural',
+    directorNotes: 'Style: Deep, measured, and resonant. Gritty but controlled. Speak slowly. Let the words land.',
   },
   'Urban Survival': {
     referenceId: FISH_VOICE_GENERIC_FEMALE,
-    directorNotes: `
-# AUDIO PROFILE: Tactical Briefing
-## "Urban Survival"
-
-### THE SCENE
-A no-nonsense briefing room. The narrator is delivering actionable intelligence
-for a high-stakes scenario. Every second counts. The information could save
-someone's life. No drama — just precision.
-
-### DIRECTOR'S NOTES
-Style: Urgent but controlled — like a special forces instructor giving a
-pre-mission brief. Authoritative without being theatrical. The stakes are
-real. Speak with the calm urgency of someone who has been in the scenario.
-
-Pacing: Brisk and direct. Each shot reads in 2-4 seconds.
-Gear names, specs, and critical steps are enunciated with extra clarity. No hesitation.
-
-Accent: Clear, neutral international English.`,
+    fallbackVoice: 'en-US-EricNeural',
+    directorNotes: 'Style: Urgent but controlled. Authoritative without being theatrical. Gear names, specs, and critical steps are enunciated with extra clarity.',
   },
 };
 
@@ -168,16 +101,8 @@ export const FORMATS = FORMAT_TEMPLATES; // alias for backward compatibility
 
 export const DEFAULT_TTS_VOICE_PROFILE: TTSVoiceProfile = {
   referenceId: FISH_VOICE_GENERIC_FEMALE,
-  directorNotes: `
-### DIRECTOR'S NOTES
-Style: Crisp, authoritative narrator. Tension from facts, not voice.
-Pacing: Brisk but measured. Brief pause before key facts. Each shot reads in 2–4 seconds.
-Accent: Clear, neutral international English.`,
-};
-
-export type TTSVoiceProfile = {
-  referenceId: string;
-  directorNotes: string;
+  fallbackVoice: 'en-US-AriaNeural',
+  directorNotes: 'Style: Crisp, authoritative narrator. Tension from facts, not voice. Pacing: Brisk but measured.',
 };
 
 export const MODAL_RENDER_URL = process.env.MODAL_RENDER_URL || 'https://example-modal-url.com/render';
@@ -187,7 +112,7 @@ export const FFMPEG_PRESET = 'medium';
 export const FFMPEG_AUDIO_BITRATE = '128k';
 export const VIDEO_WIDTH = 1080;
 export const VIDEO_HEIGHT = 1920;
-export const VIDEO_FPS = 25;
+export const VIDEO_FPS = 30;
 
 export const ZOOMPAN_ZOOM_IN_START = 1.0;
 export const ZOOMPAN_ZOOM_IN_END = 1.12;
@@ -286,7 +211,6 @@ export type Aesthetic = {
   instruction: string;
   imagePrefix: string;
   thumbnailPrefix: string;
-  imageNegative: string;
 };
 
 // FLUX.1 [schnell] optimized image prefixes — natural language paragraphs, not comma tags.
@@ -298,28 +222,24 @@ export const AESTHETICS: Record<string, Aesthetic> = {
     instruction: 'Write a highly descriptive, cinematic paragraph. Treat the image as a classified, high-contrast archival document.',
     imagePrefix: 'A striking, high-contrast black and white cinematic photograph resembling a declassified archival document. The scene features dramatic chiaroscuro lighting, deep shadows, and heavy vintage film grain. There are absolutely no written words or text anywhere in the environment. ',
     thumbnailPrefix: 'A striking black and white cinematic photograph resembling a declassified document with dramatic shadows and heavy film grain. The composition includes vast, completely empty dark space specifically designed for a text overlay. There is no existing text in the image. ',
-    imageNegative: 'text, typography, watermark, logo, blurry, low quality, unrealistic anatomy, modern style, color photo, bright colors',
   },
   vector: {
     id: 'vector',
     instruction: 'Write a highly descriptive, structural paragraph. Treat the image as a premium, high-budget UI/UX product demo.',
     imagePrefix: 'A pristine, high-budget 2D vector flat art illustration shot from an isometric perspective. The scene uses a bold, limited color palette, geometric shapes, dramatic studio lighting, and smooth matte textures. The environment is entirely devoid of text, labels, or UI typography to leave room for overlays. ',
     thumbnailPrefix: 'A pristine 2D vector flat art illustration with a bold color palette and isometric perspective. The composition is radically asymmetrical, leaving vast empty negative space perfectly suited for a bold thumbnail text overlay. No existing text or logos. ',
-    imageNegative: 'text, typography, watermark, logo, blurry, low quality, photorealistic, 3D render, stock photo, cluttered',
   },
   'dark-cinematic': {
     id: 'dark-cinematic',
     instruction: 'Write a highly descriptive, cinematic paragraph. Treat the image as an epic, moody frame from a philosophical epic.',
     imagePrefix: 'A dark, moody cinematic photograph utilizing dramatic chiaroscuro lighting. The scene is defined by deep desaturated blacks, rich textures like rough marble or worn stone, and an epic, solitary atmosphere under a brooding sky. The composition is completely free of any text, symbols, or modern artifacts. ',
     thumbnailPrefix: 'A dark, moody cinematic photograph with dramatic lighting, deep shadows, and a solitary atmosphere. The framing leaves massive, completely empty dark space for bold thumbnail text overlays. There are absolutely no written words in the image. ',
-    imageNegative: 'text, typography, watermark, logo, blurry, bright colors, cheerful, cartoon, modern technology, crowded scenes, selfie style',
   },
   tactical: {
     id: 'tactical',
     instruction: 'Write a highly descriptive, cinematic paragraph. Treat the image as a hyper-realistic, high-stakes operational photograph.',
     imagePrefix: 'A hyper-realistic, gritty tactical photograph shot with a shallow depth of field. The scene features matte black surfaces, dramatic practical lighting, and a moody urban or survival environment filled with atmospheric haze. The environment contains no text, no branding, and no signage of any kind. ',
     thumbnailPrefix: 'A hyper-realistic tactical photograph with dramatic moody lighting and shallow depth of field. The composition pushes the main subject to the edge, featuring stark negative space perfectly suited for large text overlays. Absolutely no text or logos exist in the scene. ',
-    imageNegative: 'text, typography, watermark, logo, blurry, low quality, cartoon, illustration, bright cheerful colors, cluttered background, AI-generated look',
   },
 };
 

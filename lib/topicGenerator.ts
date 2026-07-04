@@ -11,8 +11,6 @@ import {
   QUALITY_GATE_MAX_RETRIES,
   FORMAT_TEMPLATE_WEIGHTS,
   TEMPLATE_SHOT_COUNTS,
-  CAPTION_MAX_CHARS_PER_LINE,
-  CAPTION_MAX_CHARS,
 } from './constants';
 import type { FormatTemplate } from './constants';
 
@@ -22,17 +20,12 @@ const ShotSchema = z.object({
   visual_prompt: z.string()
     .min(30, 'Image prompt must be at least 30 characters')
     .max(600, 'Image prompt must be ≤600 chars'),
-  text: z.string()
-    .min(3, 'text must not be empty')
-    .refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
-  audio_instruction: z.enum(['[serious]', '[curious]', '[urgent]', '[measured]', '[grave]']).optional(),
+  text: z.string().refine(t => t.trim().split(/\s+/).length >= 3, {
+    message: 'Min 3 words per shot',
+  }).refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
   is_conclusion: z.boolean().default(false),
-}).refine(data => data.text.split(' ').length <= 12, {
-  message: 'Soft cap: 12 words max per shot',
-}).refine(data => data.text.split(' ').length >= 3, {
-  message: 'Min 3 words per shot',
-}).refine(data => data.text.trim() === data.text, {
-  message: 'No leading/trailing whitespace',
+}).refine(data => data.text.split(' ').length <= 14, {
+  message: 'Hard cap: 14 words max per shot to preserve pacing',
 });
 
 const SlideshowScriptSchema = z.object({
@@ -217,138 +210,16 @@ Slice this narrative into the exact JSON schema.`;
   return extractJson(raw);
 }
 
-// ─── SELF-HEALING SHOT MUTATOR ──────────────────────────────────────────────────
-function countCaptionLines(text: string): number {
-  const words = text.split(/\s+/);
-  let lines = 0;
-  let current = '';
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length > CAPTION_MAX_CHARS_PER_LINE) {
-      if (current) lines++;
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines++;
-  return lines;
-}
-
-function healShots(raw: any): any {
-  const MAX_WORDS = 11;
-  const MIN_WORDS = 3;
-  const MAX_LINES = 3;
-
-  let shots: any[] = raw.shots ?? [];
-  if (!Array.isArray(shots)) return raw;
-
-  function splitTextIntoValidChunks(text: string): string[] {
-    const words = text.split(/\s+/);
-    if (words.length === 0) return [];
-
-    const chunks: string[][] = [];
-    let currentChunk: string[] = [];
-
-    for (const word of words) {
-      const testChunk = [...currentChunk, word];
-      const testText = testChunk.join(' ');
-
-      const tooManyWords = testChunk.length > MAX_WORDS;
-      const tooManyChars = testText.length > CAPTION_MAX_CHARS;
-      const tooManyLines = countCaptionLines(testText) > MAX_LINES;
-
-      if (tooManyWords || tooManyChars || tooManyLines) {
-        if (currentChunk.length > 0) chunks.push(currentChunk);
-        currentChunk = [word];
-      } else {
-        currentChunk = testChunk;
-      }
-    }
-    if (currentChunk.length > 0) chunks.push(currentChunk);
-
-    for (let i = chunks.length - 1; i > 0; i--) {
-      if (chunks[i].length < MIN_WORDS) {
-        const combined = [...chunks[i - 1], ...chunks[i]];
-        const mid = Math.floor(combined.length / 2);
-
-        chunks[i - 1] = combined.slice(0, mid);
-        chunks[i] = combined.slice(mid);
-      }
-    }
-
-    return chunks.map(c => c.join(' '));
-  }
-
-  const healed: any[] = [];
-
-  for (const shot of shots) {
-    const text = (shot.text ?? '').trim();
-
-    if (text.split(/\s+/).length <= MAX_WORDS && text.length <= CAPTION_MAX_CHARS && countCaptionLines(text) <= MAX_LINES) {
-      healed.push(shot);
-    } else {
-      const validChunks = splitTextIntoValidChunks(text);
-
-      for (let i = 0; i < validChunks.length; i++) {
-        healed.push({
-          ...shot,
-          text: validChunks[i],
-          is_conclusion: false,
-        });
-      }
-      healed[healed.length - 1].is_conclusion = shot.is_conclusion === true;
-    }
-  }
-
-  for (let i = healed.length - 1; i >= 0; i--) {
-    const words = healed[i].text.split(/\s+/);
-    if (words.length < MIN_WORDS) {
-      if (i > 0) {
-        const combinedText = `${healed[i - 1].text} ${healed[i].text}`;
-        if (combinedText.length <= CAPTION_MAX_CHARS && countCaptionLines(combinedText) <= MAX_LINES) {
-          healed[i - 1].text = combinedText;
-          healed[i - 1].is_conclusion = healed[i].is_conclusion || healed[i - 1].is_conclusion;
-          healed.splice(i, 1);
-        }
-      }
-    }
-  }
-
-  healed.forEach((s, i) => {
-    s.id = i + 1;
-    s.is_conclusion = i === healed.length - 1;
-  });
-
-  return { ...raw, shots: healed };
-}
-
 // ─── NARRATIVE / SHOT ALIGNMENT GUARD ────────────────────────────────────────
-// The render pipeline now TTS's the whole narrative as ONE continuous clip
-// and re-derives each shot's start/end timestamps by Whisper-aligning the
-// audio, then walking the shot texts' word counts across it. That only works
-// if joining the shots' `text` fields back together reproduces (very
-// closely) the narrative that was actually spoken. Pass 2 is instructed to
-// slice verbatim rather than paraphrase, but LLMs drift — this is the
-// safety net that catches it and forces a retry instead of shipping a
-// script whose captions/cuts will be misaligned with the audio.
 function normalizeForComparison(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[.,!?;:—-]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
+  return text.toLowerCase().replace(/[.,!?;:—-]/g, ' ').split(/\s+/).filter(Boolean);
 }
 
 function shotsMatchNarrative(narrative: string, shots: { text: string }[]): { ok: boolean; ratio: number } {
   const narrativeWords = normalizeForComparison(narrative);
   const shotWords = normalizeForComparison(shots.map(s => s.text).join(' '));
-
   if (narrativeWords.length === 0) return { ok: false, ratio: 0 };
 
-  // Greedy in-order match: what fraction of the narrative's words show up,
-  // in the same order, across the joined shot text.
   let ni = 0;
   let matched = 0;
   for (const word of shotWords) {
@@ -358,7 +229,6 @@ function shotsMatchNarrative(narrative: string, shots: { text: string }[]): { ok
       ni++;
     }
   }
-
   const ratio = matched / narrativeWords.length;
   return { ok: ratio >= 0.85, ratio };
 }
@@ -422,7 +292,7 @@ export async function generateScript(
     
     for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
       console.log(`[TopicGenerator] Running Pass 2 (Chunking), attempt ${attempt + 1}`);
-      
+
       const parsed = await chunkScriptToJSON(
         narrative,
         reserved.topic,
@@ -432,11 +302,9 @@ export async function generateScript(
         formatTemplate
       );
 
-      const healed = healShots(parsed);
-
       let validated: z.infer<typeof SlideshowScriptSchema>;
       try {
-        validated = SlideshowScriptSchema.parse(healed);
+        validated = SlideshowScriptSchema.parse(parsed);
       } catch (zodErr) {
         if (zodErr instanceof z.ZodError) {
           if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
@@ -453,13 +321,10 @@ export async function generateScript(
 
       const narrativeMatch = shotsMatchNarrative(narrative, validated.shots);
       if (!narrativeMatch.ok) {
-        console.warn(`[TopicGenerator] Shot text drifted from narrative (verbatim match ratio ${narrativeMatch.ratio.toFixed(2)}), retrying...`);
+        console.warn(`[TopicGenerator] Text drifted from narrative (ratio ${narrativeMatch.ratio.toFixed(2)}). Retrying...`);
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-        throw new Error(`Shots diverged too far from the source narrative (verbatim match ratio ${narrativeMatch.ratio.toFixed(2)}). The chunking pass likely paraphrased instead of slicing, which would desync audio/captions/cuts in the renderer.`);
+        throw new Error(`Shots diverged too far from the source narrative. The LLM paraphrased instead of slicing.`);
       }
-
-      // NOTE: Removed the force-merge loop that destroyed caption boundaries. 
-      // The viewer's ability to read the text overrides an arbitrary shot count.
 
       const score = await scoreScript(validated, reserved.research_context, niche, profile.minQualityScore);
       if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
@@ -475,13 +340,12 @@ export async function generateScript(
             tags: validated.tags,
             shots: validated.shots.map(shot => ({
               id: shot.id,
-              visual_prompt: `${aesthetic.imagePrefix}${shot.visual_prompt} | Avoid: ${aesthetic.imageNegative}`,
-              tts_text: shot.text,       // Passed to TTS engine
-              caption_text: shot.text,   // Passed to Render engine (which strips punctuation dynamically)
-              audio_instruction: shot.audio_instruction,
+              visual_prompt: `${aesthetic.imagePrefix}${shot.visual_prompt}`,
+              tts_text: shot.text,
+              caption_text: shot.text,
               is_conclusion: shot.is_conclusion,
             })),
-            thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt} | Avoid: ${aesthetic.imageNegative}`,
+            thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt}`,
             hook_intro,
           },
           topic: reserved.topic,
