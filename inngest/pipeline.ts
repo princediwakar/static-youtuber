@@ -1,5 +1,6 @@
 // Path: inngest/pipeline.ts
 import { inngest } from './client';
+import { NonRetriableError } from 'inngest';
 import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
 import type { Shot } from '@/lib/types';
 import { generateImage } from '@/lib/cloudflareAi';
@@ -90,35 +91,40 @@ export const generateShort = inngest.createFunction(
       return { script, jobId, format_template, niche, variant, topic };
     });
 
-    // ── Step 2a: Generate Images per shot (parallelized, memoized) ───────────
-    // Images stay per-shot: they're the slow/rate-limited part and each one
-    // is an independent artifact, so per-shot crash recovery still pays off here.
+    // ── Step 2a: Generate Images per shot (batched concurrency) ────────────
+    // 25 concurrent requests to Cloudflare Workers AI would trigger 429 rate
+    // limiting. Sequential would waste ~160 s. Batching at 5 gives ~20 s wall
+    // time without tripping Cloudflare's anomaly detection.
+    const CONCURRENCY_LIMIT = 5;
     const imageUrls: string[] = new Array(script.shots.length);
 
-    for (let i = 0; i < script.shots.length; i++) {
-      const result = await step.run(`process-shot-image-${i}`, async () => {
-        const job = await db.getJob(jobId);
-        if (job?.shot_image_urls?.[i]) {
-          return { imageUrl: job.shot_image_urls[i] };
-        }
+    for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
+      const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
+      const batch = script.shots.slice(batchStart, batchEnd);
 
-        const shot = script.shots[i];
-        const creds = await getAccountCredentials(accountId);
+      const batchResults = await Promise.all(
+        batch.map((shot: Shot, offset: number) =>
+          step.run(`process-shot-image-${batchStart + offset}`, async () => {
+            const job = await db.getJob(jobId);
+            if (job?.shot_image_urls?.[batchStart + offset]) {
+              return job.shot_image_urls[batchStart + offset];
+            }
 
-        const rawImageBuffer = await generateImage(shot.visual_prompt, CF_AI_SLIDE_WIDTH, CF_AI_SLIDE_HEIGHT);
-        const imageUrl = await uploadSlideImage(rawImageBuffer, jobId, i, creds);
+            const creds = await getAccountCredentials(accountId);
+            const rawImageBuffer = await generateImage(shot.visual_prompt, CF_AI_SLIDE_WIDTH, CF_AI_SLIDE_HEIGHT);
+            return uploadSlideImage(rawImageBuffer, jobId, batchStart + offset, creds);
+          })
+        )
+      );
 
-        // Persist immediately so crash recovery doesn't lose completed work
-        const currentJob = await db.getJob(jobId);
-        const updatedImageUrls = [...(currentJob?.shot_image_urls ?? [])];
-        updatedImageUrls[i] = imageUrl;
-        await db.updateJob(jobId, { shot_image_urls: updatedImageUrls });
-
-        return { imageUrl };
+      batchResults.forEach((url, offset) => {
+        imageUrls[batchStart + offset] = url;
       });
-
-      imageUrls[i] = result.imageUrl;
     }
+
+    await step.run('persist-image-urls', async () => {
+      await db.updateJob(jobId, { shot_image_urls: imageUrls });
+    });
 
     // ── Step 2b: Generate ONE continuous narration track for the whole script ─
     // This replaces the old per-shot generateSpeech() calls. EdgeTTS treats
@@ -192,7 +198,7 @@ export const generateShort = inngest.createFunction(
       }
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 280_000);  // just under Vercel's 300s max
+      const timeout = setTimeout(() => controller.abort(), 30_000);
 
       try {
         const response = await fetch(MODAL_RENDER_URL, {
@@ -200,10 +206,6 @@ export const generateShort = inngest.createFunction(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             jobId,
-            // NEW CONTRACT: no per-shot audio_url anymore. "text" must be the
-            // exact, verbatim wording that was spoken (tts_text === caption_text
-            // in the current script shape) — render.py uses it to re-derive
-            // each shot's timing from the single narration track via word counts.
             shots: script.shots.map((shot: Shot, i: number) => ({
               image_url: imageUrls[i],
               text: shot.tts_text,
@@ -217,28 +219,33 @@ export const generateShort = inngest.createFunction(
 
         clearTimeout(timeout);
 
-        if (response.ok) {
-          const body = await response.json();
-          // Modal now returns videoUrl directly (sync render)
-          if (body.videoUrl || body.mp4Url) {
-            const url = body.videoUrl || body.mp4Url;
-            console.log(`[Pipeline] Modal returned video: ${url}`);
-            await db.updateJob(jobId, { video_url: url, status: 'assembled' });
-            return url;
-          }
-          // Fallback: Modal queued async (legacy), await webhook
-          console.log(`[Pipeline] Modal returned without video URL, falling back to webhook`);
-        } else {
+        if (!response.ok) {
           const errorBody = await response.text().catch(() => '');
-          throw new Error(`Modal returned HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+          const msg = `Modal returned HTTP ${response.status}: ${errorBody.slice(0, 200)}`;
+          // 400 = bad request (deterministic). 5xx = transient infra, retry.
+          if (response.status >= 400 && response.status < 500) {
+            throw new NonRetriableError(msg);
+          }
+          throw new Error(msg);
         }
+
+        const body = await response.json();
+
+        if (body.error) {
+          throw new NonRetriableError(`Modal render failed: ${body.error}`);
+        }
+
+        if (body.videoUrl || body.mp4Url) {
+          const url = body.videoUrl || body.mp4Url;
+          console.log(`[Pipeline] Modal returned video: ${url}`);
+          await db.updateJob(jobId, { video_url: url, status: 'assembled' });
+          return url;
+        }
+
+        console.log(`[Pipeline] Modal queued render (status: ${body.status}), awaiting webhook`);
       } catch (e: any) {
         clearTimeout(timeout);
-        if (e.name === 'AbortError') {
-          console.warn('[Pipeline] Modal timed out after 280s — will await webhook');
-        } else {
-          throw e;
-        }
+        throw e;
       }
     });
 
@@ -251,6 +258,10 @@ export const generateShort = inngest.createFunction(
         timeout: '10m',
         match: 'data.jobId',
       }).catch(() => null);
+
+      if (modalResult?.data?.error) {
+        throw new NonRetriableError(`Modal render failed asynchronously: ${modalResult.data.error}`);
+      }
 
       if (!modalResult?.data?.mp4Url) {
         throw new Error('Modal render did not complete within 10 minutes — webhook never arrived');
