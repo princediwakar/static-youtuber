@@ -124,17 +124,24 @@ export const generateShort = inngest.createFunction(
       await db.updateJob(jobId, { shot_image_urls: imageUrls });
     });
 
-    // ── Step 2b: Generate ONE continuous narration track ────────────────────
+// ── Step 2b: Generate ONE continuous narration track ───
     const narrationAudioUrl = await step.run('generate-narration', async () => {
       const job = await db.getJob(jobId);
       if (job?.narration_audio_url) return job.narration_audio_url;
 
       const creds = await getAccountCredentials(accountId);
-      const fullText = script.shots.map((s: Shot) => s.tts_text).join(' ');
-
-      const { audioBuffer, engine } = await generateNarrativeSpeech(fullText, niche);
-      console.log(`[Pipeline] Narration generated via ${engine}`);
-
+      
+      // Sanitize the text: strip weird unicode, curly quotes, and unsupported symbols
+      // that silently crash local TTS API wrappers.
+      const rawText = script.shots.map((s: Shot) => s.tts_text).join(' ');
+      const sanitizedText = rawText
+        .replace(/[‘’`]/g, "'") // Normalize apostrophes
+        .replace(/[“”]/g, '"')  // Normalize quotes
+        .replace(/—/g, '-')     // Normalize em-dashes
+        .replace(/[^\x00-\x7F]/g, ''); // Strip remaining non-ASCII characters
+      
+      const { audioBuffer } = await generateNarrativeSpeech(sanitizedText, niche);
+      
       const url = await uploadSlideAudio(audioBuffer, jobId, 0, creds);
       await db.updateJob(jobId, { narration_audio_url: url });
       return url;
