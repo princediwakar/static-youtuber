@@ -142,7 +142,10 @@ export const generateShort = inngest.createFunction(
       const creds = await getAccountCredentials(accountId);
       const voice = EDGE_TTS_VOICES[niche] ?? 'en-US-AriaNeural';
 
-      const { audioBuffer } = await generateNarrativeSpeech(script.shots, voice);
+      const { audioBuffer } = await generateNarrativeSpeech(
+        script.shots.map((s: Shot) => ({ text: s.tts_text })),
+        voice,
+      );
       // Reusing uploadSlideAudio with a fixed index — consider adding a
       // dedicated uploadNarrationAudio() helper if you want a cleaner
       // Cloudinary path than "audio_0".
