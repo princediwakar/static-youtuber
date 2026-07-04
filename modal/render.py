@@ -59,10 +59,20 @@ def slice_words_by_shot(words: list, shots: list) -> list:
     word_idx = 0
     n = len(words)
 
+    if n == 0:
+        total_duration = max(len(shots) * 2.0, 10.0)
+        share = total_duration / max(len(shots), 1)
+        for i in range(len(shots)):
+            boundaries.append([i * share, (i + 1) * share, []])
+        return boundaries
+
+    total_audio_duration = words[-1]['end']
+    last_end_time = 0.0
+
     for i, shot in enumerate(shots):
         target_words = re.findall(r'[a-z0-9]+', shot["text"].lower())
         if not target_words:
-            target_words = ["none"]
+            target_words = ["placeholder"]
 
         slice_words = []
         match_count = 0
@@ -77,18 +87,25 @@ def slice_words_by_shot(words: list, shots: list) -> list:
 
             word_idx += 1
 
-            if match_count >= len(target_words) * 0.8:
+            if match_count >= len(target_words) * 0.75:
                 break
 
-        start_time = slice_words[0]['start'] if slice_words else (boundaries[-1][1] if boundaries else 0.0)
-        boundaries.append([start_time, 0.0, slice_words])
+        if not slice_words:
+            start_time = last_end_time
+            est_duration = max(len(target_words) * 0.35, 1.5)
+            end_time = min(start_time + est_duration, total_audio_duration)
+        else:
+            start_time = max(slice_words[0]['start'], last_end_time)
+            end_time = max(slice_words[-1]['end'], start_time + 0.5)
+
+        boundaries.append([start_time, end_time, slice_words])
+        last_end_time = end_time
 
     for i in range(len(boundaries) - 1):
         boundaries[i][1] = boundaries[i + 1][0]
 
     if boundaries:
-        last_end = boundaries[-1][2][-1]['end'] if boundaries[-1][2] else boundaries[-1][0]
-        boundaries[-1][1] = last_end + 0.5
+        boundaries[-1][1] = max(total_audio_duration, boundaries[-1][0] + 0.5)
 
     return boundaries
 

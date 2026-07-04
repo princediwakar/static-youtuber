@@ -134,6 +134,13 @@ Output pure prose. NO JSON. NO formatting. Just the story.`;
   return raw as string;
 }
 
+const VISUAL_AESTHETIC_ANCHOR = `
+A dark, atmospheric, high-contrast fine art oil painting with visible canvas textures and raw, expressive brushstrokes.
+The image must be composed strictly in a cinematic black and white monochrome color profile, featuring deep charcoal shadows, grimy graphite midtones, and stark volumetric highlights.
+Shot from a dramatic, artful perspective using an anamorphic cinematic lens emulation.
+CRITICAL: The entire frame must be completely devoid of text, words, characters, labels, status bars, or UI typography to guarantee clean overlay rendering space.
+`;
+
 // ─── PASS 2: EDITOR / CHUNKING ────────────────────────────────────────────────
 async function chunkScriptToJSON(
   narrative: string, 
@@ -163,9 +170,9 @@ VOICEOVER & PACING (CRITICAL):
 - The final shot (is_conclusion: true) MUST end with terminal punctuation (., !, or ?).
 - Mid-sequence shots (is_conclusion: false) should end at natural breath points (commas or mid-sentence flow) to pull the viewer into the next shot. Do not force periods if the thought continues.
 
-VISUAL PROMPTS (FLUX.1):
-${aestheticInstruction}
-- Write a highly descriptive, cinematic paragraph using natural language.
+VISUAL AESTHETIC (FLUX.1):
+${VISUAL_AESTHETIC_ANCHOR}
+- Write a highly descriptive, cinematic paragraph using natural language describing the specific scene.
 - KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Even if a sentence spans two shots, advance the camera. Change the angle (e.g., "wide shot" to "extreme macro close-up"), change the lighting, or shift the focus to a new object. Never let the viewer stare at the same composition.
 - NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS. Duplicate prompts are a generation failure. Each shot must have a unique visual_prompt.
 - Describe exactly what is in the frame, where it is located, and the specific lighting.
@@ -340,7 +347,7 @@ export async function generateScript(
             tags: validated.tags,
             shots: validated.shots.map(shot => ({
               id: shot.id,
-              visual_prompt: `${aesthetic.imagePrefix}${shot.visual_prompt}`,
+              visual_prompt: `${VISUAL_AESTHETIC_ANCHOR} Scene description: ${shot.visual_prompt} | Avoid: text, vibrant colors, neon, flat vector, corporate art, typography, watermark, logo, blurry, photorealistic, 3D render, stock photo, modern clean illustration.`,
               tts_text: shot.text,
               caption_text: shot.text,
               is_conclusion: shot.is_conclusion,

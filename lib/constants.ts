@@ -54,42 +54,30 @@ export const DEEPSEEK_TEXT_MODEL = process.env.DEEPSEEK_TEXT_MODEL || 'deepseek-
 export const CF_AI_IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
 export const CF_AI_SLIDE_WIDTH = 768;
 export const CF_AI_SLIDE_HEIGHT = 1344;
-export const FISH_AUDIO_MODEL = 's2.1-pro-free';
-
-// Edge TTS fallback (self-hosted on EC2)
 export const EDGE_TTS_URL = process.env.EDGE_TTS_URL || 'http://localhost:5050';
 export const EDGE_TTS_API_KEY = process.env.EDGE_TTS_API_KEY || 'your_api_key_here';
 
-// Default Fish Audio reference_id (Generic Female / English).
-// Swap per niche if different voices are desired.
-const FISH_VOICE_GENERIC_FEMALE = 'fb6c0e1ea91e427fb9a93b9bbf0a1e4d';
-
 export type TTSVoiceProfile = {
-  referenceId: string;
   fallbackVoice: string;
   directorNotes: string;
 };
 
 export const TTS_VOICE_PROFILES: Record<string, TTSVoiceProfile> = {
   'SaaS & AI Tools': {
-    referenceId: FISH_VOICE_GENERIC_FEMALE,
-    fallbackVoice: 'en-US-AriaNeural',
-    directorNotes: 'Style: Crisp and confident. Pace is brisk. Enunciate product names clearly. Never sound salesy. Let the utility of the tool speak for itself.',
+    fallbackVoice: 'en-US-AvaNeural',
+    directorNotes: 'Crisp pacing, clean software tool explanation rhythm.',
   },
   'Financial Forensics': {
-    referenceId: FISH_VOICE_GENERIC_FEMALE,
-    fallbackVoice: 'en-US-GuyNeural',
-    directorNotes: 'Style: Grave and precise. Build tension through the scale of the numbers. Never sensational. Let the facts indict.',
+    fallbackVoice: 'en-US-BrianNeural',
+    directorNotes: 'Grave tone, cinematic scale framing.',
   },
   'Stoic Philosophy': {
-    referenceId: FISH_VOICE_GENERIC_FEMALE,
-    fallbackVoice: 'en-US-ChristopherNeural',
-    directorNotes: 'Style: Deep, measured, and resonant. Gritty but controlled. Speak slowly. Let the words land.',
+    fallbackVoice: 'en-US-BrianNeural',
+    directorNotes: 'Deep, measured, and resonant.',
   },
   'Urban Survival': {
-    referenceId: FISH_VOICE_GENERIC_FEMALE,
-    fallbackVoice: 'en-US-EricNeural',
-    directorNotes: 'Style: Urgent but controlled. Authoritative without being theatrical. Gear names, specs, and critical steps are enunciated with extra clarity.',
+    fallbackVoice: 'en-US-BrianNeural',
+    directorNotes: 'Urgent but controlled, authoritative.',
   },
 };
 
@@ -100,8 +88,7 @@ export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — L
 export const FORMATS = FORMAT_TEMPLATES; // alias for backward compatibility
 
 export const DEFAULT_TTS_VOICE_PROFILE: TTSVoiceProfile = {
-  referenceId: FISH_VOICE_GENERIC_FEMALE,
-  fallbackVoice: 'en-US-AriaNeural',
+  fallbackVoice: 'en-US-AvaNeural',
   directorNotes: 'Style: Crisp, authoritative narrator. Tension from facts, not voice. Pacing: Brisk but measured.',
 };
 
