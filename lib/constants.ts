@@ -27,9 +27,9 @@ export const ACCOUNT_YOUTUBE_CHANNEL_ID: Record<string, string> = {
 // evening viewing (7-10 PM local) and no two pipelines contend for resources.
 export const NICHE_PUBLISH_HOUR_UTC: Record<string, number> = {
   'Financial Forensics': 15,  // 11 AM EST — finance audience peaks midday + lunch scroll
-  'Stoic Philosophy':    17,  //  1 PM EST — self-improvement, indexed by afternoon reflection window
-  'Urban Survival':      19,  //  3 PM EST — broad US male audience, indexed by evening peak
-  'SaaS & AI Tools':     21,  //  5 PM EST — tech audience scrolls after work / pre-dinner
+  'Stoic Philosophy': 17,  //  1 PM EST — self-improvement, indexed by afternoon reflection window
+  'Urban Survival': 19,  //  3 PM EST — broad US male audience, indexed by evening peak
+  'SaaS & AI Tools': 21,  //  5 PM EST — tech audience scrolls after work / pre-dinner
 };
 
 // ─── Format templates ───────────────────────────────────────────────────────────
@@ -37,16 +37,16 @@ export const FORMAT_TEMPLATES = ['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST'] as const
 export type FormatTemplate = typeof FORMAT_TEMPLATES[number];
 
 export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, number>> = {
-  'SaaS & AI Tools':       { RAPID_FIRE: 0.1, SLOW_BURN: 0.7, THE_LIST: 0.2 },
-  'Financial Forensics':   { RAPID_FIRE: 0.8, SLOW_BURN: 0.2, THE_LIST: 0   },
-  'Stoic Philosophy':      { RAPID_FIRE: 0,   SLOW_BURN: 0.7, THE_LIST: 0.3 },
-  'Urban Survival':        { RAPID_FIRE: 0,   SLOW_BURN: 0.6, THE_LIST: 0.4 },
+  'SaaS & AI Tools': { RAPID_FIRE: 0.1, SLOW_BURN: 0.7, THE_LIST: 0.2 },
+  'Financial Forensics': { RAPID_FIRE: 0.8, SLOW_BURN: 0.2, THE_LIST: 0 },
+  'Stoic Philosophy': { RAPID_FIRE: 0, SLOW_BURN: 0.7, THE_LIST: 0.3 },
+  'Urban Survival': { RAPID_FIRE: 0, SLOW_BURN: 0.6, THE_LIST: 0.4 },
 };
 
 export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: number }> = {
   RAPID_FIRE: { min: 15, max: 18 },
-  SLOW_BURN:  { min: 12, max: 12 },
-  THE_LIST:   { min: 15, max: 15 },
+  SLOW_BURN: { min: 12, max: 12 },
+  THE_LIST: { min: 15, max: 15 },
 };
 
 // ─── Model config ─────────────────────────────────────────────────────────────
@@ -64,19 +64,19 @@ export type TTSVoiceProfile = {
 
 export const TTS_VOICE_PROFILES: Record<string, TTSVoiceProfile> = {
   'SaaS & AI Tools': {
-    fallbackVoice: 'en-US-BrianNeural',
+    fallbackVoice: 'en-US-AndrewNeurall',
     directorNotes: 'Measured narrative pacing. Documentary storytelling. Build tension through the facts, not the voice.',
   },
   'Financial Forensics': {
-    fallbackVoice: 'en-US-BrianNeural',
+    fallbackVoice: 'en-US-AndrewNeurall',
     directorNotes: 'Grave tone, cinematic scale framing.',
   },
   'Stoic Philosophy': {
-    fallbackVoice: 'en-US-BrianNeural',
+    fallbackVoice: 'en-US-AndrewNeurall',
     directorNotes: 'Deep, measured, and resonant.',
   },
   'Urban Survival': {
-    fallbackVoice: 'en-US-BrianNeural',
+    fallbackVoice: 'en-US-AndrewNeurall',
     directorNotes: 'Urgent but controlled, authoritative.',
   },
 };
@@ -88,7 +88,7 @@ export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — L
 export const FORMATS = FORMAT_TEMPLATES; // alias for backward compatibility
 
 export const DEFAULT_TTS_VOICE_PROFILE: TTSVoiceProfile = {
-  fallbackVoice: 'en-US-AvaNeural',
+  fallbackVoice: 'en-US-AvaMultilingualNeural',
   directorNotes: 'Style: Crisp, authoritative narrator. Tension from facts, not voice. Pacing: Brisk but measured.',
 };
 

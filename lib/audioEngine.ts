@@ -3,29 +3,11 @@ import { TTS_VOICE_PROFILES, DEFAULT_TTS_VOICE_PROFILE } from './constants';
 
 const MAX_RETRIES = 3;
 
+import { tts } from 'edge-tts';
+
 async function callEdgeTts(text: string, voice: string): Promise<Buffer> {
-  const url = process.env.EDGE_TTS_URL;
-  const apiKey = process.env.EDGE_TTS_API_KEY;
-  
-  if (!url) {
-    throw new Error("Missing EDGE_TTS_URL configuration environment variable.");
-  }
-
-  const response = await fetch(`${url}/v1/tts`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(apiKey && { 'Authorization': `Bearer ${apiKey}` })
-    },
-    body: JSON.stringify({ text, voice, output_format: 'audio-24khz-48kbps-mp3' }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Edge TTS API responded with status code ${response.status}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  const buffer = await tts(text, { voice });
+  return Buffer.from(buffer);
 }
 
 export async function generateNarrativeSpeech(fullText: string, niche: string): Promise<{ audioBuffer: Buffer; engine: string }> {
