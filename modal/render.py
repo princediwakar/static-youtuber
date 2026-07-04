@@ -41,7 +41,6 @@ def format_ass_time(seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
 
 
-@app.function()
 def align_narration(audio_path: str, full_text: str) -> list:
     import whisper_timestamped as whisper
     model = whisper.load_model("base")
@@ -228,7 +227,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         ], check=True, capture_output=True, timeout=120)
 
         full_text = " ".join(shot["text"].strip() for shot in shots)
-        words = align_narration.local(master_audio, full_text)
+        words = align_narration(master_audio, full_text)
 
         if not words:
             raise Exception(f"[{job_id}] Whisper returned no words for narration — cannot align shots.")
