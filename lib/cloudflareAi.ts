@@ -20,10 +20,9 @@ function contentHash(prompt: string, width: number, height: number, steps: numbe
   return createHash('sha256').update(`${prompt}|${width}|${height}|${steps}`).digest('hex').slice(0, 16);
 }
 
-function resolveAccount(): { token: string; accountId: string } {
+function resolveAccounts(): { token: string; accountId: string }[] {
   const pairs: { token: string; accountId: string }[] = [];
 
-  // Collect all valid account pairs
   for (const suffix of ['', '_1', '_2']) {
     const token = process.env[`CLOUDFLARE_AI_API_TOKEN${suffix}`];
     const accountId = process.env[`CLOUDFLARE_ACCOUNT_ID${suffix}`];
@@ -31,7 +30,7 @@ function resolveAccount(): { token: string; accountId: string } {
   }
 
   if (pairs.length === 0) throw new Error('No CLOUDFLARE_AI_API_TOKEN / CLOUDFLARE_ACCOUNT_ID pair is set');
-  return pairs[Math.floor(Math.random() * pairs.length)];
+  return pairs;
 }
 
 export async function generateImage(
@@ -41,7 +40,7 @@ export async function generateImage(
   steps: number = 4,
   retries: number = 3,
 ): Promise<Buffer> {
-  const { token, accountId } = resolveAccount();
+  const accounts = resolveAccounts();
 
   ensureCacheDir();
 
@@ -51,9 +50,15 @@ export async function generateImage(
     return readFileSync(cachedPath);
   }
 
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${CF_AI_IMAGE_MODEL}`;
+  // Shuffle so we don't always hammer the first account
+  const shuffled = [...accounts].sort(() => Math.random() - 0.5);
 
   for (let attempt = 1; attempt <= retries; attempt++) {
+    // Cycle through accounts on retryable failures — if one account is
+    // rate-limited, the next attempt tries the other account.
+    const { token, accountId } = shuffled[(attempt - 1) % shuffled.length];
+    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${CF_AI_IMAGE_MODEL}`;
+
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -73,7 +78,7 @@ export async function generateImage(
 
         if (attempt < retries && isRetryable) {
           const delay = 2000 * attempt;
-          console.warn(`[CloudflareAI] Attempt ${attempt} failed with ${res.status}, retrying in ${delay}ms...`);
+          console.warn(`[CloudflareAI] Account ${accountId.slice(0, 8)}... attempt ${attempt} failed with ${res.status}, retrying in ${delay}ms...`);
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
