@@ -240,7 +240,7 @@ export const generateShort = inngest.createFunction(
       const modalResult = await step.waitForEvent('wait-for-modal', {
         event: 'modal/render.complete',
         timeout: '10m',
-        match: 'data.jobId',
+        if: `async.data.jobId == '${jobId}'`,
       }).catch(() => null);
 
       if (modalResult?.data?.error) {
