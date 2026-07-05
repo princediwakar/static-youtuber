@@ -1,8 +1,87 @@
 // Path: lib/musicSelector.ts
-import { chatCompletion, extractJson } from './deepseek';
 import { ACE_STEP_BGM_URL, ACE_STEP_API_KEY } from './constants';
+import type { FormatTemplate } from './constants';
 
-const FETCH_TIMEOUT_MS = 3 * 60 * 1000; 
+const FETCH_TIMEOUT_MS = 3 * 60 * 1000;
+
+const NICHE_MUSIC_PROMPTS: Record<string, Partial<Record<FormatTemplate, string[]>>> = {
+  'Financial Forensics': {
+    RAPID_FIRE: [
+      'dark ambient, pulsing synth bass, investigative, sparse piano, tense, 85bpm, cinematic',
+      'electronic thriller, low drone, ticking clock percussion, corporate espionage, brooding',
+      'minimalist electronic, cold analog synths, slow build, mysterious, dark, 90bpm',
+    ],
+    SLOW_BURN: [
+      'dark ambient, brooding cello, slow atmospheric pads, tension building, mysterious, 70bpm',
+      'cinematic drone, sparse piano, low strings, investigative, melancholy, 65bpm',
+    ],
+    THE_LIST: [
+      'dark synth, pulsing arpeggio, tense, investigative, building intensity, 95bpm',
+      'electronic, driving bassline, urgent, mysterious, minimalist percussion, 100bpm',
+    ],
+  },
+  'Stoic Philosophy': {
+    RAPID_FIRE: [
+      'epic orchestral, soaring strings, motivational brass, steady percussion, inspiring, 90bpm',
+      'cinematic, building crescendo, heroic horns, determined, triumphant, 95bpm',
+    ],
+    SLOW_BURN: [
+      'ambient, deep pads, slow strings, contemplative, meditative, minimal piano, 60bpm',
+      'neoclassical, solo cello, sparse, introspective, melancholic, warm, 55bpm',
+    ],
+    THE_LIST: [
+      'orchestral, steady build, strings and brass, contemplative yet powerful, 80bpm',
+      'cinematic, gradual crescendo, emotional strings, reflective, resolute, 75bpm',
+    ],
+  },
+  'Urban Survival': {
+    RAPID_FIRE: [
+      'industrial, aggressive percussion, dark synth, urgent, tactical, high tension, 100bpm',
+      'electronic, driving beat, pulsing bass, alert, gritty, intense, 105bpm',
+    ],
+    SLOW_BURN: [
+      'dark ambient, low drones, distant thunder, eerie, suspenseful, slow build, 65bpm',
+      'cinematic tension, sub-bass rumble, sparse percussion, ominous, foreboding, 70bpm',
+    ],
+    THE_LIST: [
+      'industrial, mechanical rhythm, dark electronic, urgent, tactical, 95bpm',
+      'aggressive synth, heavy percussion, tense, driving, apocalyptic, 100bpm',
+    ],
+  },
+  'SaaS & AI Tools': {
+    RAPID_FIRE: [
+      'electronic, upbeat synth, driving beat, optimistic, energetic, modern, 100bpm',
+      'synthwave, bright arpeggios, motivational, tech-forward, sleek, 95bpm',
+    ],
+    SLOW_BURN: [
+      'ambient electronic, soft pads, minimal beat, hopeful, reflective, inspiring, 70bpm',
+      'lo-fi, warm piano, gentle beat, contemplative, optimistic, cozy, 75bpm',
+    ],
+    THE_LIST: [
+      'synthwave, driving bassline, optimistic, retro-future, energetic, modern, 95bpm',
+      'electronic, pulsing rhythm, bright, innovative, sleek, motivational, 90bpm',
+    ],
+  },
+};
+
+const GENERIC_PROMPTS: string[] = [
+  'ambient electronic, atmospheric pads, subtle rhythm, cinematic, neutral mood, 80bpm',
+  'cinematic ambient, soft strings, gentle percussion, broad appeal, balanced, 85bpm',
+];
+
+function pickMusicPrompt(niche: string, formatTemplate: FormatTemplate, title: string): string {
+  const nicheMap = NICHE_MUSIC_PROMPTS[niche];
+  const prompts = nicheMap?.[formatTemplate] ?? GENERIC_PROMPTS;
+  const base = prompts[Math.floor(Math.random() * prompts.length)];
+  return `${base} — underscore: ${title}`;
+}
+
+function estimateDuration(narrationText?: string): number {
+  if (!narrationText) return 60;
+  const wordCount = narrationText.split(/\s+/).length;
+  const estimatedSeconds = Math.ceil((wordCount / 150) * 60) + 5;
+  return Math.max(30, Math.min(estimatedSeconds, 90));
+}
 
 async function generateWithAceStep(prompt: string, duration: number): Promise<Buffer> {
   const controller = new AbortController();
@@ -43,7 +122,8 @@ async function generateWithAceStep(prompt: string, duration: number): Promise<Bu
 export async function selectMusicTrack(
   scriptTitle: string,
   niche: string,
-  visualWorld: string,
+  formatTemplate: FormatTemplate,
+  _visualWorld: string,
   narrationText?: string,
 ): Promise<{ buffer: Buffer; filename: string; title: string }> {
   
@@ -51,37 +131,12 @@ export async function selectMusicTrack(
     throw new Error('CRITICAL: ACE_STEP_BGM_URL is not configured. Pipeline halting.');
   }
 
-  const llmPrompt = `You are composing background music for a YouTube Shorts video.
+  const prompt = pickMusicPrompt(niche, formatTemplate, scriptTitle);
+  const duration = estimateDuration(narrationText);
 
-VIDEO DETAILS:
-- Title: "${scriptTitle}"
-- Niche: ${niche}
-- Visual World: ${visualWorld}
-${narrationText ? `\nNARRATION:\n${narrationText}\n` : ''}
+  console.log(`[MusicSelector] ${niche}/${formatTemplate} → ${duration}s BGM: "${prompt.slice(0, 100)}..."`);
 
-Write a detailed music prompt for ACE-Step 1.5 to generate instrumental background music.
-The music MUST be purely instrumental — NO vocals, NO singing, NO lyrics.
-
-Consider the emotional arc of the story, appropriate instrumentation for the niche,
-tempo, mood, and dynamic changes that follow the narrative.
-
-Output ONLY valid JSON. No markdown.
-{ "prompt": "detailed music description for ACE-Step (max 500 chars)", "reason": "one sentence explaining why this fits" }`;
-
-  const raw = await chatCompletion(
-    [{ role: 'user', content: llmPrompt }],
-    { temperature: 0.4, maxTokens: 400, responseJson: true, timeout: 30_000 },
-  );
-
-  const parsed = extractJson(raw) as { prompt: string; reason: string };
-  if (!parsed.prompt || parsed.prompt.length < 20) {
-    throw new Error('LLM returned an unusable music prompt');
-  }
-
-  console.log(`[MusicSelector] ACE-Step prompt generated: ${parsed.prompt.slice(0, 100)}... — ${parsed.reason}`);
-
-  // By the time this is called, the A10G is already hot from the warmup step.
-  const buffer = await generateWithAceStep(parsed.prompt, 90);
+  const buffer = await generateWithAceStep(prompt, duration);
 
   return { buffer, filename: 'acestep-bgm.mp3', title: scriptTitle };
 }
