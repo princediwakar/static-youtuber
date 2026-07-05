@@ -64,19 +64,19 @@ export type TTSVoiceProfile = {
 
 export const TTS_VOICE_PROFILES: Record<string, TTSVoiceProfile> = {
   'SaaS & AI Tools': {
-    fallbackVoice: 'en-US-AndrewNeurall',
+    fallbackVoice: 'en-US-AndrewNeural',
     directorNotes: 'Measured narrative pacing. Documentary storytelling. Build tension through the facts, not the voice.',
   },
   'Financial Forensics': {
-    fallbackVoice: 'en-US-AndrewNeurall',
+    fallbackVoice: 'en-US-AndrewNeural',
     directorNotes: 'Grave tone, cinematic scale framing.',
   },
   'Stoic Philosophy': {
-    fallbackVoice: 'en-US-AndrewNeurall',
+    fallbackVoice: 'en-US-AndrewNeural',
     directorNotes: 'Deep, measured, and resonant.',
   },
   'Urban Survival': {
-    fallbackVoice: 'en-US-AndrewNeurall',
+    fallbackVoice: 'en-US-AndrewNeural',
     directorNotes: 'Urgent but controlled, authoritative.',
   },
 };
@@ -111,7 +111,7 @@ export const MUSIC_VOLUME = 0.35;
 
 // ─── Caption rendering ────────────────────────────────────────────────────────
 export const CAPTION_FONT_SIZE = 72;
-export const CAPTION_MAX_CHARS_PER_LINE = 26;
+export const CAPTION_MAX_CHARS_PER_LINE = 32;
 export const CAPTION_MAX_CHARS = 80;
 export const CAPTION_Y_POSITION = 0.65;
 export const CAPTION_LINE_HEIGHT = 84;
