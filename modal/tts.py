@@ -273,7 +273,7 @@ class F5TTSModel:
         audio_parts: list = []
         sample_rate: int = 24_000  # F5-TTS default; will be set from first chunk
 
-        silence_frames = int(sample_rate * 0.08)  # 80 ms natural inter-sentence pause
+        silence_frames = int(sample_rate * 0.45)  # 450 ms — actual human breath pause
 
         for i, chunk in enumerate(chunks):
             print(f"[F5-TTS] Chunk {i + 1}/{len(chunks)}: {chunk!r}")

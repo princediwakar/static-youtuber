@@ -160,16 +160,16 @@ VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic P
 VOICEOVER & PACING (CRITICAL):
 - CRITICAL — VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or rephrase a single word of the narrative below. Every shot's "text" must be an exact, verbatim, contiguous substring of the narrative — you are only choosing WHERE to cut it into shots, never changing the wording, spelling, or punctuation. All shots get re-joined in order into ONE continuous voiceover; any paraphrasing here will desync the captions, the audio, and the on-screen timing.
 - MAX 11 WORDS PER SHOT TEXT, AND MAX 75 CHARACTERS (including spaces/punctuation). Word count alone is not enough — a shot can pass the word check and still be too long. If in doubt, count characters, not words.
-- Never let a shot run to more than 3 wrapped lines at ~32 chars/line — any longer and the caption overlay will overflow the screen.
-- Write naturally for the ear. Use commas (,) and em-dashes (—) exactly where a human would naturally pause.
-- NEVER spell out numbers. Use digits (e.g., "4.5 million", "$1.4 billion", "2009"). Digits are visual anchors that grab attention. TTS engines read them flawlessly.
-- SEMANTIC CHUNKING: Never end a shot mid-thought on an article (a, an, the), preposition (on, in, to), or conjunction (and, but).
+- WRITE FOR AUDIO PACING: TTS engines interpret punctuation as physical time in milliseconds. You are engineering a vocal performance, not writing text.
+- Use ellipses (...) to force dramatic pauses (300-500ms) before critical reveals.
+- Use em-dashes (—) for mid-thought hard pauses that signal a shift.
+- Never end a shot mid-thought on an article (a, an, the), preposition (on, in, to), or conjunction (and, but).
   BAD: "He lost it all on a" -> "bad bet."
   GOOD: "He lost it all—" -> "on a single, bad bet."
-- TTS engines interpret punctuation as silence. Use this to build tension before key facts.
-- The on-screen captions will be generated directly from this text. Ensure each shot contains a complete, coherent micro-thought that makes sense visually on its own.
+- Every mid-sequence shot (is_conclusion: false) MUST end with a comma (,), ellipsis (...), or em-dash (—) to force a micro-pause that creates natural breath rhythm. Do NOT leave the end of a chunk bare without punctuation — bare endings make the TTS accelerate into the next chunk.
 - The final shot (is_conclusion: true) MUST end with terminal punctuation (., !, or ?).
-- Mid-sequence shots (is_conclusion: false) should end at natural breath points (commas or mid-sentence flow) to pull the viewer into the next shot. Do not force periods if the thought continues.
+- NEVER spell out numbers. Use digits (e.g., "4.5 million", "$1.4 billion", "2009").
+- Never let a shot run to more than 3 wrapped lines at ~32 chars/line — any longer and the caption overlay will overflow the screen.
 
 VISUAL AESTHETIC (FLUX.1):
 ${VISUAL_AESTHETIC_ANCHOR}

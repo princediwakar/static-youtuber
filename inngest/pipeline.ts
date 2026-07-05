@@ -138,7 +138,7 @@ export const generateShort = inngest.createFunction(
       const sanitizedText = rawText
         .replace(/[‘’`]/g, "'") // Normalize apostrophes
         .replace(/[“”]/g, '"')  // Normalize quotes
-        .replace(/—/g, '-')     // Normalize em-dashes
+        .replace(/—/g, '... ')  // Em-dash → ellipsis so TTS pauses instead of rushing
         .replace(/[^\x00-\x7F]/g, ''); // Strip remaining non-ASCII characters
       
       const { audioBuffer } = await generateNarrativeSpeech(sanitizedText, niche);
