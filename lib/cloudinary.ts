@@ -67,7 +67,7 @@ export async function uploadSlideAudio(
   return uploadFromBuffer(
     buffer,
     `${CLOUDINARY_FOLDER}/${jobId}`,
-    `audio-${shotIndex}.mp3`,
+    `audio-${shotIndex}.wav`,
     'raw'
   );
 }

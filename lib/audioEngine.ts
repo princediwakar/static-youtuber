@@ -3,43 +3,69 @@ import { F5_TTS_URL, F5_TTS_API_KEY } from './constants';
 
 const MAX_RETRIES = 3;
 
+// F5-TTS on Modal: GPU cold start (~40s) + chunked synthesis of a full
+// narration (~60-120s) = up to ~3 minutes total. Give it 8 minutes before
+// treating the request as hung, which comfortably covers any cold start.
+const FETCH_TIMEOUT_MS = 8 * 60 * 1000;
+
 /**
- * Calls the F5-TTS Modal endpoint and returns raw WAV bytes as a Buffer.
- * The endpoint clones the voice profile uploaded to the Modal volume and
- * synthesizes `text` in that voice.
+ * Single attempt: POST to F5-TTS Modal endpoint, return WAV buffer.
+ * Each call creates a fresh AbortController so retries get full timeout.
  */
 async function callF5Tts(text: string): Promise<Buffer> {
   if (!F5_TTS_URL) {
-    throw new Error('Missing F5_TTS_URL environment variable.');
+    throw new Error('[AudioEngine] Missing F5_TTS_URL environment variable.');
   }
 
-  const response = await fetch(F5_TTS_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(F5_TTS_API_KEY && { Authorization: `Bearer ${F5_TTS_API_KEY}` }),
-    },
-    body: JSON.stringify({ text }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(
-      `F5-TTS API responded with status ${response.status}: ${body.slice(0, 300)}`
-    );
+  try {
+    const response = await fetch(F5_TTS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(F5_TTS_API_KEY && { Authorization: `Bearer ${F5_TTS_API_KEY}` }),
+      },
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `F5-TTS endpoint responded ${response.status}: ${body.slice(0, 400)}`
+      );
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength < 44) {
+      // WAV header is 44 bytes minimum — anything smaller is a corrupt/empty response
+      throw new Error(
+        `F5-TTS returned suspiciously small audio buffer (${arrayBuffer.byteLength} bytes) — synthesis likely failed silently`
+      );
+    }
+
+    return Buffer.from(arrayBuffer);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(
+        `F5-TTS request timed out after ${FETCH_TIMEOUT_MS / 1000}s — Modal cold start or synthesis took too long`
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 }
 
 /**
  * Generates a voice-cloned narration track for the full script text.
- * Returns the audio as a WAV buffer (Modal F5-TTS outputs WAV natively).
+ * Returns the audio as a WAV buffer (F5-TTS Modal endpoint outputs WAV).
  *
- * The `niche` parameter is kept in the signature to preserve the call-site
- * contract in pipeline.ts — F5-TTS uses a single global voice profile,
- * so niche-specific voice selection no longer applies.
+ * The `_niche` parameter is kept to preserve the call-site contract in
+ * pipeline.ts — F5-TTS uses a single global voice profile, so niche-specific
+ * voice selection no longer applies.
  */
 export async function generateNarrativeSpeech(
   fullText: string,
@@ -49,23 +75,26 @@ export async function generateNarrativeSpeech(
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       console.log(
-        `[AudioEngine] F5-TTS synthesis attempt ${attempt}/${MAX_RETRIES} (${fullText.length} chars)`
+        `[AudioEngine] F5-TTS attempt ${attempt}/${MAX_RETRIES} — ${fullText.length} chars`
       );
       const audioBuffer = await callF5Tts(fullText);
-      console.log(`[AudioEngine] F5-TTS success — buffer size: ${audioBuffer.byteLength} bytes`);
+      console.log(
+        `[AudioEngine] F5-TTS success — ${audioBuffer.byteLength.toLocaleString()} bytes`
+      );
       return { audioBuffer, engine: 'f5_tts' };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[AudioEngine] F5-TTS failure on attempt ${attempt}: ${message}`);
+      console.error(`[AudioEngine] Attempt ${attempt} failed: ${message}`);
       if (attempt === MAX_RETRIES) {
         throw new Error(
-          `[AudioEngine] CRITICAL: F5-TTS failed after ${MAX_RETRIES} attempts. Engine halted.`
+          `[AudioEngine] CRITICAL: F5-TTS failed after ${MAX_RETRIES} attempts. Last error: ${message}`
         );
       }
-      // Exponential backoff
-      await new Promise((res) => setTimeout(res, attempt * 3000));
+      const backoffMs = attempt * 5_000;
+      console.log(`[AudioEngine] Retrying in ${backoffMs / 1000}s...`);
+      await new Promise((res) => setTimeout(res, backoffMs));
     }
   }
 
-  throw new Error('Unreachable pipeline execution state');
+  throw new Error('[AudioEngine] Unreachable pipeline execution state');
 }
