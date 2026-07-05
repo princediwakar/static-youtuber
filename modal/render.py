@@ -158,7 +158,6 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
 
     return boundaries
 
-
 def build_continuous_ass(shot_boundaries: list) -> str:
     ass_content = [
         "[Script Info]",
@@ -188,14 +187,13 @@ def build_continuous_ass(shot_boundaries: list) -> str:
             for j, w in enumerate(words_data):
                 clean_word = w['text'].strip()
                 if j == i:
-                    line_text += f"{{\\fscx130\\fscy130\\c&H00D7FF&}}{{\\b1}}{clean_word}{{\\b0}}{{\\fscx100\\fscy100\\c&HFFFFFF&}} "
+                    line_text += f"{{\\c&H00D7FF&}}{{\\b1}}{clean_word}{{\\b0}}{{\\c&HFFFFFF&}} "
                 else:
                     line_text += f"{clean_word} "
 
             ass_content.append(f"Dialogue: 0,{w_start},{w_end},Default,,0,0,0,,{line_text.strip()}")
 
     return "\n".join(ass_content)
-
 
 @app.function(cpu=8.0, timeout=600, secrets=[modal.Secret.from_name("cloudinary")])
 def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str):
