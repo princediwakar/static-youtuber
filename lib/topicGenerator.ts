@@ -22,8 +22,8 @@ const ShotSchema = z.object({
     .max(600, 'Image prompt must be ≤600 chars'),
   text: z.string().refine(t => t.trim().split(/\s+/).length >= 1, {
     message: 'Min 1 word per shot',
-  }).refine(t => t.trim().split(/\s+/).length <= 15, {
-    message: 'Max 15 words per shot to maintain pacing',
+  }).refine(t => t.trim().split(/\s+/).length <= 18, {
+    message: 'Max 18 words per shot to maintain pacing',
   }).refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
   is_conclusion: z.boolean().default(false),
 });
@@ -164,7 +164,7 @@ VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic P
 VOICEOVER & PACING (CRITICAL MANDATE):
 - VERBATIM SLICING ONLY: Do NOT rewrite or paraphrase the narrative below.
 - You must slice the narrative into highly aggressive, punchy "Visual Beats". A Visual Beat is a single concept that takes 1 to 3 seconds to say out loud.
-- WORD LIMIT: No shot may contain more than 15 words.
+- WORD LIMIT: No shot may contain more than 12 words.
 - NUMBER FORMATTING RULE: Do not use digits or symbols. Write out ALL numbers as words (e.g., write "twenty six" instead of "26", write "one point four billion dollars" instead of "$1.4B"). This ensures perfect text-to-speech synchronization.
 - Use ellipses (...) to force dramatic pauses (300-500ms) before critical reveals.
 - Use em-dashes (—) for mid-thought hard pauses that signal a shift.
