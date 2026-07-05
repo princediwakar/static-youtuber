@@ -3,7 +3,8 @@
 export interface Shot {
   id: number;
   visual_prompt: string;
-  text: string;
+  caption_text: string;
+  spoken_text: string;
   is_conclusion: boolean;
   duration_seconds?: number;
   imageUrl?: string;

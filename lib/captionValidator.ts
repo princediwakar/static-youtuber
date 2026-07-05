@@ -8,7 +8,7 @@ export type CaptionValidationResult = {
 };
 
 type Shot = {
-  text: string;
+  caption_text: string;
   index: number;
 };
 
@@ -39,8 +39,8 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
   const errors: string[] = [];
 
   // Defensive: never render director tags in captions
-  const cleaned = stripDirectorTags(shot.text);
-  if (cleaned !== shot.text) {
+  const cleaned = stripDirectorTags(shot.caption_text);
+  if (cleaned !== shot.caption_text) {
     warnings.push(`Shot ${shot.index}: contained director tags — stripped before caption render.`);
   }
   
@@ -72,7 +72,7 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
     warnings.push(`Shot ${shot.index}: wraps to 3 caption lines — consider shortening.`);
   }
 
-  if (/[<>{}[\]|\\]/.test(shot.text)) {
+  if (/[<>{}[\]|\\]/.test(shot.caption_text)) {
     warnings.push(`Shot ${shot.index}: contains special characters that may affect TTS rendering.`);
   }
 
@@ -83,12 +83,12 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
   };
 }
 
-export function validateAllCaptions(shots: Array<{ text: string }>): CaptionValidationResult {
+export function validateAllCaptions(shots: Array<{ caption_text: string }>): CaptionValidationResult {
   const allWarnings: string[] = [];
   const allErrors: string[] = [];
 
   shots.forEach((shot, i) => {
-    const result = validateShotCaption({ text: shot.text, index: i + 1 });
+    const result = validateShotCaption({ caption_text: shot.caption_text, index: i + 1 });
     allWarnings.push(...result.warnings);
     allErrors.push(...result.errors);
   });

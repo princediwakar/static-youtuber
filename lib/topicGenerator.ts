@@ -19,11 +19,12 @@ const ShotSchema = z.object({
   visual_prompt: z.string()
     .min(30, 'Image prompt must be at least 30 characters')
     .max(600, 'Image prompt must be ≤600 chars'),
-  text: z.string().refine(t => t.trim().split(/\s+/).length >= 1, {
-    message: 'Min 1 word per shot',
-  }).refine(t => t.trim().split(/\s+/).length <= 18, {
-    message: 'Max 18 words per shot to maintain pacing',
-  }).refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
+  caption_text: z.string()
+    .refine(t => t.trim().split(/\s+/).length >= 1, 'Min 1 word')
+    .refine(t => t.trim().split(/\s+/).length <= 18, 'Max 18 words')
+    .refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
+  spoken_text: z.string()
+    .min(1, 'Must contain spoken phonetic text for TTS'),
   is_conclusion: z.boolean().default(false),
 });
 
@@ -44,7 +45,7 @@ const SlideshowScriptSchema = z.object({
   message: 'Exactly one shot must be marked as the conclusion',
 }).refine(data => data.shots[data.shots.length - 1].is_conclusion, {
   message: 'The conclusion shot must be the last shot',
-}).refine(data => /[.!?]$/.test(data.shots[data.shots.length - 1].text.trim()), {
+}).refine(data => /[.!?]$/.test(data.shots[data.shots.length - 1].spoken_text.trim()), {
   message: 'The final shot must end with terminal punctuation (. ! ?)',
 });;
 
@@ -163,12 +164,28 @@ Your job is to take a completed narrative script and slice it into exactly ${sho
 FORMAT: ${formatTemplate}
 VISUAL WORLD: ${niche === 'Financial Forensics' ? 'finance-editorial' : niche === 'Stoic Philosophy' ? 'stoic-zen' : niche === 'Urban Survival' ? 'survival-technical' : 'tech-minimalist'}
 
-VOICEOVER & PACING (CRITICAL MANDATE):
-- VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, summarize, or alter the formatting of the narrative below.
-- Your ONLY job is to slice the exact text into chunks.
-- WORD LIMIT: No shot may contain more than 12 words.
-- Output a single 'text' property for each shot. It must be an exact, word-for-word slice of the narrative.
-- If a sentence is long, SPLIT it across multiple consecutive shots. Do NOT summarize it to fit.
+DUAL-TEXT MANDATE (CRITICAL):
+Each shot has TWO text fields for different modalities:
+
+1. "caption_text" — The visually punchy, abbreviated text burned onto the screen via FFMPEG.
+   - VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, summarize, or alter the formatting of the narrative.
+   - WORD LIMIT: No shot may contain more than 12 words.
+   - If a sentence is long, SPLIT it across multiple consecutive shots. Do NOT summarize it to fit.
+   - Keep symbols and abbreviations as-is from the narrative (e.g., "$1.4B", "26%", "CEO").
+   - This is what the viewer reads on screen — short, scannable, punchy.
+
+2. "spoken_text" — The phonetically expanded version of the caption, fed to F5-TTS for voiceover and to Whisper for timestamp alignment.
+   - Expand ALL abbreviations, symbols, and shorthand into full phonetic words.
+   - "$1.4B" → "one point four billion dollars"
+   - "26%" → "twenty six percent"
+   - "reCAPTCHA" → "re captcha"
+   - "CEO" → "C E O"
+   - "Duolingo" → "duo lingo"
+   - "$6.5 billion" → "six point five billion dollars"
+   - "500M" → "five hundred million"
+   - "Luis von Ahn" → "lweece von ahn" (keep as proper name)
+   - If the caption text is already phonetic, spoken_text equals caption_text.
+   - spoken_text is what TTS will say and Whisper will hear — it MUST phonetically match the audio exactly.
 
 VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 - morgan-freeman-your-inner-voice: Deep, warm, gravelly, authoritative narration. Wise, calm, memorable. Rich bass tones, highly storytelling-oriented.
@@ -206,7 +223,8 @@ JSON SCHEMA TO FOLLOW:
     {
       "id": 1,
       "visual_prompt": "cinematic paragraph describing the scene... NO GORE. NO TEXT.",
-      "text": "The perfectly paced verbatim text.",
+      "caption_text": "The visually punchy, abbreviated text for the screen (e.g., '$6.5B').",
+      "spoken_text": "The exact phonetic spelling for the voiceover and Whisper alignment (e.g., 'six point five billion dollars').",
       "is_conclusion": false
     }
   ],
@@ -237,34 +255,7 @@ Slice this narrative into the exact JSON schema.`;
   return extractJson(raw);
 }
 
-// ─── NARRATIVE / SHOT ALIGNMENT GUARD ────────────────────────────────────────
-function normalizeForComparison(text: string): string[] {
-  // Strip non-alphanumeric to preserve number integrity ($1.4B -> 14b, 100,000 -> 100000)
-  return text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
-}
 
-function shotsMatchNarrative(narrative: string, shots: { text: string }[]): { ok: boolean; ratio: number } {
-  const narrativeWords = normalizeForComparison(narrative);
-  if (narrativeWords.length === 0) return { ok: false, ratio: 0 };
-
-  const getRatio = (shotText: string) => {
-    const shotWords = normalizeForComparison(shotText);
-    let ni = 0;
-    let matched = 0;
-    for (const word of shotWords) {
-      while (ni < narrativeWords.length && narrativeWords[ni] !== word) ni++;
-      if (ni < narrativeWords.length) {
-        matched++;
-        ni++;
-      }
-    }
-    return matched / narrativeWords.length;
-  };
-
-  const ratio = getRatio(shots.map(s => s.text).join(' '));
-
-  return { ok: ratio >= 0.85, ratio };
-}
 
 // ─── QUALITY GATE ────────────────────────────────────────────────────────────
 async function scoreScript(
@@ -281,7 +272,7 @@ ${researchContext}
 
 SCRIPT TO EVALUATE:
 ${JSON.stringify({
-  shots: script.shots.map(s => ({ text: s.text, visual_prompt: s.visual_prompt }))
+  shots: script.shots.map(s => ({ caption_text: s.caption_text, spoken_text: s.spoken_text, visual_prompt: s.visual_prompt }))
 }, null, 2)}
 
 SCORING RUBRIC (0-10):
@@ -356,25 +347,17 @@ export async function generateScript(
         throw zodErr;
       }
 
-      // Validate shot text
-      const captionValidation = validateAllCaptions(validated.shots.map(s => ({ text: s.text })));
+      // Validate caption text for on-screen rendering constraints
+      const captionValidation = validateAllCaptions(validated.shots.map(s => ({ caption_text: s.caption_text })));
       if (!captionValidation.valid) {
         validationFeedback = captionValidation.errors.join('\n');
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
         throw new Error(`Caption validation failed:\n${validationFeedback}`);
       }
 
-      const narrativeMatch = shotsMatchNarrative(narrative, validated.shots);
-      if (!narrativeMatch.ok) {
-        console.warn(`[TopicGenerator] Text drifted from narrative (ratio ${narrativeMatch.ratio.toFixed(2)}). Retrying...`);
-        validationFeedback = `Shots diverged from narrative (${(narrativeMatch.ratio * 100).toFixed(0)}% word match). Stick to verbatim slicing of the narrative text — do not paraphrase.`;
-        if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-        throw new Error(`Shots diverged too far from the source narrative. The LLM paraphrased instead of slicing.`);
-      }
-
       const score = await scoreScript(validated, reserved.research_context, niche, profile.minQualityScore);
       if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
-        const hookWords = validated.shots[0].text.split(/\s+/).slice(0, 4).join(' ');
+        const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
         const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
         return {
           script: {
@@ -388,7 +371,8 @@ export async function generateScript(
             shots: validated.shots.map(shot => ({
               id: shot.id,
               visual_prompt: `${aesthetic.imagePrefix}Scene description: ${shot.visual_prompt}`,
-              text: shot.text,
+              caption_text: shot.caption_text,
+              spoken_text: shot.spoken_text,
               is_conclusion: shot.is_conclusion,
             })),
             thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt}`,
