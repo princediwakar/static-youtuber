@@ -21,6 +21,7 @@ export type SlideshowScript = {
   shots: Shot[];
   thumbnailPrompt: string;
   hook_intro: string;
+  voiceName: string;
 };
 
 export interface SlideshowJob {

@@ -141,7 +141,7 @@ export const generateShort = inngest.createFunction(
         .replace(/—/g, '... ')  // Em-dash → ellipsis so TTS pauses instead of rushing
         .replace(/[^\x00-\x7F]/g, ''); // Strip remaining non-ASCII characters
       
-      const { audioBuffer } = await generateNarrativeSpeech(sanitizedText, niche);
+      const { audioBuffer } = await generateNarrativeSpeech(sanitizedText, script.voiceName);
       
       const url = await uploadSlideAudio(audioBuffer, jobId, 0, creds);
       await db.updateJob(jobId, { narration_audio_url: url });

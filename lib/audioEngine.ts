@@ -12,7 +12,7 @@ const FETCH_TIMEOUT_MS = 8 * 60 * 1000;
  * Single attempt: POST to F5-TTS Modal endpoint, return WAV buffer.
  * Each call creates a fresh AbortController so retries get full timeout.
  */
-async function callF5Tts(text: string): Promise<Buffer> {
+async function callF5Tts(text: string, voiceName: string): Promise<Buffer> {
   if (!F5_TTS_URL) {
     throw new Error('[AudioEngine] Missing F5_TTS_URL environment variable.');
   }
@@ -27,7 +27,7 @@ async function callF5Tts(text: string): Promise<Buffer> {
         'Content-Type': 'application/json',
         ...(F5_TTS_API_KEY && { Authorization: `Bearer ${F5_TTS_API_KEY}` }),
       },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, voice: voiceName }),
       signal: controller.signal,
     });
 
@@ -62,22 +62,17 @@ async function callF5Tts(text: string): Promise<Buffer> {
 /**
  * Generates a voice-cloned narration track for the full script text.
  * Returns the audio as a WAV buffer (F5-TTS Modal endpoint outputs WAV).
- *
- * The `_niche` parameter is kept to preserve the call-site contract in
- * pipeline.ts — F5-TTS uses a single global voice profile, so niche-specific
- * voice selection no longer applies.
  */
 export async function generateNarrativeSpeech(
   fullText: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _niche: string
+  voiceName: string
 ): Promise<{ audioBuffer: Buffer; engine: string }> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       console.log(
-        `[AudioEngine] F5-TTS attempt ${attempt}/${MAX_RETRIES} — ${fullText.length} chars`
+        `[AudioEngine] F5-TTS attempt ${attempt}/${MAX_RETRIES} — ${fullText.length} chars with voice '${voiceName}'`
       );
-      const audioBuffer = await callF5Tts(fullText);
+      const audioBuffer = await callF5Tts(fullText, voiceName);
       console.log(
         `[AudioEngine] F5-TTS success — ${audioBuffer.byteLength.toLocaleString()} bytes`
       );

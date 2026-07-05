@@ -64,7 +64,7 @@ app = modal.App("f5-tts", image=image)
 # ── Request / Response schemas ────────────────────────────────────────────────
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "dee-smith"
+    voice: str = "dee-smith-american-male"
 
 
 # ── Text chunking ─────────────────────────────────────────────────────────────
@@ -257,7 +257,7 @@ class F5TTSModel:
         if len(text) > 10_000:
             raise HTTPException(status_code=400, detail="'text' exceeds 10,000 character limit")
 
-        voice_name = (payload.voice or "dee-smith").strip()
+        voice_name = (payload.voice or "dee-smith-american-male").strip()
         if voice_name not in self.voices:
             raise HTTPException(
                 status_code=400,

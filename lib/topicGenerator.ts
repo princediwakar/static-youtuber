@@ -36,6 +36,7 @@ const SlideshowScriptSchema = z.object({
   title: z.string().min(5).max(100),
   description: z.string().min(30).max(500),
   tags: z.array(z.string()).min(5).max(12),
+  voiceName: z.string().min(1),
   shots: z.array(ShotSchema).min(12).max(25),
   thumbnailPrompt: z.string().min(30).max(500),
 }).refine(data => data.shots.filter(s => s.is_conclusion).length === 1, {
@@ -185,6 +186,16 @@ CENSORSHIP & NSFW GUARDRAILS (ZERO TOLERANCE):
 - GOOD: "A distressed tactical uniform, torn fabric, red emergency lighting, medical gauze being hastily applied in deep shadows."
 - Focus on the gear, the environment, and the urgency. Keep anatomy out of frame or completely obscured in darkness.
 
+VOICE PROFILE SELECTION:
+Available voices — pick the ONE that best matches the story's tone:
+- dee-smith-american-male: HQ professional American male voice. African American millennial male. Versatile range — business, commercial, narrative, conversational, urban, hype. Use for commercial ads, brand storytelling, e-learning, or energetic narration. Fiverr Pro.
+- phil-freeman-american-male: Award-winning deep male voice. Offers American and British accents. Authoritative, corporate, deep, dramatic. Use for high-stakes investigations, historical epics, cinematic trailers, or when the story needs gravitas. Clients include Discovery, NordVPN, Kansas City Chiefs. Fiverr Pro.
+- jon-british-male: Deep, authoritative British male. Use for grave investigative stories, financial crimes, historical weight, or when the narrative demands a commanding presence.
+- mallory-handford-american-female: Warm, professional American female. Use for corporate, business, or human-interest stories that need a trustworthy, polished delivery.
+- melissa-harlow-american-female: Natural, conversational American female. Use for relatable everyday stories, personal anecdotes, or when the narrative needs to feel intimate.
+- kylie-hinze-american-female: Upbeat, energetic American female. Use for motivational, positive, or fast-paced stories that need enthusiasm.
+- kelli-winkler-american-female: Neutral, clear American female. Use for tech explainers, instructional content, or when you need a balanced, non-intrusive narrator.
+
 JSON SCHEMA TO FOLLOW:
 {
   "fact_check_and_sources": [
@@ -194,6 +205,7 @@ JSON SCHEMA TO FOLLOW:
   ], // MUST BE EXACTLY 3 OR MORE ITEMS. DO NOT PROVIDE FEWER THAN 3.
   "visual_world": "MUST EXACTLY MATCH THE VISUAL WORLD SPECIFIED ABOVE",
   "format_template": "${formatTemplate}",
+  "voiceName": "the voice profile you selected for this story",
   "title": "5-100 chars, no period",
   "description": "Video description",
   "tags": ["lowercase", "hyphenated"],
@@ -399,6 +411,7 @@ export async function generateScript(
             description: `${validated.description}`,
             visual_world: validated.visual_world,
             format_template: validated.format_template,
+            voiceName: validated.voiceName,
             fact_check_and_sources: validated.fact_check_and_sources.map(f => `${f.claim} → ${f.source}`).join('\n'),
             tags: validated.tags,
             shots: validated.shots.map(shot => ({
