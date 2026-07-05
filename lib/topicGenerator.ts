@@ -159,7 +159,7 @@ VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic P
 
 VOICEOVER & PACING (CRITICAL):
 - CRITICAL — VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or rephrase a single word of the narrative below. Every shot's "text" must be an exact, verbatim, contiguous substring of the narrative — you are only choosing WHERE to cut it into shots, never changing the wording, spelling, or punctuation. All shots get re-joined in order into ONE continuous voiceover; any paraphrasing here will desync the captions, the audio, and the on-screen timing.
-- MAX 11 WORDS PER SHOT TEXT, AND MAX 75 CHARACTERS (including spaces/punctuation). Word count alone is not enough — a shot can pass the word check and still be too long. If in doubt, count characters, not words.
+- LENGTH LIMITS: EVERY shot MUST be between 3 and 11 words, AND absolutely no more than 75 characters (including spaces/punctuation). A 1 or 2 word shot is a validation failure — never create orphans.
 - WRITE FOR AUDIO PACING: TTS engines interpret punctuation as physical time in milliseconds. You are engineering a vocal performance, not writing text.
 - Use ellipses (...) to force dramatic pauses (300-500ms) before critical reveals.
 - Use em-dashes (—) for mid-thought hard pauses that signal a shift.
@@ -181,7 +181,11 @@ ${VISUAL_AESTHETIC_ANCHOR}
 
 JSON SCHEMA TO FOLLOW:
 {
-  "fact_check_and_sources": [ { "claim": "fact", "source": "context" } ],
+  "fact_check_and_sources": [
+    { "claim": "fact 1", "source": "context 1" },
+    { "claim": "fact 2", "source": "context 2" },
+    { "claim": "fact 3", "source": "context 3" }
+  ], // CRITICAL: YOU MUST PROVIDE 3 OR MORE ITEMS
   "visual_world": "MUST EXACTLY MATCH THE VISUAL WORLD SPECIFIED ABOVE",
   "format_template": "${formatTemplate}",
   "title": "5-100 chars, no period",
@@ -251,13 +255,16 @@ function repairShotLengths(shots: { text: string; id: number; is_conclusion?: bo
   for (const shot of shots) {
     if (shot.text.length <= maxChars) { out.push(shot); continue; }
     const words = shot.text.split(' ');
-    let a = '', b = '';
-    for (const w of words) {
-      if ((a + ' ' + w).trim().length <= maxChars) a = (a + ' ' + w).trim();
-      else b = (b + ' ' + w).trim();
+    const midpoint = Math.ceil(words.length / 2);
+    let a = words.slice(0, midpoint).join(' ');
+    let b = words.slice(midpoint).join(' ');
+    if (a.length > maxChars) {
+      a = words.slice(0, 3).join(' ');
+      b = words.slice(3).join(' ');
     }
+    const bWords = b.split(' ').length;
     out.push({ ...shot, text: a, is_conclusion: false });
-    out.push({ ...shot, id: shot.id + 0.5, text: b });
+    out.push({ ...shot, id: shot.id + 0.5, text: bWords < 3 ? b + '...' : b });
   }
   return out;
 }
