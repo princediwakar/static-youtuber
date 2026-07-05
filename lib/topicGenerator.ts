@@ -19,11 +19,12 @@ const ShotSchema = z.object({
   visual_prompt: z.string()
     .min(30, 'Image prompt must be at least 30 characters')
     .max(600, 'Image prompt must be ≤600 chars'),
-  text: z.string().refine(t => t.trim().split(/\s+/).length >= 1, {
+  caption_text: z.string().refine(t => t.trim().split(/\s+/).length >= 1, {
     message: 'Min 1 word per shot',
   }).refine(t => t.trim().split(/\s+/).length <= 18, {
     message: 'Max 18 words per shot to maintain pacing',
   }).refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
+  tts_text: z.string().min(1, 'TTS text is required'),
   is_conclusion: z.boolean().default(false),
 });
 
@@ -164,8 +165,10 @@ VOICEOVER & PACING (CRITICAL MANDATE):
 - VERBATIM SLICING ONLY: Do NOT rewrite or paraphrase the narrative below.
 - You must slice the narrative into highly aggressive, punchy "Visual Beats". A Visual Beat is a single concept that takes 1 to 3 seconds to say out loud.
 - WORD LIMIT: No shot may contain more than 12 words.
-- NUMBER FORMATTING RULE: Do not use digits or symbols. Write out ALL numbers as words (e.g., write "twenty six" instead of "26", write "one point four billion dollars" instead of "$1.4B"). This ensures perfect text-to-speech synchronization.
-- Use ellipses (...) to force dramatic pauses (300-500ms) before critical reveals.
+- DUAL-FORMAT RULE: You must output TWO versions of the text for every shot:
+  1. 'caption_text': Optimized for on-screen reading. USE digits and symbols to keep it concise (e.g., "$1.4B", "26", "100%").
+  2. 'tts_text': Optimized for perfect audio generation. Spell out ALL numbers and symbols exactly as they should be spoken (e.g., "one point four billion dollars", "twenty six", "one hundred percent").
+- Use ellipses (...) to force dramatic pauses (300-500ms) before critical reveals in both text fields.
 - Use em-dashes (—) for mid-thought hard pauses that signal a shift.
 - Never split a single thought awkwardly across two shots just to keep it short.
 - Every mid-sequence shot (is_conclusion: false) MUST end with a comma (,), ellipsis (...), or em-dash (—) to force a micro-pause.
@@ -207,7 +210,8 @@ JSON SCHEMA TO FOLLOW:
     {
       "id": 1,
       "visual_prompt": "cinematic paragraph describing the scene... NO GORE. NO TEXT.",
-      "text": "The perfectly paced voiceover line. Use commas naturally,",
+      "caption_text": "The perfectly paced visual text. Use $1.4B and digits,",
+      "tts_text": "The perfectly paced spoken text. Use one point four billion dollars,",
       "is_conclusion": false
     }
   ],
@@ -243,9 +247,10 @@ function normalizeForComparison(text: string): string[] {
   return text.toLowerCase().replace(/[.,!?;:—-]/g, ' ').split(/\s+/).filter(Boolean);
 }
 
-function shotsMatchNarrative(narrative: string, shots: { text: string }[]): { ok: boolean; ratio: number } {
+function shotsMatchNarrative(narrative: string, shots: { tts_text: string }[]): { ok: boolean; ratio: number } {
   const narrativeWords = normalizeForComparison(narrative);
-  const shotWords = normalizeForComparison(shots.map(s => s.text).join(' '));
+  // Compare against tts_text since that contains the spelled out, verbatim narrative
+  const shotWords = normalizeForComparison(shots.map(s => s.tts_text).join(' '));
   if (narrativeWords.length === 0) return { ok: false, ratio: 0 };
 
   let ni = 0;
@@ -276,7 +281,7 @@ ${researchContext}
 
 SCRIPT TO EVALUATE:
 ${JSON.stringify({
-  shots: script.shots.map(s => ({ text: s.text, visual_prompt: s.visual_prompt }))
+  shots: script.shots.map(s => ({ caption_text: s.caption_text, tts_text: s.tts_text, visual_prompt: s.visual_prompt }))
 }, null, 2)}
 
 SCORING RUBRIC (0-10):
@@ -351,7 +356,8 @@ export async function generateScript(
         throw zodErr;
       }
 
-      const captionValidation = validateAllCaptions(validated.shots.map(s => ({ text: s.text })));
+      // Map caption_text to 'text' just for the existing validator structure
+      const captionValidation = validateAllCaptions(validated.shots.map(s => ({ text: s.caption_text })));
       if (!captionValidation.valid) {
         validationFeedback = captionValidation.errors.join('\n');
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
@@ -368,7 +374,7 @@ export async function generateScript(
 
       const score = await scoreScript(validated, reserved.research_context, niche, profile.minQualityScore);
       if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
-        const hookWords = validated.shots[0].text.split(/\s+/).slice(0, 4).join(' ');
+        const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
         const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
         return {
           script: {
@@ -382,8 +388,8 @@ export async function generateScript(
             shots: validated.shots.map(shot => ({
               id: shot.id,
               visual_prompt: `${VISUAL_AESTHETIC_ANCHOR} Scene description: ${shot.visual_prompt} | Avoid: text, vibrant colors, neon, flat vector, corporate art, typography, watermark, logo, blurry, photorealistic, 3D render, stock photo, modern clean illustration.`,
-              tts_text: shot.text,
-              caption_text: shot.text,
+              tts_text: shot.tts_text,
+              caption_text: shot.caption_text,
               is_conclusion: shot.is_conclusion,
             })),
             thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt}`,
