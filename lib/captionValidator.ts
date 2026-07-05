@@ -58,7 +58,6 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
     errors.push(`Shot ${shot.index}: ${cleaned.length} chars — exceeds ${CAPTION_MAX_CHARS} char limit.`);
   }
 
-  // DELETED: The strict [.!?] punctuation check. Narrative chunks will end in commas, em-dashes, or mid-thought.
 
   if (words.length > 18) {
     errors.push(`Shot ${shot.index}: ${words.length} words — too long. Max is 18.`);

@@ -45,7 +45,9 @@ const SlideshowScriptSchema = z.object({
   message: 'Exactly one shot must be marked as the conclusion',
 }).refine(data => data.shots[data.shots.length - 1].is_conclusion, {
   message: 'The conclusion shot must be the last shot',
-});
+}).refine(data => /[.!?]$/.test(data.shots[data.shots.length - 1].caption_text.trim()), {
+  message: 'The final shot must end with terminal punctuation (. ! ?)',
+});;
 
 const QualityScoreSchema = z.object({
   specificity: z.number().min(0).max(10),
@@ -207,8 +209,8 @@ JSON SCHEMA TO FOLLOW:
     {
       "id": 1,
       "visual_prompt": "cinematic paragraph describing the scene... NO GORE. NO TEXT.",
-      "caption_text": "The perfectly paced visual text. Use $1.4B and digits,",
-      "tts_text": "The perfectly paced spoken text. Use one point four billion dollars,",
+      "caption_text": "The perfectly paced visual text. Use $1.4B and digits.",
+      "tts_text": "The perfectly paced spoken text. Use one point four billion dollars.",
       "is_conclusion": false
     }
   ],
@@ -267,10 +269,8 @@ function shotsMatchNarrative(narrative: string, shots: { caption_text: string, t
   const ttsRatio = getRatio(shots.map(s => s.tts_text).join(' '));
   const bestRatio = Math.max(captionRatio, ttsRatio);
 
-  // Threshold lowered to 0.60 to account for intentional dual-format modifications
-  // (e.g. "$1.4B" -> "one point four billion dollars"). 
-  // It will still fail if the LLM completely rewrites the plot.
-  return { ok: bestRatio >= 0.60, ratio: bestRatio };
+  // Enforce strict adherence. Allow ~15% variance for dual-format number spelling diffs.
+  return { ok: bestRatio >= 0.85, ratio: bestRatio };
 }
 
 // ─── QUALITY GATE ────────────────────────────────────────────────────────────
