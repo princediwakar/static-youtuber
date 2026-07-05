@@ -67,7 +67,7 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
     target_words = []
     for s_idx, shot in enumerate(shots):
         # Pad punctuation so str.split() produces distinct tokens matching Whisper output
-        text_to_split = shot["text"].replace("—", "— ").replace("–", "– ").replace("-", "- ").replace("/", "/ ")
+        text_to_split = shot["spoken_text"].replace("—", "— ").replace("–", "– ").replace("-", "- ").replace("/", "/ ")
         for w_text in text_to_split.split():
             target_words.append({
                 "text": w_text,
@@ -167,7 +167,7 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
 
     return boundaries
 
-def build_continuous_ass(shot_boundaries: list) -> str:
+def build_continuous_ass(shot_boundaries: list, shots: list) -> str:
     ass_content = [
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -183,24 +183,16 @@ def build_continuous_ass(shot_boundaries: list) -> str:
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
     ]
 
-    for start_time, end_time, words_data in shot_boundaries:
-        if not words_data:
+    for i, (start_time, end_time, _words_data) in enumerate(shot_boundaries):
+        if i >= len(shots):
+            break
+        caption = shots[i].get("caption_text", "").strip()
+        if not caption:
             continue
 
-        for i, current_word in enumerate(words_data):
-            w_start = format_ass_time(current_word['start'])
-            w_end_raw = words_data[i + 1]['start'] if i < len(words_data) - 1 else current_word['end'] + 0.15
-            w_end = format_ass_time(max(w_end_raw - 0.01, current_word['start'] + 0.01))
-
-            line_text = ""
-            for j, w in enumerate(words_data):
-                clean_word = w['text'].strip()
-                if j == i:
-                    line_text += f"{{\\c&H00D7FF&}}{clean_word}{{\\c&HFFFFFF&}} "
-                else:
-                    line_text += f"{clean_word} "
-
-            ass_content.append(f"Dialogue: 0,{w_start},{w_end},Default,,0,0,0,,{line_text.strip()}")
+        ass_start = format_ass_time(start_time)
+        ass_end = format_ass_time(end_time)
+        ass_content.append(f"Dialogue: 0,{ass_start},{ass_end},Default,,0,0,0,,{caption}")
 
     return "\n".join(ass_content)
 
@@ -246,7 +238,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             "-c:a", "libmp3lame", "-b:a", "128k", master_audio
         ], check=True, capture_output=True, timeout=120)
 
-        full_text = " ".join(shot["text"].replace("—", "— ").replace("–", "– ").replace("-", "- ").replace("/", "/ ").strip() for shot in shots)
+        full_text = " ".join(shot["spoken_text"].replace("—", "— ").replace("–", "– ").replace("-", "- ").replace("/", "/ ").strip() for shot in shots)
         words = align_narration(master_audio, full_text)
 
         if not words:
@@ -275,7 +267,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
 
         ass_path = f"{work_dir}/captions.ass"
         with open(ass_path, "w") as f:
-            f.write(build_continuous_ass(shot_boundaries))
+            f.write(build_continuous_ass(shot_boundaries, shots))
 
         rendered_shots = []
         for i, (shot, img_path) in enumerate(zip(shots, img_paths)):
