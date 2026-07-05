@@ -159,7 +159,8 @@ VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic P
 
 VOICEOVER & PACING (CRITICAL):
 - CRITICAL — VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or rephrase a single word of the narrative below. Every shot's "text" must be an exact, verbatim, contiguous substring of the narrative — you are only choosing WHERE to cut it into shots, never changing the wording, spelling, or punctuation. All shots get re-joined in order into ONE continuous voiceover; any paraphrasing here will desync the captions, the audio, and the on-screen timing.
-- MAX 14 WORDS PER SHOT TEXT. Each shot's "text" field must be at most 14 words. Count your words. If a shot exceeds 14 words, split it into two shots or trim.
+- MAX 11 WORDS PER SHOT TEXT, AND MAX 75 CHARACTERS (including spaces/punctuation). Word count alone is not enough — a shot can pass the word check and still be too long. If in doubt, count characters, not words.
+- Never let a shot run to more than 3 wrapped lines at ~32 chars/line — any longer and the caption overlay will overflow the screen.
 - Write naturally for the ear. Use commas (,) and em-dashes (—) exactly where a human would naturally pause.
 - NEVER spell out numbers. Use digits (e.g., "4.5 million", "$1.4 billion", "2009"). Digits are visual anchors that grab attention. TTS engines read them flawlessly.
 - SEMANTIC CHUNKING: Never end a shot mid-thought on an article (a, an, the), preposition (on, in, to), or conjunction (and, but).
@@ -244,6 +245,23 @@ function shotsMatchNarrative(narrative: string, shots: { text: string }[]): { ok
   return { ok: ratio >= 0.85, ratio };
 }
 
+// ─── REPAIR PASS: deterministic shot splitting before validation ──────────
+function repairShotLengths(shots: { text: string; id: number; is_conclusion?: boolean }[], maxChars = 75): any[] {
+  const out: any[] = [];
+  for (const shot of shots) {
+    if (shot.text.length <= maxChars) { out.push(shot); continue; }
+    const words = shot.text.split(' ');
+    let a = '', b = '';
+    for (const w of words) {
+      if ((a + ' ' + w).trim().length <= maxChars) a = (a + ' ' + w).trim();
+      else b = (b + ' ' + w).trim();
+    }
+    out.push({ ...shot, text: a, is_conclusion: false });
+    out.push({ ...shot, id: shot.id + 0.5, text: b });
+  }
+  return out;
+}
+
 // ─── QUALITY GATE ────────────────────────────────────────────────────────────
 async function scoreScript(
   script: z.infer<typeof SlideshowScriptSchema>,
@@ -316,6 +334,13 @@ export async function generateScript(
       );
 
       validationFeedback = '';
+
+      // Deterministic repair: split any shot that exceeds the char limit
+      // before hitting the validator, so we don't waste retries on something
+      // we can fix deterministically.
+      if (parsed && typeof parsed === 'object' && 'shots' in (parsed as any)) {
+        (parsed as any).shots = repairShotLengths((parsed as any).shots);
+      }
 
       let validated: z.infer<typeof SlideshowScriptSchema>;
       try {

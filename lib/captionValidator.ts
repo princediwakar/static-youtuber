@@ -60,10 +60,10 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
 
   // DELETED: The strict [.!?] punctuation check. Narrative chunks will end in commas, em-dashes, or mid-thought.
 
-  if (words.length > 14) {
-    errors.push(`Shot ${shot.index}: ${words.length} words — too long. Max is 14.`);
-  } else if (words.length > 12) {
-    warnings.push(`Shot ${shot.index}: ${words.length} words — target ≤12.`);
+  if (words.length > 11) {
+    errors.push(`Shot ${shot.index}: ${words.length} words — too long. Max is 11.`);
+  } else if (words.length > 10) {
+    warnings.push(`Shot ${shot.index}: ${words.length} words — target ≤10.`);
   }
 
   const lines = simulateWordWrap(cleaned, CAPTION_MAX_CHARS_PER_LINE);

@@ -204,4 +204,4 @@ export const AESTHETICS: Record<string, Aesthetic> = {
   },
 };
 
-export const QUALITY_GATE_MAX_RETRIES = 2;
+export const QUALITY_GATE_MAX_RETRIES = 4;

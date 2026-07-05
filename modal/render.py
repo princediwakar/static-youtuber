@@ -41,6 +41,15 @@ def format_ass_time(seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
 
 
+def get_audio_duration(path: str) -> float:
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", path],
+        capture_output=True, text=True, check=True, timeout=30,
+    )
+    return float(result.stdout.strip())
+
+
 def align_narration(audio_path: str, full_text: str) -> list:
     import whisper_timestamped as whisper
     model = whisper.load_model("base")
@@ -53,7 +62,7 @@ def align_narration(audio_path: str, full_text: str) -> list:
     return words
 
 
-def slice_words_by_shot(words: list, shots: list) -> list:
+def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list:
     boundaries = []
     
     target_words = []
@@ -101,7 +110,7 @@ def slice_words_by_shot(words: list, shots: list) -> list:
                     prev_t = target_words[j]["end"]
                     break
             
-            next_t = words[-1]["end"] if words else 0.0
+            next_t = total_duration
             next_idx = len(target_words)
             for j in range(i+1, len(target_words)):
                 if "start" in target_words[j]:
@@ -134,8 +143,7 @@ def slice_words_by_shot(words: list, shots: list) -> list:
     if boundaries:
         # Add padding to the video track so it outlasts the audio track.
         # ffmpeg's '-shortest' will cleanly slice it to match the exact audio duration.
-        total_audio_duration = (words[-1]["end"] if words else 10.0) + 10.0
-        boundaries[-1][1] = max(total_audio_duration, boundaries[-1][0] + 1.0)
+        boundaries[-1][1] = max(total_duration + 10.0, boundaries[-1][0] + 1.0)
         
     return boundaries
 
@@ -231,7 +239,16 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         if not words:
             raise Exception(f"[{job_id}] Whisper returned no words for narration — cannot align shots.")
 
-        shot_boundaries = slice_words_by_shot(words, shots)
+        actual_duration = get_audio_duration(master_audio)
+        coverage = words[-1]["end"] / actual_duration
+        if coverage < 0.6:
+            raise Exception(
+                f"[{job_id}] Whisper only transcribed {words[-1]['end']:.1f}s of a "
+                f"{actual_duration:.1f}s narration ({coverage:.0%} coverage) — "
+                f"alignment unreliable, aborting instead of producing a truncated video."
+            )
+
+        shot_boundaries = slice_words_by_shot(words, shots, actual_duration)
 
         ass_path = f"{work_dir}/captions.ass"
         with open(ass_path, "w") as f:

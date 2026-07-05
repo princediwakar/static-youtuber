@@ -1,3 +1,4 @@
+// inngest/pipeline.ts
 import { inngest } from './client';
 import { NonRetriableError } from 'inngest';
 import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
