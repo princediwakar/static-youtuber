@@ -52,7 +52,7 @@ def get_audio_duration(path: str) -> float:
 
 def align_narration(audio_path: str, full_text: str) -> list:
     import whisper_timestamped as whisper
-    model = whisper.load_model("base")
+    model = whisper.load_model("small")
     results = whisper.transcribe(model, audio_path, language="en", initial_prompt=full_text)
 
     words = []
@@ -64,7 +64,6 @@ def align_narration(audio_path: str, full_text: str) -> list:
 
 def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list:
     boundaries = []
-
     target_words = []
     for s_idx, shot in enumerate(shots):
         for w_text in shot["text"].split():
@@ -74,76 +73,48 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
                 "shot_idx": s_idx
             })
 
+    def last_matched_end(before_idx):
+        for j in range(before_idx - 1, -1, -1):
+            if "end" in target_words[j]:
+                return target_words[j]["end"]
+        return 0.0
+
+    RESYNC_WINDOW = 12
+    MAX_GAP_PER_WORD = 0.6
+    MIN_GAP = -0.05
+
     w_idx = 0
     t_idx = 0
-    RESYNC_WINDOW = 12
-
     while t_idx < len(target_words) and w_idx < len(words):
         t_clean = target_words[t_idx]["clean"]
         w_clean = re.sub(r'[^a-z0-9]', '', words[w_idx]["text"].lower())
+        candidate = w_idx if t_clean == w_clean else None
 
-        if t_clean == w_clean:
-            target_words[t_idx]["start"] = words[w_idx]["start"]
-            target_words[t_idx]["end"] = words[w_idx]["end"]
-            t_idx += 1
-            w_idx += 1
-            continue
+        if candidate is None:
+            for look in range(1, RESYNC_WINDOW):
+                if w_idx + look < len(words):
+                    cand_clean = re.sub(r'[^a-z0-9]', '', words[w_idx + look]["text"].lower())
+                    if cand_clean == t_clean:
+                        candidate = w_idx + look
+                        break
 
-        # Try to resync: look for the current target word anywhere in the
-        # next RESYNC_WINDOW whisper words.
-        found_at = None
-        for look in range(1, RESYNC_WINDOW):
-            if w_idx + look < len(words):
-                cand = re.sub(r'[^a-z0-9]', '', words[w_idx + look]["text"].lower())
-                if cand == t_clean:
-                    found_at = look
-                    break
-        if found_at is not None:
-            w_idx += found_at
-            target_words[t_idx]["start"] = words[w_idx]["start"]
-            target_words[t_idx]["end"] = words[w_idx]["end"]
-            t_idx += 1
-            w_idx += 1
-            continue
+        accepted = False
+        if candidate is not None:
+            w = words[candidate]
+            prev_end = last_matched_end(t_idx)
+            n_since = max(candidate - w_idx, 0) + 1
+            gap = w["start"] - prev_end
+            if MIN_GAP <= gap <= MAX_GAP_PER_WORD * n_since:
+                target_words[t_idx]["start"] = w["start"]
+                target_words[t_idx]["end"] = w["end"]
+                w_idx = candidate + 1
+                accepted = True
 
-        # Mirror case: maybe whisper word matches a LATER target word
-        # (whisper skipped words) — advance t_idx instead of burning w_idx.
-        found_target = None
-        for look in range(1, RESYNC_WINDOW):
-            if t_idx + look < len(target_words):
-                cand = target_words[t_idx + look]["clean"]
-                if cand == w_clean:
-                    found_target = look
-                    break
-        if found_target is not None:
-            t_idx += found_target
-            continue
-
-        # Plausibility guard: if this exact-match anchor is unreasonably far
-        # from the last real anchor, it's almost certainly a bogus match
-        # (Whisper hallucinated the same word far from its real position).
-        if "start" in target_words[t_idx]:
-            prior_end = None
-            for j in range(t_idx - 1, -1, -1):
-                if "end" in target_words[j]:
-                    prior_end = target_words[j]["end"]
-                    break
-            if prior_end is not None:
-                gap = target_words[t_idx]["start"] - prior_end
-                if gap > 4.0:
-                    del target_words[t_idx]["start"]
-                    del target_words[t_idx]["end"]
-
-        # Truly no match nearby — skip target word only, don't freeze w_idx.
         t_idx += 1
 
     for i in range(len(target_words)):
         if "start" not in target_words[i]:
-            prev_t = 0.0
-            for j in range(i-1, -1, -1):
-                if "end" in target_words[j]:
-                    prev_t = target_words[j]["end"]
-                    break
+            prev_t = last_matched_end(i)
 
             next_t = total_duration
             next_idx = len(target_words)
@@ -176,8 +147,6 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
         boundaries[i][1] = boundaries[i+1][0]
 
     if boundaries:
-        # Add padding to the video track so it outlasts the audio track.
-        # ffmpeg's '-shortest' will cleanly slice it to match the exact audio duration.
         boundaries[-1][1] = max(total_duration + 10.0, boundaries[-1][0] + 1.0)
 
     return boundaries
@@ -273,6 +242,8 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
 
         if not words:
             raise Exception(f"[{job_id}] Whisper returned no words for narration — cannot align shots.")
+
+        print(f"[{job_id}] whisper words: {[(w['text'], round(w['start'], 2)) for w in words]}")
 
         actual_duration = get_audio_duration(master_audio)
         coverage = words[-1]["end"] / actual_duration
