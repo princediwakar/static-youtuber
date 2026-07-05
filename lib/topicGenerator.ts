@@ -148,7 +148,8 @@ async function chunkScriptToJSON(
   researchContext: string,
   niche: string, 
   aestheticInstruction: string, 
-  formatTemplate: FormatTemplate
+  formatTemplate: FormatTemplate,
+  validationFeedback?: string,
 ): Promise<unknown> {
   const shotCounts = TEMPLATE_SHOT_COUNTS[formatTemplate];
   
@@ -160,6 +161,7 @@ VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic P
 
 VOICEOVER & PACING (CRITICAL):
 - CRITICAL — VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or rephrase a single word of the narrative below. Every shot's "text" must be an exact, verbatim, contiguous substring of the narrative — you are only choosing WHERE to cut it into shots, never changing the wording, spelling, or punctuation. All shots get re-joined in order into ONE continuous voiceover; any paraphrasing here will desync the captions, the audio, and the on-screen timing.
+- MAX 14 WORDS PER SHOT TEXT. Each shot's "text" field must be at most 14 words. Count your words. If a shot exceeds 14 words, split it into two shots or trim.
 - Write naturally for the ear. Use commas (,) and em-dashes (—) exactly where a human would naturally pause.
 - NEVER spell out numbers. Use digits (e.g., "4.5 million", "$1.4 billion", "2009"). Digits are visual anchors that grab attention. TTS engines read them flawlessly.
 - SEMANTIC CHUNKING: Never end a shot mid-thought on an article (a, an, the), preposition (on, in, to), or conjunction (and, but).
@@ -198,13 +200,17 @@ JSON SCHEMA TO FOLLOW:
 }
 Only the LAST shot must have is_conclusion: true.`;
 
-  const userPrompt = `TOPIC: ${topic}
+  let userPrompt = `TOPIC: ${topic}
 RESEARCH CONTEXT: ${researchContext}
 
 NARRATIVE TO CHUNK:
 ${narrative}
 
 Slice this narrative into the exact JSON schema.`;
+
+  if (validationFeedback) {
+    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS — FIX ALL OF THESE:\n${validationFeedback}`;
+  }
 
   const raw = await chatCompletion(
     [
@@ -296,7 +302,8 @@ export async function generateScript(
     const narrative = await generateNarrative(reserved.topic, reserved.research_context, profile.toneInstruction);
 
     let lastScore: QualityScore | null = null;
-    
+    let validationFeedback = '';
+
     for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
       console.log(`[TopicGenerator] Running Pass 2 (Chunking), attempt ${attempt + 1}`);
 
@@ -306,29 +313,37 @@ export async function generateScript(
         reserved.research_context,
         niche,
         aesthetic.instruction,
-        formatTemplate
+        formatTemplate,
+        validationFeedback || undefined,
       );
+
+      validationFeedback = '';
 
       let validated: z.infer<typeof SlideshowScriptSchema>;
       try {
         validated = SlideshowScriptSchema.parse(parsed);
       } catch (zodErr) {
         if (zodErr instanceof z.ZodError) {
+          validationFeedback = zodErr.issues.map(i =>
+            `${i.path.length > 0 ? i.path.join('.') + ': ' : ''}${i.message}`
+          ).join('\n');
           if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-          throw new Error(`Script validation failed:\n${zodErr.issues.map(i => i.message).join('\n')}`);
+          throw new Error(`Script validation failed:\n${validationFeedback}`);
         }
         throw zodErr;
       }
 
       const captionValidation = validateAllCaptions(validated.shots.map(s => ({ text: s.text })));
       if (!captionValidation.valid) {
+        validationFeedback = captionValidation.errors.join('\n');
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-        throw new Error(`Caption validation failed:\n${captionValidation.errors.join('\n')}`);
+        throw new Error(`Caption validation failed:\n${validationFeedback}`);
       }
 
       const narrativeMatch = shotsMatchNarrative(narrative, validated.shots);
       if (!narrativeMatch.ok) {
         console.warn(`[TopicGenerator] Text drifted from narrative (ratio ${narrativeMatch.ratio.toFixed(2)}). Retrying...`);
+        validationFeedback = `Shots diverged from narrative (${(narrativeMatch.ratio * 100).toFixed(0)}% word match). Stick to verbatim slicing of the narrative text — do not paraphrase.`;
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
         throw new Error(`Shots diverged too far from the source narrative. The LLM paraphrased instead of slicing.`);
       }
