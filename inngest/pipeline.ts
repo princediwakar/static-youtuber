@@ -303,7 +303,7 @@ export const generateShort = inngest.createFunction(
         }
 
         await db.updateJob(jobId, { status: 'published', video_url: resolvedVideoUrl, youtube_video_id: result.youtubeVideoId });
-        await cleanupJobArtifacts(jobId, creds);
+        // await cleanupJobArtifacts(jobId, creds); // paused — assets retained for debugging
       });
     }
   }
