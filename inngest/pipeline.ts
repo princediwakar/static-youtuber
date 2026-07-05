@@ -23,6 +23,7 @@ import {
   NICHES,
   ACCOUNT_NICHE,
   NICHE_PUBLISH_HOUR_UTC,
+  ACE_STEP_WARMUP_URL,
 } from '@/lib/constants';
 import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
@@ -94,13 +95,10 @@ export const generateShort = inngest.createFunction(
 
       // Task B: Wake up the Modal A10G (takes ~30-40s cold, 1s hot)
       step.run('warmup-bgm-gpu', async () => {
-        if (!process.env.ACE_STEP_BGM_URL) return { status: 'skipped' };
+        if (!ACE_STEP_WARMUP_URL) return { status: 'skipped' };
         
         try {
-          const baseUrl = new URL(process.env.ACE_STEP_BGM_URL);
-          const warmupUrl = new URL('/warmup', baseUrl.origin).toString();
-          
-          const res = await fetch(warmupUrl, { method: 'GET' });
+          const res = await fetch(ACE_STEP_WARMUP_URL, { method: 'GET' });
           if (!res.ok) console.warn(`[Pipeline] BGM Warmup failed with status: ${res.status}`);
           return { status: 'warmed' };
         } catch (err) {

@@ -61,6 +61,11 @@ export const F5_TTS_API_KEY = process.env.F5_TTS_API_KEY || '';
 // ACE-Step BGM Modal endpoint (instrumental music generation)
 export const ACE_STEP_BGM_URL = process.env.ACE_STEP_BGM_URL || '';
 export const ACE_STEP_API_KEY = process.env.ACE_STEP_API_KEY || '';
+// Separate endpoint for warmup. Modal fastapi_endpoint creates a unique domain
+// per method, so appending /warmup to the BGM URL won't work.
+// Falls back to deriving from ACE_STEP_BGM_URL by replacing the method slug.
+export const ACE_STEP_WARMUP_URL = process.env.ACE_STEP_WARMUP_URL ||
+  (ACE_STEP_BGM_URL ? ACE_STEP_BGM_URL.replace('-generate-bgm', '-warmup') : '');
 
 // ─── Music ─────────────────────────────────────────────────────────────────────
 export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
