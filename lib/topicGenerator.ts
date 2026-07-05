@@ -1,5 +1,4 @@
 // lib/topicGenerator.ts
-// lib/topicGenerator.ts
 import { z } from 'zod';
 import { chatCompletion, extractJson } from './deepseek';
 import { query } from './database';
@@ -172,6 +171,16 @@ VOICEOVER & PACING (CRITICAL MANDATE):
 - Every mid-sequence shot (is_conclusion: false) MUST end with a comma (,), ellipsis (...), or em-dash (—) to force a micro-pause.
 - The final shot (is_conclusion: true) MUST end with terminal punctuation (., !, or ?).
 
+VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
+- morgan-freeman-your-inner-voice: Deep, warm, gravelly, authoritative narration. Wise, calm, memorable. Rich bass tones, highly storytelling-oriented.
+- mallory-handford-american-female: Bright, conversational, friendly girl-next-door American female. Compelling, versatile, modern.
+- melissa-harlow-american-female: Conversational, natural, energetic American female. Warm, relatable, good for narration and explainers.
+- jon-british-male: Professional, clear, experienced British male. Polished, versatile narration.
+- kylie-hinze-american-female: Friendly, upbeat, energetic girl-next-door American female. Cheerful, youthful, positive.
+- kelli-winkler-american-female: Professional American female with radio/broadcasting background. Warm, clear, conversational.
+- phil-freeman-american-male: Deep, rich, authoritative, dramatic, versatile American male. Strong bass tones, great for corporate, gritty, storytelling.
+- dee-smith-american-male: Dynamic, energetic, professional African American male. Versatile, conversational, commercial-friendly.
+
 VISUAL AESTHETIC (FLUX.1):
 ${VISUAL_AESTHETIC_ANCHOR}
 - Write a highly descriptive, cinematic paragraph using natural language describing the specific scene.
@@ -190,7 +199,7 @@ JSON SCHEMA TO FOLLOW:
   ],
   "visual_world": "MUST EXACTLY MATCH THE VISUAL WORLD SPECIFIED ABOVE",
   "format_template": "${formatTemplate}",
-  "voiceName": "phil-freeman-american-male",
+  "voiceName": "pick the best match from the voice catalog above",
   "title": "5-100 chars, no period",
   "description": "Video description",
   "tags": ["lowercase", "hyphenated"],
