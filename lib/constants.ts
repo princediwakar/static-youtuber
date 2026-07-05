@@ -54,43 +54,15 @@ export const DEEPSEEK_TEXT_MODEL = process.env.DEEPSEEK_TEXT_MODEL || 'deepseek-
 export const CF_AI_IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
 export const CF_AI_SLIDE_WIDTH = 768;
 export const CF_AI_SLIDE_HEIGHT = 1344;
-export const EDGE_TTS_URL = process.env.EDGE_TTS_URL || 'http://localhost:5050';
-export const EDGE_TTS_API_KEY = process.env.EDGE_TTS_API_KEY || 'your_api_key_here';
-
-export type TTSVoiceProfile = {
-  fallbackVoice: string;
-  directorNotes: string;
-};
-
-export const TTS_VOICE_PROFILES: Record<string, TTSVoiceProfile> = {
-  'SaaS & AI Tools': {
-    fallbackVoice: 'en-US-AndrewNeural',
-    directorNotes: 'Measured narrative pacing. Documentary storytelling. Build tension through the facts, not the voice.',
-  },
-  'Financial Forensics': {
-    fallbackVoice: 'en-US-AndrewNeural',
-    directorNotes: 'Grave tone, cinematic scale framing.',
-  },
-  'Stoic Philosophy': {
-    fallbackVoice: 'en-US-AndrewNeural',
-    directorNotes: 'Deep, measured, and resonant.',
-  },
-  'Urban Survival': {
-    fallbackVoice: 'en-US-AndrewNeural',
-    directorNotes: 'Urgent but controlled, authoritative.',
-  },
-};
+// F5-TTS Modal endpoint (voice cloning)
+export const F5_TTS_URL = process.env.F5_TTS_URL || '';
+export const F5_TTS_API_KEY = process.env.F5_TTS_API_KEY || '';
 
 // ─── Music ─────────────────────────────────────────────────────────────────────
 export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
 export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/';
 
 export const FORMATS = FORMAT_TEMPLATES; // alias for backward compatibility
-
-export const DEFAULT_TTS_VOICE_PROFILE: TTSVoiceProfile = {
-  fallbackVoice: 'en-US-AvaMultilingualNeural',
-  directorNotes: 'Style: Crisp, authoritative narrator. Tension from facts, not voice. Pacing: Brisk but measured.',
-};
 
 export const MODAL_RENDER_URL = process.env.MODAL_RENDER_URL || 'https://example-modal-url.com/render';
 
