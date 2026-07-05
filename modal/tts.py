@@ -145,9 +145,13 @@ class F5TTSModel:
     def load(self):
         """
         Runs once per container lifecycle.
-        Loads F5-TTS model weights and auto-transcribes the voice profile
-        with Whisper so ref_text is ready on every hot-path request.
+        Loads F5-TTS and prepares the voice profile:
+          1. Trims it to 12 seconds (F5-TTS degrades badly on >15s refs —
+             the original 30+ second marketing demo caused 10x compressed audio).
+          2. Converts to 24kHz mono WAV to match F5-TTS native sample rate.
+          3. Auto-transcribes with Whisper so ref_text is ready on the hot path.
         """
+        import subprocess
         import whisper
         from f5_tts.api import F5TTS
 
@@ -159,26 +163,51 @@ class F5TTSModel:
                 "  modal volume put f5-tts-voices public/voice-profile.mp3 /voice-profile.mp3"
             )
 
+        # Trim to 12 seconds and normalise to 24kHz mono WAV.
+        # F5-TTS recommendation: 5–15 seconds of clean speech.
+        # The original voice-profile.mp3 was a 30+ second marketing demo which
+        # caused F5-TTS to calibrate speaking rate at ~10x normal speed.
+        self.trimmed_ref_path = "/tmp/voice-profile-12s.wav"
+        trim_result = subprocess.run([
+            "ffmpeg", "-y", "-i", VOICE_PROFILE_PATH,
+            "-t", "12",          # first 12 seconds
+            "-ar", "24000",      # 24kHz — F5-TTS native sample rate
+            "-ac", "1",          # mono
+            "-af", "loudnorm",   # normalize amplitude so ref isn't too quiet/loud
+            self.trimmed_ref_path,
+        ], capture_output=True)
+        if trim_result.returncode != 0:
+            print(f"[F5-TTS] WARN: ffmpeg trim failed, using original: {trim_result.stderr.decode()[:200]}")
+            self.trimmed_ref_path = VOICE_PROFILE_PATH
+        else:
+            print(f"[F5-TTS] Voice profile trimmed to 12s at 24kHz mono → {self.trimmed_ref_path}")
+
         print("[F5-TTS] Loading model...")
         self.tts = F5TTS(device="cuda")
 
-        print(f"[F5-TTS] Transcribing voice profile at {VOICE_PROFILE_PATH}...")
+        print(f"[F5-TTS] Transcribing trimmed voice profile...")
         whisper_model = whisper.load_model("base")
-        result = whisper_model.transcribe(VOICE_PROFILE_PATH, language="en")
+        result = whisper_model.transcribe(self.trimmed_ref_path, language="en")
         self.ref_text: str = result["text"].strip()
         print(f"[F5-TTS] ref_text: {self.ref_text!r}")
 
     def _infer_chunk(self, text: str):
-        """Run a single F5-TTS inference call. Returns (audio_np, sample_rate)."""
+        """Run a single F5-TTS inference call. Returns (audio_np_1d, sample_rate)."""
         import numpy as np
 
+        # remove_silence=False: let render.py's ffmpeg silenceremove handle
+        # cleanup. F5-TTS's built-in trimmer was over-aggressive on voice-cloned
+        # audio and stripped most of the output after the speed bug was present.
         audio_array, sample_rate, _ = self.tts.infer(
-            ref_file=VOICE_PROFILE_PATH,
+            ref_file=self.trimmed_ref_path,
             ref_text=self.ref_text,
             gen_text=text,
-            remove_silence=True,
+            remove_silence=False,
         )
-        return np.array(audio_array, dtype=np.float32), sample_rate
+        audio_np = np.array(audio_array, dtype=np.float32).flatten()  # guarantee 1-D
+        duration = len(audio_np) / sample_rate
+        print(f"[F5-TTS] chunk {len(text)}c → {duration:.2f}s ({len(audio_np)} samples @ {sample_rate}Hz)")
+        return audio_np, sample_rate
 
     @modal.fastapi_endpoint(method="POST")
     async def generate_speech(
