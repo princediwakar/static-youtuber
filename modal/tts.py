@@ -30,9 +30,9 @@ from fastapi import Header, HTTPException, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-# ── Volume holding the voice profile ─────────────────────────────────────────
+# ── Volume holding voice profiles ────────────────────────────────────────────
 voice_volume = modal.Volume.from_name("f5-tts-voices", create_if_missing=True)
-VOICE_PROFILE_PATH = "/voices/voice-profile.mp3"
+VOICES_DIR = "/voices"
 
 # Maximum characters per F5-TTS inference call.
 # The model degrades in quality and slows down significantly beyond ~200 chars.
@@ -64,6 +64,7 @@ app = modal.App("f5-tts", image=image)
 # ── Request / Response schemas ────────────────────────────────────────────────
 class TTSRequest(BaseModel):
     text: str
+    voice: str = "dee-smith"
 
 
 # ── Text chunking ─────────────────────────────────────────────────────────────
@@ -145,62 +146,73 @@ class F5TTSModel:
     def load(self):
         """
         Runs once per container lifecycle.
-        Loads F5-TTS and prepares the voice profile:
-          1. Trims it to 12 seconds (F5-TTS degrades badly on >15s refs —
+        Loads F5-TTS and prepares every voice profile found on the volume:
+          1. Trims each to 12 seconds (F5-TTS degrades badly on >15s refs —
              the original 30+ second marketing demo caused 10x compressed audio).
           2. Converts to 24kHz mono WAV to match F5-TTS native sample rate.
           3. Auto-transcribes with Whisper so ref_text is ready on the hot path.
+        Populates self.voices: dict[str, {"ref_path": str, "ref_text": str}].
         """
+        import pathlib
         import subprocess
         import whisper
         from f5_tts.api import F5TTS
 
-        if not os.path.exists(VOICE_PROFILE_PATH):
+        mp3_files = sorted(pathlib.Path(VOICES_DIR).glob("*.mp3"))
+        if not mp3_files:
             raise RuntimeError(
-                f"Voice profile not found at {VOICE_PROFILE_PATH}.\n"
+                f"No voice profiles found in {VOICES_DIR}.\n"
                 "Run:\n"
                 "  modal volume create f5-tts-voices\n"
-                "  modal volume put f5-tts-voices public/voice-profile.mp3 /voice-profile.mp3"
+                "  modal volume put f5-tts-voices <local-file> /<name>.mp3"
             )
 
-        # Trim to 12 seconds and normalise to 24kHz mono WAV.
-        # F5-TTS recommendation: 5–15 seconds of clean speech.
-        # The original voice-profile.mp3 was a 30+ second marketing demo which
-        # caused F5-TTS to calibrate speaking rate at ~10x normal speed.
-        self.trimmed_ref_path = "/tmp/voice-profile-12s.wav"
-        trim_result = subprocess.run([
-            "ffmpeg", "-y", "-i", VOICE_PROFILE_PATH,
-            "-t", "12",          # first 12 seconds
-            "-ar", "24000",      # 24kHz — F5-TTS native sample rate
-            "-ac", "1",          # mono
-            "-af", "loudnorm",   # normalize amplitude so ref isn't too quiet/loud
-            self.trimmed_ref_path,
-        ], capture_output=True)
-        if trim_result.returncode != 0:
-            print(f"[F5-TTS] WARN: ffmpeg trim failed, using original: {trim_result.stderr.decode()[:200]}")
-            self.trimmed_ref_path = VOICE_PROFILE_PATH
-        else:
-            print(f"[F5-TTS] Voice profile trimmed to 12s at 24kHz mono → {self.trimmed_ref_path}")
-
-        print("[F5-TTS] Loading model...")
+        print(f"[F5-TTS] Loading model...")
         self.tts = F5TTS(device="cuda")
-
-        print(f"[F5-TTS] Transcribing trimmed voice profile...")
         whisper_model = whisper.load_model("base")
-        result = whisper_model.transcribe(self.trimmed_ref_path, language="en")
-        self.ref_text: str = result["text"].strip()
-        print(f"[F5-TTS] ref_text: {self.ref_text!r}")
 
-    def _infer_chunk(self, text: str):
+        self.voices: dict[str, dict] = {}
+        for mp3_path in mp3_files:
+            voice_name = mp3_path.stem
+            print(f"[F5-TTS] Processing voice profile: {voice_name}")
+
+            # Trim to 12 seconds and normalise to 24kHz mono WAV.
+            trimmed_path = f"/tmp/{voice_name}-12s.wav"
+            trim_result = subprocess.run([
+                "ffmpeg", "-y", "-i", str(mp3_path),
+                "-t", "12",
+                "-ar", "24000",
+                "-ac", "1",
+                "-af", "loudnorm",
+                trimmed_path,
+            ], capture_output=True)
+            if trim_result.returncode != 0:
+                print(f"[F5-TTS] WARN: ffmpeg trim failed for {voice_name}, using original: {trim_result.stderr.decode()[:200]}")
+                ref_path = str(mp3_path)
+            else:
+                print(f"[F5-TTS] {voice_name} trimmed to 12s at 24kHz mono → {trimmed_path}")
+                ref_path = trimmed_path
+
+            result = whisper_model.transcribe(ref_path, language="en")
+            ref_text = result["text"].strip()
+            print(f"[F5-TTS] {voice_name} ref_text: {ref_text!r}")
+
+            self.voices[voice_name] = {"ref_path": ref_path, "ref_text": ref_text}
+
+        print(f"[F5-TTS] Loaded {len(self.voices)} voice profile(s): {', '.join(self.voices)}")
+
+    def _infer_chunk(self, text: str, voice_name: str):
         """Run a single F5-TTS inference call. Returns (audio_np_1d, sample_rate)."""
         import numpy as np
+
+        voice = self.voices[voice_name]
 
         # remove_silence=False: let render.py's ffmpeg silenceremove handle
         # cleanup. F5-TTS's built-in trimmer was over-aggressive on voice-cloned
         # audio and stripped most of the output after the speed bug was present.
         audio_array, sample_rate, _ = self.tts.infer(
-            ref_file=self.trimmed_ref_path,
-            ref_text=self.ref_text,
+            ref_file=voice["ref_path"],
+            ref_text=voice["ref_text"],
             gen_text=text,
             remove_silence=False,
         )
@@ -245,11 +257,18 @@ class F5TTSModel:
         if len(text) > 10_000:
             raise HTTPException(status_code=400, detail="'text' exceeds 10,000 character limit")
 
+        voice_name = (payload.voice or "dee-smith").strip()
+        if voice_name not in self.voices:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown voice '{voice_name}'. Available: {', '.join(self.voices)}",
+            )
+
         # ── Chunk + synthesize ────────────────────────────────────────────────
         # Split into sentence-aligned chunks to keep each F5-TTS call under
         # F5_MAX_CHARS. Quality degrades sharply beyond that threshold.
         chunks = chunk_text(text)
-        print(f"[F5-TTS] Synthesizing {len(text)} chars in {len(chunks)} chunk(s)...")
+        print(f"[F5-TTS] Synthesizing {len(text)} chars with voice '{voice_name}' in {len(chunks)} chunk(s)...")
 
         audio_parts: list = []
         sample_rate: int = 24_000  # F5-TTS default; will be set from first chunk
@@ -258,7 +277,7 @@ class F5TTSModel:
 
         for i, chunk in enumerate(chunks):
             print(f"[F5-TTS] Chunk {i + 1}/{len(chunks)}: {chunk!r}")
-            audio_np, sr = self._infer_chunk(chunk)
+            audio_np, sr = self._infer_chunk(chunk, voice_name)
             sample_rate = sr
             audio_parts.append(audio_np)
             if i < len(chunks) - 1:
