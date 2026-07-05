@@ -222,7 +222,6 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         master_audio = f"{work_dir}/narration_trimmed.mp3"
         subprocess.run([
             "ffmpeg", "-y", "-i", master_audio_raw,
-            "-af", "silenceremove=start_periods=1:start_silence=0.05:start_threshold=-45dB:stop_periods=1:stop_silence=0.05:stop_threshold=-45dB,apad=pad_dur=0.5",
             "-c:a", "libmp3lame", "-b:a", "128k", master_audio
         ], check=True, capture_output=True, timeout=120)
 
