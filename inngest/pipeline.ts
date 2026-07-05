@@ -89,6 +89,7 @@ export const generateShort = inngest.createFunction(
         const { script, topic } = await generateScript(niche, accountId);
 
         const jobId = await db.createJob({ account_id: accountId, topic, niche, format_template, script, status: 'script_ready', variant });
+        (event as any).data.jobId = jobId;
         return { script, jobId, format_template, niche, variant, topic };
       }),
 

@@ -66,8 +66,8 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
     boundaries = []
     target_words = []
     for s_idx, shot in enumerate(shots):
-        # Pad em-dashes with a trailing space so str.split() produces distinct tokens
-        text_to_split = shot["text"].replace("—", "— ").replace("–", "– ")
+        # Pad punctuation so str.split() produces distinct tokens matching Whisper output
+        text_to_split = shot["text"].replace("—", "— ").replace("–", "– ").replace("-", "- ").replace("/", "/ ")
         for w_text in text_to_split.split():
             target_words.append({
                 "text": w_text,
@@ -81,7 +81,7 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
                 return target_words[j]["end"]
         return 0.0
 
-    RESYNC_WINDOW = 12
+    RESYNC_WINDOW = 24
     MAX_GAP_PER_WORD = 0.6
     MIN_GAP = -0.05
 
@@ -92,6 +92,11 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
             return True
         if len(target) >= 4 and len(candidate) >= 4:
             return target in candidate or candidate in target
+        # NUMBER OVERRIDE: Match "$10B" (target "10b") to Whisper's "10"
+        num_t = re.sub(r'[^0-9]', '', target)
+        num_c = re.sub(r'[^0-9]', '', candidate)
+        if num_t and num_c and num_t == num_c:
+            return True
         return False
 
     w_idx = 0
@@ -241,7 +246,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             "-c:a", "libmp3lame", "-b:a", "128k", master_audio
         ], check=True, capture_output=True, timeout=120)
 
-        full_text = " ".join(shot["text"].replace("—", "— ").replace("–", "– ").strip() for shot in shots)
+        full_text = " ".join(shot["text"].replace("—", "— ").replace("–", "– ").replace("-", "- ").replace("/", "/ ").strip() for shot in shots)
         words = align_narration(master_audio, full_text)
 
         if not words:
