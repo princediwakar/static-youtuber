@@ -67,7 +67,7 @@ class BGMRequest(BaseModel):
     volumes={checkpoints_dir: model_cache},
     secrets=[modal.Secret.from_name("acestep-secrets")],
     # T4 (16 GB) fits one ACE-Step inference at a time with 1.7B LM + DiT
-    concurrency_limit=1,
+    max_containers=1,
 )
 class BGMGenerator:
     @modal.enter()
