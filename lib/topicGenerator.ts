@@ -24,8 +24,6 @@ const ShotSchema = z.object({
     message: 'Min 3 words per shot',
   }).refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
   is_conclusion: z.boolean().default(false),
-}).refine(data => data.text.split(' ').length <= 14, {
-  message: 'Hard cap: 14 words max per shot to preserve pacing',
 });
 
 const SlideshowScriptSchema = z.object({
