@@ -62,8 +62,8 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
 
   if (words.length > 18) {
     errors.push(`Shot ${shot.index}: ${words.length} words — too long. Max is 18.`);
-  } else if (words.length > 13) {
-    warnings.push(`Shot ${shot.index}: ${words.length} words — target ≤13.`);
+  } else if (words.length > 12) {
+    warnings.push(`Shot ${shot.index}: ${words.length} words — target ≤12.`);
   }
 
   const lines = simulateWordWrap(cleaned, CAPTION_MAX_CHARS_PER_LINE);
