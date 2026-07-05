@@ -29,9 +29,9 @@ async function main() {
   if (job.script?.shots) {
     job.script.shots.forEach((s: any, i: number) => {
       console.log(`\nShot ${i + 1}:`);
-      console.log(`  TTS Text: "${s.tts_text}"`);
-      console.log(`  Words: ${s.tts_text.split(/\s+/).length}`);
-      console.log(`  Chars: ${s.tts_text.length}`);
+      console.log(`  Text: "${s.text}"`);
+      console.log(`  Words: ${s.text.split(/\s+/).length}`);
+      console.log(`  Chars: ${s.text.length}`);
       console.log(`  Audio instruction: ${s.audio_instruction || 'none'}`);
     });
     console.log(`\nTitle: ${job.script.title}`);

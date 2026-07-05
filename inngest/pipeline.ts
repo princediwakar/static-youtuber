@@ -159,7 +159,7 @@ export const generateShort = inngest.createFunction(
         if (job?.narration_audio_url) return job.narration_audio_url;
 
         const creds = await getAccountCredentials(accountId);
-        const rawText = script.shots.map((s: Shot) => s.tts_text).join(' ');
+        const rawText = script.shots.map((s: Shot) => s.text).join(' ');
         const sanitizedText = rawText
           .replace(/[‘’`]/g, "'") 
           .replace(/[“”]/g, '"')  
@@ -179,7 +179,7 @@ export const generateShort = inngest.createFunction(
         if (job?.music_url) return job.music_url;
 
         const creds = await getAccountCredentials(accountId);
-        const narrationText = script.shots.map((s: Shot) => s.tts_text).join(' ');
+        const narrationText = script.shots.map((s: Shot) => s.text).join(' ');
         const { buffer } = await selectMusicTrack(script.title, niche, script.visual_world, narrationText);
         const url = await uploadMusicTrack(buffer, jobId, creds);
         
@@ -229,7 +229,7 @@ export const generateShort = inngest.createFunction(
             accountId,
             shots: script.shots.map((shot: Shot, i: number) => ({
               image_url: imageUrls[i],
-              text: shot.caption_text,
+              text: shot.text,
             })),
             audio_url: narrationAudioUrl,
             music_url: musicUrl,

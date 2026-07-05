@@ -66,10 +66,12 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
     boundaries = []
     target_words = []
     for s_idx, shot in enumerate(shots):
-        for w_text in shot["text"].split():
+        # Pad em-dashes with a trailing space so str.split() produces distinct tokens
+        text_to_split = shot["text"].replace("—", "— ").replace("–", "– ")
+        for w_text in text_to_split.split():
             target_words.append({
                 "text": w_text,
-                "clean": re.sub(r'[^a-z]', '', w_text.lower()), # Stripped numbers to force purely phonetic matches
+                "clean": re.sub(r'[^a-z0-9]', '', w_text.lower()),
                 "shot_idx": s_idx
             })
 
@@ -84,6 +86,8 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
     MIN_GAP = -0.05
 
     def is_match(target, candidate):
+        if not target or not candidate:
+            return False
         if target == candidate:
             return True
         if len(target) >= 4 and len(candidate) >= 4:
@@ -94,7 +98,7 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
     t_idx = 0
     while t_idx < len(target_words) and w_idx < len(words):
         t_clean = target_words[t_idx]["clean"]
-        w_clean = re.sub(r'[^a-z]', '', words[w_idx]["text"].lower())
+        w_clean = re.sub(r'[^a-z0-9]', '', words[w_idx]["text"].lower())
         
         candidate = w_idx if is_match(t_clean, w_clean) else None
 
@@ -237,7 +241,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             "-c:a", "libmp3lame", "-b:a", "128k", master_audio
         ], check=True, capture_output=True, timeout=120)
 
-        full_text = " ".join(shot["text"].strip() for shot in shots)
+        full_text = " ".join(shot["text"].replace("—", "— ").replace("–", "– ").strip() for shot in shots)
         words = align_narration(master_audio, full_text)
 
         if not words:

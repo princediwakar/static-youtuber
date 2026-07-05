@@ -15,12 +15,11 @@ export function buildThumbnailPrompt(
   return `${aesthetic.thumbnailPrefix}${rawThumbnailPrompt}
 
 THUMBNAIL COMPOSITION RULES (critical — follow exactly):
-- Single, dominant focal point. No cluttered scenes.
-- Extreme high contrast — must be readable at 200 pixels wide on a phone screen.
-- Leave the lower 40% of the image relatively dark and simple — text will overlay here.
-- Strong visual emotion: awe, surprise, or tension communicated through composition.
-- Bold, saturated colors. No muted or pastel palettes.
-- NO text, watermarks, logos, or lettering anywhere in the image.`;
+- Single, dominant focal point. Absolutely no cluttered scenes.
+- Maintain massive, clean negative space to allow for text overlay without visual conflict.
+- The color palette and lighting must strictly adhere to the aesthetic prefix provided above.
+- Strong visual hierarchy: lead the eye to the central concept.
+- CRITICAL: NO text, watermarks, logos, numbers, or lettering anywhere in the image.`;
 }
 
 // ─── Caption renderer ─────────────────────────────────────────────────────────
@@ -66,10 +65,10 @@ async function addTextOverlay(imageBuffer: Buffer, title: string): Promise<Buffe
   const lines = wordWrap(displayTitle, 24, 3);
 
   const lineHeight = 76;
-  const fontSize = 62;
+  const fontSize = 58;
   const totalTextHeight = lines.length * lineHeight;
 
-  const yStart = THUMBNAIL_HEIGHT * 0.68;
+  const yStart = THUMBNAIL_HEIGHT * 0.75;
 
   const svgLines = lines.map((line, i) => {
     const y = yStart + i * lineHeight;
@@ -79,43 +78,32 @@ async function addTextOverlay(imageBuffer: Buffer, title: string): Promise<Buffe
         y="${y}"
         text-anchor="middle"
         dominant-baseline="middle"
-        font-family="Arial Black, Arial, Helvetica, sans-serif"
+        font-family="Montserrat, Inter, system-ui, -apple-system, sans-serif"
         font-size="${fontSize}"
-        font-weight="900"
+        font-weight="700"
         fill="white"
         stroke="black"
-        stroke-width="6"
+        stroke-width="3"
         stroke-linejoin="round"
         paint-order="stroke"
-        letter-spacing="-1"
+        letter-spacing="-0.5"
       >${escapeXml(line)}</text>
       <text
         x="50%"
         y="${y}"
         text-anchor="middle"
         dominant-baseline="middle"
-        font-family="Arial Black, Arial, Helvetica, sans-serif"
+        font-family="Montserrat, Inter, system-ui, -apple-system, sans-serif"
         font-size="${fontSize}"
-        font-weight="900"
+        font-weight="700"
         fill="white"
         stroke-width="0"
-        letter-spacing="-1"
+        letter-spacing="-0.5"
       >${escapeXml(line)}</text>`;
   });
 
-  const gradientStartY = yStart - lineHeight * 1.5;
-  const gradientHeight = totalTextHeight + lineHeight * 2.5;
-
   const svg = `
     <svg width="${THUMBNAIL_WIDTH}" height="${THUMBNAIL_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="black" stop-opacity="0"/>
-          <stop offset="60%" stop-color="black" stop-opacity="0.75"/>
-          <stop offset="100%" stop-color="black" stop-opacity="0.92"/>
-        </linearGradient>
-      </defs>
-      <rect x="0" y="${gradientStartY}" width="${THUMBNAIL_WIDTH}" height="${gradientHeight}" fill="url(#grad)"/>
       ${svgLines.join('')}
     </svg>`;
 

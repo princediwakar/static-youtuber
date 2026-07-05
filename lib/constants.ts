@@ -91,11 +91,8 @@ export const ZOOMPAN_SPEED = 0.0006;
 export const MUSIC_VOLUME = 0.35;
 
 // ─── Caption rendering ────────────────────────────────────────────────────────
-export const CAPTION_FONT_SIZE = 72;
 export const CAPTION_MAX_CHARS_PER_LINE = 32;
 export const CAPTION_MAX_CHARS = 80;
-export const CAPTION_Y_POSITION = 0.65;
-export const CAPTION_LINE_HEIGHT = 84;
 export const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'Montserrat-Bold.ttf');
 
 export const THUMBNAIL_WIDTH = 1280;
@@ -112,7 +109,7 @@ export type NicheProfile = {
 
 export const NICHE_PROFILES: Record<string, NicheProfile> = {
   'SaaS & AI Tools': {
-    aestheticId: 'dossier',
+    aestheticId: 'tech-minimalist',
     toneInstruction: `You are a master storyteller chronicling the raw human drama behind billion-dollar startups.
 Every story is about a real person who made a single bet that paid off — or nearly destroyed them.
 Paint the founder as a character: Where did they come from? What was their obsession?
@@ -128,7 +125,7 @@ Every shot must advance the narrative, not just list features.`,
     minQualityScore: 7,
   },
   'Financial Forensics': {
-    aestheticId: 'dossier',
+    aestheticId: 'finance-editorial',
     toneInstruction: `Your tone is grave, investigative, and forensically precise — like the journalist
 who broke the Enron or FTX story. The numbers are damning. The psychology of the
 people involved is fascinating. Build tension through the scale of the money and
@@ -140,7 +137,7 @@ NEVER use "mind-blowing" or "insane". Let the facts indict.`,
     minQualityScore: 6,
   },
   'Stoic Philosophy': {
-    aestheticId: 'dark-cinematic',
+    aestheticId: 'stoic-zen',
     toneInstruction: `Your tone is deep, measured, and unflinching — like a philosopher-warrior
 who has endured immense hardship and emerged with clarity. Speak like Marcus
 Aurelius addressing himself in his journal. Every word is chosen. Every sentence
@@ -156,7 +153,7 @@ This is cold, hard, earned wisdom — not inspiration.`,
     minQualityScore: 6,
   },
   'Urban Survival': {
-    aestheticId: 'tactical',
+    aestheticId: 'survival-technical',
     toneInstruction: `Your tone is urgent, precise, and operational — like a special forces instructor
 briefing a team before a mission. The scenarios are real. The stakes are life and
 death. Every specification matters. Build tension through the plausibility of the
@@ -171,7 +168,7 @@ preparedness in a chaotic world.`,
 };
 
 export const DEFAULT_NICHE_PROFILE: NicheProfile = {
-  aestheticId: 'vector',
+  aestheticId: 'tech-minimalist',
   toneInstruction: `Your tone is crisp, authoritative, and informative. Build value through
 specific facts and actionable insights, not theatrical emphasis.`,
   minQualityScore: 5,
@@ -187,29 +184,29 @@ export type Aesthetic = {
 // FLUX.1 [schnell] optimized image prefixes.
 // Replaced flat vectors with textured, cinematic, fine-art styling.
 export const AESTHETICS: Record<string, Aesthetic> = {
-  dossier: {
-    id: 'dossier',
-    instruction: 'Write a highly descriptive paragraph. Treat the image as a dark, high-contrast monochrome archival painting.',
-    imagePrefix: 'A dark, atmospheric, high-contrast black and white fine art painting with visible canvas textures and raw, expressive brushstrokes. Deep charcoal shadows and stark volumetric highlights. Completely devoid of text. ',
-    thumbnailPrefix: 'A dark, high-contrast black and white fine art painting with raw brushstrokes. Empty dark space for overlay. No text. ',
+  'tech-minimalist': {
+    id: 'tech-minimalist',
+    instruction: 'Describe a pristine, abstract UI/UX concept. Think Apple product reveal, Dribbble minimalism, and clean geometry.',
+    imagePrefix: 'A hyper-minimalist, high-end 3D abstract geometric render. Soft, diffused daylight, frosted glassmorphism, pristine pastel gradients, and flawlessly smooth surfaces. Massive empty space. Absolutely devoid of any text, letters, or typography. ',
+    thumbnailPrefix: 'An ultra-clean, asymmetrical 3D abstract glassmorphism render. Flawless Apple-style minimalism with soft lighting and a massive, pristine negative space on the left. No text. ',
   },
-  vector: {
-    id: 'vector',
-    instruction: 'Write a highly descriptive paragraph. Treat the image as a dark, textured, cinematic oil painting.',
-    imagePrefix: 'A dark, atmospheric, high-contrast fine art oil painting with visible canvas textures and raw, expressive brushstrokes. Muted, desaturated cinematic color grading, heavy shadows. Entirely devoid of text. ',
-    thumbnailPrefix: 'A dark, cinematic fine art oil painting with raw brushstrokes and muted colors. Asymmetrical, massive empty negative space. No text. ',
+  'finance-editorial': {
+    id: 'finance-editorial',
+    instruction: 'Describe a clean, sophisticated data concept. Think Wall Street Journal editorial illustration or Google Material design.',
+    imagePrefix: 'A crisp, minimalist isometric paper-craft illustration. Clean architectural lines, calm morning lighting, subtle drop shadows, and abstract data visualization shapes. Sophisticated color palette. Deep negative space. Completely devoid of text. ',
+    thumbnailPrefix: 'A striking, minimalist isometric infographic illustration. Clean lines, soft editorial lighting, and an asymmetrical composition leaving a massive, blank void for overlay. Absolutely no text. ',
   },
-  'dark-cinematic': {
-    id: 'dark-cinematic',
-    instruction: 'Write a highly descriptive paragraph. Treat the image as a brooding, epic masterpiece painting.',
-    imagePrefix: 'A dark, moody cinematic oil painting utilizing dramatic chiaroscuro lighting. Deep desaturated blacks, rich oil textures, and an epic, solitary atmosphere. Completely free of text. ',
-    thumbnailPrefix: 'A dark, moody cinematic oil painting with dramatic lighting and deep shadows. Massive empty dark space. No text. ',
+  'stoic-zen': {
+    id: 'stoic-zen',
+    instruction: 'Describe a concept using perfect balance and flow. Think 3Blue1Brown elegance, Japanese calligraphy, and absolute tranquility.',
+    imagePrefix: 'An elegant, minimalist sumi-e ink wash painting on pristine white paper. A single fluid, abstract brushstroke, perfectly balanced geometry, bathed in calm morning light. Absolute absence of text, symbols, or characters. ',
+    thumbnailPrefix: 'A minimalist, high-contrast abstract sumi-e ink sweep. Pristine white negative space dominating the frame, perfectly balanced and serene. Asymmetrical design. No text, characters, or symbols. ',
   },
-  tactical: {
-    id: 'tactical',
-    instruction: 'Write a highly descriptive paragraph. Treat the image as a gritty, hyper-realistic combat painting.',
-    imagePrefix: 'A gritty, heavily textured fine art painting shot with a shallow depth of field. Matte black surfaces, dramatic practical lighting, and a moody, atmospheric haze. Contains no text. ',
-    thumbnailPrefix: 'A gritty, atmospheric combat painting with dramatic moody lighting. Stark negative space. Absolutely no text. ',
+  'survival-technical': {
+    id: 'survival-technical',
+    instruction: 'Describe a clean, technical blueprint. Think Dieter Rams / Braun industrial design, wireframes, and clinical precision.',
+    imagePrefix: 'A crisp, high-contrast minimalist technical wireframe illustration. Clean vector lines, subtle grid background, stark industrial design layout, and clinical lighting. Uncluttered and precise. Completely empty space for overlay. No text, no labels. ',
+    thumbnailPrefix: 'A bold, minimalist technical blueprint illustration. Stark contrast, clean vector lines on a subtle grid, aggressively asymmetrical to leave a massive blank area. Zero text, numbers, or labels. ',
   },
 };
 

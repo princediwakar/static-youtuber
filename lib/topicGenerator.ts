@@ -19,12 +19,11 @@ const ShotSchema = z.object({
   visual_prompt: z.string()
     .min(30, 'Image prompt must be at least 30 characters')
     .max(600, 'Image prompt must be ≤600 chars'),
-  caption_text: z.string().refine(t => t.trim().split(/\s+/).length >= 1, {
+  text: z.string().refine(t => t.trim().split(/\s+/).length >= 1, {
     message: 'Min 1 word per shot',
   }).refine(t => t.trim().split(/\s+/).length <= 18, {
     message: 'Max 18 words per shot to maintain pacing',
   }).refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
-  tts_text: z.string().min(1, 'TTS text is required'),
   is_conclusion: z.boolean().default(false),
 });
 
@@ -33,7 +32,7 @@ const SlideshowScriptSchema = z.object({
     claim: z.string().min(10),
     source: z.string().min(5),
   })).min(3),
-  visual_world: z.enum(['vector', 'dossier', 'dark-cinematic', 'tactical']),
+  visual_world: z.enum(['tech-minimalist', 'finance-editorial', 'stoic-zen', 'survival-technical']),
   format_template: z.enum(['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST']),
   title: z.string().min(5).max(100),
   description: z.string().min(30).max(500),
@@ -45,7 +44,7 @@ const SlideshowScriptSchema = z.object({
   message: 'Exactly one shot must be marked as the conclusion',
 }).refine(data => data.shots[data.shots.length - 1].is_conclusion, {
   message: 'The conclusion shot must be the last shot',
-}).refine(data => /[.!?]$/.test(data.shots[data.shots.length - 1].caption_text.trim()), {
+}).refine(data => /[.!?]$/.test(data.shots[data.shots.length - 1].text.trim()), {
   message: 'The final shot must end with terminal punctuation (. ! ?)',
 });;
 
@@ -123,6 +122,9 @@ PACING & SYNTAX (CRITICAL):
 - NO sentence may exceed 15 words.
 - Avoid compound sentences with multiple clauses. Use periods heavily.
 
+FORMATTING:
+- Use digits, symbols, and abbreviations for numbers (e.g., "$1.4B" instead of "one point four billion dollars", "26", "100%") to keep the text visually concise.
+
 CAPTION READABILITY:
 - Write for the ear AND the eye. Subject → verb → object. Clean and direct.
 
@@ -143,13 +145,6 @@ Output pure prose. NO JSON. NO formatting. Just the story.`;
   return raw as string;
 }
 
-const VISUAL_AESTHETIC_ANCHOR = `
-A dark, atmospheric, high-contrast fine art oil painting with visible canvas textures and raw, expressive brushstrokes.
-The image must be composed strictly in a cinematic black and white monochrome color profile, featuring deep charcoal shadows, grimy graphite midtones, and stark volumetric highlights.
-Shot from a dramatic, artful perspective using an anamorphic cinematic lens emulation.
-CRITICAL: The entire frame must be completely devoid of text, words, characters, labels, status bars, or UI typography to guarantee clean overlay rendering space.
-`;
-
 // ─── PASS 2: EDITOR / CHUNKING ────────────────────────────────────────────────
 async function chunkScriptToJSON(
   narrative: string, 
@@ -166,19 +161,14 @@ async function chunkScriptToJSON(
 Your job is to take a completed narrative script and slice it into exactly ${shotCounts.min}-${shotCounts.max} shots, formatted as strict JSON.
 
 FORMAT: ${formatTemplate}
-VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'dossier'}
+VISUAL WORLD: ${niche === 'Financial Forensics' ? 'finance-editorial' : niche === 'Stoic Philosophy' ? 'stoic-zen' : niche === 'Urban Survival' ? 'survival-technical' : 'tech-minimalist'}
 
 VOICEOVER & PACING (CRITICAL MANDATE):
-- VERBATIM SLICING ONLY: Do NOT rewrite or paraphrase the narrative below.
-- You must slice the narrative into highly aggressive, punchy "Visual Beats". A Visual Beat is a single concept that takes 1 to 3 seconds to say out loud.
+- VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, summarize, or alter the formatting of the narrative below.
+- Your ONLY job is to slice the exact text into chunks.
 - WORD LIMIT: No shot may contain more than 12 words.
-- DUAL-FORMAT RULE: You must output TWO versions of the text for every shot:
-  1. 'caption_text': Optimized for on-screen reading. USE digits and symbols to keep it concise (e.g., "$1.4B", "26", "100%").
-  2. 'tts_text': Optimized for perfect audio generation. Spell out ALL numbers and symbols exactly as they should be spoken (e.g., "one point four billion dollars", "twenty six", "one hundred percent").
-- VERBATIM RULE: Do NOT rewrite, summarize, or paraphrase any text. Every word must match the original narrative exactly.
-- If a sentence from the narrative is long, you MUST split it across multiple consecutive shots to respect the 12-word / 80-character limit.
-- Do not summarize or rewrite to save space. Just cut the sentence into pieces and put the next piece on the next shot.
-- You may append ellipses (...) to a shot to force a dramatic TTS pause, but otherwise, the text must remain strictly verbatim.
+- Output a single 'text' property for each shot. It must be an exact, word-for-word slice of the narrative.
+- If a sentence is long, SPLIT it across multiple consecutive shots. Do NOT summarize it to fit.
 
 VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 - morgan-freeman-your-inner-voice: Deep, warm, gravelly, authoritative narration. Wise, calm, memorable. Rich bass tones, highly storytelling-oriented.
@@ -191,8 +181,8 @@ VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 - dee-smith-american-male: Dynamic, energetic, professional African American male. Versatile, conversational, commercial-friendly.
 
 VISUAL AESTHETIC (FLUX.1):
-${VISUAL_AESTHETIC_ANCHOR}
-- Write a highly descriptive, cinematic paragraph using natural language describing the specific scene.
+You must write a scene description that fits this visual world: ${aestheticInstruction}
+- Write a highly descriptive paragraph using natural language describing the specific scene.
 - KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Change angles, lighting, or focus. 
 - NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS. 
 - CRITICAL: The environment must have NO written words, NO signs, and NO text of any kind.
@@ -216,8 +206,7 @@ JSON SCHEMA TO FOLLOW:
     {
       "id": 1,
       "visual_prompt": "cinematic paragraph describing the scene... NO GORE. NO TEXT.",
-      "caption_text": "The perfectly paced visual text. Use $1.4B and digits.",
-      "tts_text": "The perfectly paced spoken text. Use one point four billion dollars.",
+      "text": "The perfectly paced verbatim text.",
       "is_conclusion": false
     }
   ],
@@ -250,10 +239,11 @@ Slice this narrative into the exact JSON schema.`;
 
 // ─── NARRATIVE / SHOT ALIGNMENT GUARD ────────────────────────────────────────
 function normalizeForComparison(text: string): string[] {
-  return text.toLowerCase().replace(/[.,!?;:—-]/g, ' ').split(/\s+/).filter(Boolean);
+  // Strip non-alphanumeric to preserve number integrity ($1.4B -> 14b, 100,000 -> 100000)
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
 }
 
-function shotsMatchNarrative(narrative: string, shots: { caption_text: string, tts_text: string }[]): { ok: boolean; ratio: number } {
+function shotsMatchNarrative(narrative: string, shots: { text: string }[]): { ok: boolean; ratio: number } {
   const narrativeWords = normalizeForComparison(narrative);
   if (narrativeWords.length === 0) return { ok: false, ratio: 0 };
 
@@ -271,13 +261,9 @@ function shotsMatchNarrative(narrative: string, shots: { caption_text: string, t
     return matched / narrativeWords.length;
   };
 
-  // Check both text fields and take the highest overlap
-  const captionRatio = getRatio(shots.map(s => s.caption_text).join(' '));
-  const ttsRatio = getRatio(shots.map(s => s.tts_text).join(' '));
-  const bestRatio = Math.max(captionRatio, ttsRatio);
+  const ratio = getRatio(shots.map(s => s.text).join(' '));
 
-  // Enforce strict adherence. Allow ~15% variance for dual-format number spelling diffs.
-  return { ok: bestRatio >= 0.85, ratio: bestRatio };
+  return { ok: ratio >= 0.85, ratio };
 }
 
 // ─── QUALITY GATE ────────────────────────────────────────────────────────────
@@ -295,7 +281,7 @@ ${researchContext}
 
 SCRIPT TO EVALUATE:
 ${JSON.stringify({
-  shots: script.shots.map(s => ({ caption_text: s.caption_text, tts_text: s.tts_text, visual_prompt: s.visual_prompt }))
+  shots: script.shots.map(s => ({ text: s.text, visual_prompt: s.visual_prompt }))
 }, null, 2)}
 
 SCORING RUBRIC (0-10):
@@ -370,8 +356,8 @@ export async function generateScript(
         throw zodErr;
       }
 
-      // Map caption_text to 'text' just for the existing validator structure
-      const captionValidation = validateAllCaptions(validated.shots.map(s => ({ text: s.caption_text })));
+      // Validate shot text
+      const captionValidation = validateAllCaptions(validated.shots.map(s => ({ text: s.text })));
       if (!captionValidation.valid) {
         validationFeedback = captionValidation.errors.join('\n');
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
@@ -388,7 +374,7 @@ export async function generateScript(
 
       const score = await scoreScript(validated, reserved.research_context, niche, profile.minQualityScore);
       if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
-        const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
+        const hookWords = validated.shots[0].text.split(/\s+/).slice(0, 4).join(' ');
         const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
         return {
           script: {
@@ -401,9 +387,8 @@ export async function generateScript(
             tags: validated.tags,
             shots: validated.shots.map(shot => ({
               id: shot.id,
-              visual_prompt: `${VISUAL_AESTHETIC_ANCHOR} Scene description: ${shot.visual_prompt} | Avoid: text, vibrant colors, neon, flat vector, corporate art, typography, watermark, logo, blurry, photorealistic, 3D render, stock photo, modern clean illustration.`,
-              tts_text: shot.tts_text,
-              caption_text: shot.caption_text,
+              visual_prompt: `${aesthetic.imagePrefix}Scene description: ${shot.visual_prompt}`,
+              text: shot.text,
               is_conclusion: shot.is_conclusion,
             })),
             thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt}`,

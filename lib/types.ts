@@ -3,8 +3,7 @@
 export interface Shot {
   id: number;
   visual_prompt: string;
-  tts_text: string;
-  caption_text: string;
+  text: string;
   is_conclusion: boolean;
   duration_seconds?: number;
   imageUrl?: string;
@@ -14,7 +13,7 @@ export interface Shot {
 export type SlideshowScript = {
   title: string;
   description: string;
-  visual_world: 'vector' | 'dossier' | 'dark-cinematic' | 'tactical';
+  visual_world: 'tech-minimalist' | 'finance-editorial' | 'stoic-zen' | 'survival-technical';
   format_template: 'RAPID_FIRE' | 'SLOW_BURN' | 'THE_LIST';
   fact_check_and_sources: string;
   tags: string[];
