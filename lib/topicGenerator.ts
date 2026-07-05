@@ -178,6 +178,13 @@ ${VISUAL_AESTHETIC_ANCHOR}
 - NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS. Duplicate prompts are a generation failure. Each shot must have a unique visual_prompt.
 - Describe exactly what is in the frame, where it is located, and the specific lighting.
 - CRITICAL: The image will have text overlaid on it later. You must explicitly describe the environment as having NO written words, NO signs, and NO text of any kind.
+CENSORSHIP & NSFW GUARDRAILS (CRITICAL):
+- The image generation API has strict safety filters against gore, violence, and nudity.
+- FORBIDDEN WORDS: Do NOT use words like blood, bloody, wound, severed, arterial, flesh, visceral, raw, or bare chest in the visual_prompt.
+- THE PG-13 RULE: You must IMPLY trauma through the environment and equipment, not anatomy.
+- BAD (Will Crash API): "A bloody severed artery spurting dark blood on a bare chest."
+- GOOD (Will Pass API): "A distressed tactical uniform, torn fabric, red emergency lighting, medical gauze being hastily applied to a leg in shadows."
+- Focus on the gear (tourniquets, gauze packages), the chaotic environment, the urgency of the hands, and dramatic lighting. Keep the anatomy obscured in deep shadow or out of frame.
 
 JSON SCHEMA TO FOLLOW:
 {
