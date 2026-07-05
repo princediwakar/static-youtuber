@@ -64,7 +64,7 @@ def align_narration(audio_path: str, full_text: str) -> list:
 
 def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list:
     boundaries = []
-    
+
     target_words = []
     for s_idx, shot in enumerate(shots):
         for w_text in shot["text"].split():
@@ -73,34 +73,69 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
                 "clean": re.sub(r'[^a-z0-9]', '', w_text.lower()),
                 "shot_idx": s_idx
             })
-            
+
     w_idx = 0
     t_idx = 0
-    
+    RESYNC_WINDOW = 12
+
     while t_idx < len(target_words) and w_idx < len(words):
         t_clean = target_words[t_idx]["clean"]
         w_clean = re.sub(r'[^a-z0-9]', '', words[w_idx]["text"].lower())
-        
+
         if t_clean == w_clean:
             target_words[t_idx]["start"] = words[w_idx]["start"]
             target_words[t_idx]["end"] = words[w_idx]["end"]
             t_idx += 1
             w_idx += 1
-        else:
-            match_found = False
-            for lookahead in range(1, 4):
-                if w_idx + lookahead < len(words):
-                    lw_clean = re.sub(r'[^a-z0-9]', '', words[w_idx + lookahead]["text"].lower())
-                    if t_clean == lw_clean:
-                        w_idx += lookahead
-                        target_words[t_idx]["start"] = words[w_idx]["start"]
-                        target_words[t_idx]["end"] = words[w_idx]["end"]
-                        t_idx += 1
-                        w_idx += 1
-                        match_found = True
-                        break
-            if not match_found:
-                t_idx += 1
+            continue
+
+        # Try to resync: look for the current target word anywhere in the
+        # next RESYNC_WINDOW whisper words.
+        found_at = None
+        for look in range(1, RESYNC_WINDOW):
+            if w_idx + look < len(words):
+                cand = re.sub(r'[^a-z0-9]', '', words[w_idx + look]["text"].lower())
+                if cand == t_clean:
+                    found_at = look
+                    break
+        if found_at is not None:
+            w_idx += found_at
+            target_words[t_idx]["start"] = words[w_idx]["start"]
+            target_words[t_idx]["end"] = words[w_idx]["end"]
+            t_idx += 1
+            w_idx += 1
+            continue
+
+        # Mirror case: maybe whisper word matches a LATER target word
+        # (whisper skipped words) — advance t_idx instead of burning w_idx.
+        found_target = None
+        for look in range(1, RESYNC_WINDOW):
+            if t_idx + look < len(target_words):
+                cand = target_words[t_idx + look]["clean"]
+                if cand == w_clean:
+                    found_target = look
+                    break
+        if found_target is not None:
+            t_idx += found_target
+            continue
+
+        # Plausibility guard: if this exact-match anchor is unreasonably far
+        # from the last real anchor, it's almost certainly a bogus match
+        # (Whisper hallucinated the same word far from its real position).
+        if "start" in target_words[t_idx]:
+            prior_end = None
+            for j in range(t_idx - 1, -1, -1):
+                if "end" in target_words[j]:
+                    prior_end = target_words[j]["end"]
+                    break
+            if prior_end is not None:
+                gap = target_words[t_idx]["start"] - prior_end
+                if gap > 4.0:
+                    del target_words[t_idx]["start"]
+                    del target_words[t_idx]["end"]
+
+        # Truly no match nearby — skip target word only, don't freeze w_idx.
+        t_idx += 1
 
     for i in range(len(target_words)):
         if "start" not in target_words[i]:
@@ -109,7 +144,7 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
                 if "end" in target_words[j]:
                     prev_t = target_words[j]["end"]
                     break
-            
+
             next_t = total_duration
             next_idx = len(target_words)
             for j in range(i+1, len(target_words)):
@@ -117,11 +152,11 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
                     next_t = target_words[j]["start"]
                     next_idx = j
                     break
-            
+
             missing_count = next_idx - i
             duration = max(0.1, next_t - prev_t)
             chunk = duration / (missing_count + 1)
-            
+
             for k in range(missing_count):
                 target_words[i+k]["start"] = prev_t + chunk * (k + 1) - (chunk * 0.8)
                 target_words[i+k]["end"] = prev_t + chunk * (k + 1)
@@ -134,17 +169,17 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
         else:
             start_t = shot_words[0]["start"]
             end_t = shot_words[-1]["end"]
-            
+
         boundaries.append([start_t, end_t, shot_words])
-        
+
     for i in range(len(boundaries) - 1):
         boundaries[i][1] = boundaries[i+1][0]
-        
+
     if boundaries:
         # Add padding to the video track so it outlasts the audio track.
         # ffmpeg's '-shortest' will cleanly slice it to match the exact audio duration.
         boundaries[-1][1] = max(total_duration + 10.0, boundaries[-1][0] + 1.0)
-        
+
     return boundaries
 
 
@@ -249,6 +284,15 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             )
 
         shot_boundaries = slice_words_by_shot(words, shots, actual_duration)
+
+        durations = [max(end - start, 0) for start, end, _ in shot_boundaries]
+        total_dur = sum(durations)
+        if total_dur > 0 and max(durations) / total_dur > 0.6:
+            raise Exception(
+                f"[{job_id}] Degenerate shot alignment: one shot consumed "
+                f"{max(durations)/total_dur:.0%} of runtime — Whisper alignment "
+                f"likely desynced. Aborting instead of rendering a broken video."
+            )
 
         ass_path = f"{work_dir}/captions.ass"
         with open(ass_path, "w") as f:
