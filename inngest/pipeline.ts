@@ -64,7 +64,6 @@ export const generateShort = inngest.createFunction(
 
     // ── Step 1: Parallelize Script Generation & GPU Warmup ───────────────────
     const [scriptResult] = await Promise.all([
-      // Task A: Generate the script (takes ~20-40s)
       step.run('generate-script', async () => {
         const jobToResume = explicitJobId
           ? await db.getJob(explicitJobId)
@@ -93,7 +92,6 @@ export const generateShort = inngest.createFunction(
         return { script, jobId, format_template, niche, variant, topic };
       }),
 
-      // Task B: Wake up the Modal A10G (takes ~30-40s cold, 1s hot)
       step.run('warmup-bgm-gpu', async () => {
         if (!ACE_STEP_WARMUP_URL) return { status: 'skipped' };
         
@@ -110,88 +108,110 @@ export const generateShort = inngest.createFunction(
 
     const { script, jobId, format_template, niche, variant, topic } = scriptResult;
 
-    // ── Step 2a: Generate Images per shot (batched concurrency) ────────────
-    const CONCURRENCY_LIMIT = 5;
-    const imageUrls: string[] = new Array(script.shots.length);
-
-    for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
-      const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
-      const batch = script.shots.slice(batchStart, batchEnd);
-
-      const batchResults = await Promise.all(
-        batch.map((shot: Shot, offset: number) =>
-          step.run(`process-shot-image-${batchStart + offset}`, async () => {
-            const job = await db.getJob(jobId);
-            if (job?.shot_image_urls?.[batchStart + offset]) {
-              return job.shot_image_urls[batchStart + offset];
-            }
-
-            const creds = await getAccountCredentials(accountId);
-            const rawImageBuffer = await generateImage(shot.visual_prompt, CF_AI_SLIDE_WIDTH, CF_AI_SLIDE_HEIGHT);
-            return uploadSlideImage(rawImageBuffer, jobId, batchStart + offset, creds);
-          })
-        )
-      );
-
-      batchResults.forEach((url, offset) => {
-        imageUrls[batchStart + offset] = url;
-      });
-    }
-
-    await step.run('persist-image-urls', async () => {
-      await db.updateJob(jobId, { shot_image_urls: imageUrls });
-    });
-
-    // ── Step 2b: Generate ONE continuous narration track ───
-    const narrationAudioUrl = await step.run('generate-narration', async () => {
-      const job = await db.getJob(jobId);
-      if (job?.narration_audio_url) return job.narration_audio_url;
-
-      const creds = await getAccountCredentials(accountId);
+    // ── Step 2: Parallel Asset Generation (Images, Audio, BGM, Thumbnail) ────
+    // thumbnailUrl unused here — publish step reads it from DB; dropped to avoid TS noUnusedLocals
+    const [imageUrls, narrationAudioUrl, musicUrl] = await Promise.all([
       
-      const rawText = script.shots.map((s: Shot) => s.tts_text).join(' ');
-      const sanitizedText = rawText
-        .replace(/[‘’`]/g, "'") 
-        .replace(/[“”]/g, '"')  
-        .replace(/—/g, '... ')  
-        .replace(/[^\x00-\x7F]/g, ''); 
-      
-      const { audioBuffer } = await generateNarrativeSpeech(sanitizedText, script.voiceName);
-      
-      const url = await uploadSlideAudio(audioBuffer, jobId, 0, creds);
-      await db.updateJob(jobId, { narration_audio_url: url });
-      return url;
-    });
+      // Task A: Generate All Images (with internal idempotency)
+      step.run('generate-all-images', async () => {
+        const job = await db.getJob(jobId);
+        const existingUrls = job?.shot_image_urls || [];
+        const urls: string[] = [...existingUrls];
 
+        // Fast-path: Return early if all images are already generated
+        if (urls.length >= script.shots.length && urls.slice(0, script.shots.length).every(Boolean)) {
+          return urls.slice(0, script.shots.length);
+        }
+
+        const creds = await getAccountCredentials(accountId);
+        const CONCURRENCY_LIMIT = 5;
+
+        for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
+          const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
+          const batch = script.shots.slice(batchStart, batchEnd);
+
+          const batchResults = await Promise.all(
+            batch.map(async (shot: Shot, offset: number) => {
+              const globalIndex = batchStart + offset;
+              
+              // Granular bypass if this specific image was already done
+              if (urls[globalIndex]) return urls[globalIndex];
+
+              const rawImageBuffer = await generateImage(shot.visual_prompt, CF_AI_SLIDE_WIDTH, CF_AI_SLIDE_HEIGHT);
+              return uploadSlideImage(rawImageBuffer, jobId, globalIndex, creds);
+            })
+          );
+
+          batchResults.forEach((url, offset) => {
+            urls[batchStart + offset] = url;
+          });
+
+          // Partial commit to DB. If the next batch fails, we don't lose these.
+          await db.updateJob(jobId, { shot_image_urls: urls });
+        }
+
+        return urls;
+      }),
+
+      // Task B: Generate Narration
+      step.run('generate-narration', async () => {
+        const job = await db.getJob(jobId);
+        if (job?.narration_audio_url) return job.narration_audio_url;
+
+        const creds = await getAccountCredentials(accountId);
+        const rawText = script.shots.map((s: Shot) => s.tts_text).join(' ');
+        const sanitizedText = rawText
+          .replace(/[‘’`]/g, "'") 
+          .replace(/[“”]/g, '"')  
+          .replace(/—/g, '... ')  
+          .replace(/[^\x00-\x7F]/g, ''); 
+        
+        const { audioBuffer } = await generateNarrativeSpeech(sanitizedText, script.voiceName);
+        const url = await uploadSlideAudio(audioBuffer, jobId, 0, creds);
+        
+        await db.updateJob(jobId, { narration_audio_url: url });
+        return url;
+      }),
+
+      // Task C: Select Background Music
+      step.run('select-music', async () => {
+        const job = await db.getJob(jobId);
+        if (job?.music_url) return job.music_url;
+
+        const creds = await getAccountCredentials(accountId);
+        const narrationText = script.shots.map((s: Shot) => s.tts_text).join(' ');
+        const { buffer } = await selectMusicTrack(script.title, niche, script.visual_world, narrationText);
+        const url = await uploadMusicTrack(buffer, jobId, creds);
+        
+        await db.updateJob(jobId, { music_url: url });
+        return url;
+      }),
+
+      // Task D: Generate Thumbnail
+      step.run('generate-thumbnail', async () => {
+        const job = await db.getJob(jobId);
+        if (job?.thumbnail_url) return job.thumbnail_url;
+
+        const creds = await getAccountCredentials(accountId);
+        const thumbBuffer = await generateThumbnail(script.title, script.thumbnailPrompt, niche);
+        const url = await uploadThumbnail(thumbBuffer, jobId, creds);
+        
+        await db.updateJob(jobId, { thumbnail_url: url });
+        return url;
+      })
+    ]);
+
+    // Mark assets as fully ready once the entire Promise.all resolves
     await step.run('update-assets-ready', async () => {
       await db.updateJob(jobId, { status: 'assets_ready' });
     });
 
-    // ── Step 3: Select Background Music ──────────────────────────────────────
-    const musicUrl = await step.run('select-music', async () => {
-      const job = await db.getJob(jobId);
-      if (job?.music_url) return job.music_url;
-
-      const creds = await getAccountCredentials(accountId);
-      const narrationText = script.shots.map((s: Shot) => s.tts_text).join(' ');
-      const { buffer } = await selectMusicTrack(script.title, niche, script.visual_world, narrationText);
-      const url = await uploadMusicTrack(buffer, jobId, creds);
-      await db.updateJob(jobId, { music_url: url });
-      return url;
-    });
-
-    // ── Step 4: Generate thumbnail & Render ──────────────────────────────────
+    // ── Step 3: Render ───────────────────────────────────────────────────────
     const useModal = MODAL_RENDER_URL && !MODAL_RENDER_URL.includes('example-modal-url');
 
     const videoUrl = await step.run('render-video', async () => {
       const job = await db.getJob(jobId);
       if (job?.video_url) return job.video_url;
-
-      const creds = await getAccountCredentials(accountId);
-
-      const thumbBuffer = await generateThumbnail(script.title, script.thumbnailPrompt, niche);
-      const thumbnailUrl = await uploadThumbnail(thumbBuffer, jobId, creds);
-      await db.updateJob(jobId, { thumbnail_url: thumbnailUrl });
 
       if (!useModal) {
         throw new Error('MODAL_RENDER_URL is not configured — cannot render video');
@@ -249,7 +269,7 @@ export const generateShort = inngest.createFunction(
       }
     });
 
-    // ── Step 4b: Wait for Modal webhook if render was sent to Modal ──────────
+    // ── Step 3b: Wait for Modal webhook if render was sent to Modal ──────────
     let resolvedVideoUrl = videoUrl;
 
     if (useModal && !videoUrl) {
@@ -269,7 +289,7 @@ export const generateShort = inngest.createFunction(
       resolvedVideoUrl = modalResult.data.mp4Url;
     }
 
-    // ── Step 5: Publish ──────────────────────────────────────────────────────
+    // ── Step 4: Publish ──────────────────────────────────────────────────────
     if (!skipPublish) {
       await step.run('publish', async () => {
         if (process.env.INNGEST_DEV === '1') {
@@ -281,7 +301,6 @@ export const generateShort = inngest.createFunction(
         if (job?.status === 'published') return;
 
         const creds = await getAccountCredentials(accountId);
-
         const jobRecord = await query('SELECT thumbnail_url FROM slideshow_jobs WHERE id = $1', [jobId]);
 
         let thumbRes;
@@ -323,6 +342,7 @@ export const generateShort = inngest.createFunction(
   }
 );
 
+// Note: channelScheduler and syncAnalyticsCron remain completely unchanged below.
 export const channelScheduler = inngest.createFunction(
   {
     id: 'channel-scheduler',

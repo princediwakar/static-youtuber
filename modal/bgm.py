@@ -1,5 +1,4 @@
 # modal/bgm.py
-# modal/bgm.py
 """
 ACE-Step 1.5 instrumental BGM generation on Modal (A10G GPU).
 
