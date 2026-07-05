@@ -23,7 +23,7 @@ function contentHash(prompt: string, width: number, height: number, steps: numbe
 function resolveAccounts(): { token: string; accountId: string }[] {
   const pairs: { token: string; accountId: string }[] = [];
 
-  for (const suffix of ['', '_1', '_2']) {
+  for (const suffix of ['', '_1', '_2', '_3', '_4', '_5']) {
     const token = process.env[`CLOUDFLARE_AI_API_TOKEN${suffix}`];
     const accountId = process.env[`CLOUDFLARE_ACCOUNT_ID${suffix}`];
     if (token && accountId) pairs.push({ token, accountId });
@@ -38,7 +38,7 @@ export async function generateImage(
   width: number,
   height: number,
   steps: number = 4,
-  retries: number = 3,
+  retries: number = 6,
 ): Promise<Buffer> {
   const accounts = resolveAccounts();
 

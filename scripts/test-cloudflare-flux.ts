@@ -22,7 +22,7 @@ async function main() {
   const env = loadEnv();
   // Randomly pick from available account pairs (bare, _1, _2)
   const pairs: { token: string; accountId: string }[] = [];
-  for (const suffix of ['', '_1', '_2']) {
+  for (const suffix of ['', '_1', '_2', '_3', '_4', '_5']) {
     const token = env[`CLOUDFLARE_AI_API_TOKEN${suffix}`];
     const accountId = env[`CLOUDFLARE_ACCOUNT_ID${suffix}`];
     if (token && accountId) pairs.push({ token, accountId });
