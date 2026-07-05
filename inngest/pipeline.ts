@@ -61,39 +61,58 @@ export const generateShort = inngest.createFunction(
     const explicitJobId: string | undefined = event.data.jobId;
     const skipPublish: boolean = event.data.skipPublish === true;
 
-    // ── Step 1: Generate Script / Resume ─────────────────────────────────────
-    const { script, jobId, format_template, niche, variant, topic } = await step.run('generate-script', async () => {
-      const jobToResume = explicitJobId
-        ? await db.getJob(explicitJobId)
-        : await db.getIncompleteJob(accountId);
+    // ── Step 1: Parallelize Script Generation & GPU Warmup ───────────────────
+    const [scriptResult] = await Promise.all([
+      // Task A: Generate the script (takes ~20-40s)
+      step.run('generate-script', async () => {
+        const jobToResume = explicitJobId
+          ? await db.getJob(explicitJobId)
+          : await db.getIncompleteJob(accountId);
 
-      if (jobToResume) {
-        console.log(`[Pipeline] Resuming job ${jobToResume.id} (status: ${jobToResume.status})`);
-        if (!jobToResume.script) throw new Error(`Job ${jobToResume.id} has no script`);
-        return {
-          script: jobToResume.script,
-          jobId: jobToResume.id,
-          format_template: jobToResume.format_template,
-          niche: jobToResume.niche,
-          variant: jobToResume.variant ?? 'A',
-          topic: jobToResume.topic,
-        };
-      }
+        if (jobToResume) {
+          console.log(`[Pipeline] Resuming job ${jobToResume.id} (status: ${jobToResume.status})`);
+          if (!jobToResume.script) throw new Error(`Job ${jobToResume.id} has no script`);
+          return {
+            script: jobToResume.script,
+            jobId: jobToResume.id,
+            format_template: jobToResume.format_template,
+            niche: jobToResume.niche,
+            variant: jobToResume.variant ?? 'A',
+            topic: jobToResume.topic,
+          };
+        }
 
-      const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
-      const format_template = pickFormatTemplate(niche);
-      const variant = Math.random() < 0.5 ? 'A' : 'B';
+        const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
+        const format_template = pickFormatTemplate(niche);
+        const variant = Math.random() < 0.5 ? 'A' : 'B';
 
-      const { script, topic } = await generateScript(niche, accountId);
+        const { script, topic } = await generateScript(niche, accountId);
 
-      const jobId = await db.createJob({ account_id: accountId, topic, niche, format_template, script, status: 'script_ready', variant });
-      return { script, jobId, format_template, niche, variant, topic };
-    });
+        const jobId = await db.createJob({ account_id: accountId, topic, niche, format_template, script, status: 'script_ready', variant });
+        return { script, jobId, format_template, niche, variant, topic };
+      }),
+
+      // Task B: Wake up the Modal A10G (takes ~30-40s cold, 1s hot)
+      step.run('warmup-bgm-gpu', async () => {
+        if (!process.env.ACE_STEP_BGM_URL) return { status: 'skipped' };
+        
+        try {
+          const baseUrl = new URL(process.env.ACE_STEP_BGM_URL);
+          const warmupUrl = new URL('/warmup', baseUrl.origin).toString();
+          
+          const res = await fetch(warmupUrl, { method: 'GET' });
+          if (!res.ok) console.warn(`[Pipeline] BGM Warmup failed with status: ${res.status}`);
+          return { status: 'warmed' };
+        } catch (err) {
+          console.warn(`[Pipeline] BGM Warmup network/URL error:`, err);
+          return { status: 'failed' }; 
+        }
+      })
+    ]);
+
+    const { script, jobId, format_template, niche, variant, topic } = scriptResult;
 
     // ── Step 2a: Generate Images per shot (batched concurrency) ────────────
-    // 25 concurrent requests to Cloudflare Workers AI would trigger 429 rate
-    // limiting. Sequential would waste ~160 s. Batching at 5 gives ~20 s wall
-    // time without tripping Cloudflare's anomaly detection.
     const CONCURRENCY_LIMIT = 5;
     const imageUrls: string[] = new Array(script.shots.length);
 
@@ -125,21 +144,19 @@ export const generateShort = inngest.createFunction(
       await db.updateJob(jobId, { shot_image_urls: imageUrls });
     });
 
-// ── Step 2b: Generate ONE continuous narration track ───
+    // ── Step 2b: Generate ONE continuous narration track ───
     const narrationAudioUrl = await step.run('generate-narration', async () => {
       const job = await db.getJob(jobId);
       if (job?.narration_audio_url) return job.narration_audio_url;
 
       const creds = await getAccountCredentials(accountId);
       
-      // Sanitize the text: strip weird unicode, curly quotes, and unsupported symbols
-      // that silently crash local TTS API wrappers.
       const rawText = script.shots.map((s: Shot) => s.tts_text).join(' ');
       const sanitizedText = rawText
-        .replace(/[‘’`]/g, "'") // Normalize apostrophes
-        .replace(/[“”]/g, '"')  // Normalize quotes
-        .replace(/—/g, '... ')  // Em-dash → ellipsis so TTS pauses instead of rushing
-        .replace(/[^\x00-\x7F]/g, ''); // Strip remaining non-ASCII characters
+        .replace(/[‘’`]/g, "'") 
+        .replace(/[“”]/g, '"')  
+        .replace(/—/g, '... ')  
+        .replace(/[^\x00-\x7F]/g, ''); 
       
       const { audioBuffer } = await generateNarrativeSpeech(sanitizedText, script.voiceName);
       
@@ -159,7 +176,7 @@ export const generateShort = inngest.createFunction(
 
       const creds = await getAccountCredentials(accountId);
       const narrationText = script.shots.map((s: Shot) => s.tts_text).join(' ');
-      const { buffer, filename } = await selectMusicTrack(script.title, niche, script.visual_world, narrationText);
+      const { buffer } = await selectMusicTrack(script.title, niche, script.visual_world, narrationText);
       const url = await uploadMusicTrack(buffer, jobId, creds);
       await db.updateJob(jobId, { music_url: url });
       return url;
@@ -208,7 +225,6 @@ export const generateShort = inngest.createFunction(
         if (!response.ok) {
           const errorBody = await response.text().catch(() => '');
           const msg = `Modal returned HTTP ${response.status}: ${errorBody.slice(0, 200)}`;
-          // 400 = bad request (deterministic). 5xx = transient infra, retry.
           if (response.status >= 400 && response.status < 500) {
             throw new NonRetriableError(msg);
           }
@@ -258,7 +274,6 @@ export const generateShort = inngest.createFunction(
     // ── Step 5: Publish ──────────────────────────────────────────────────────
     if (!skipPublish) {
       await step.run('publish', async () => {
-        // Safety net: never publish from local dev, regardless of event data
         if (process.env.INNGEST_DEV === '1') {
           console.log('[Pipeline] Skipping publish — INNGEST_DEV is set (local dev)');
           return;
@@ -305,21 +320,11 @@ export const generateShort = inngest.createFunction(
         }
 
         await db.updateJob(jobId, { status: 'published', video_url: resolvedVideoUrl, youtube_video_id: result.youtubeVideoId });
-        // await cleanupJobArtifacts(jobId, creds); // paused — assets retained for debugging
       });
     }
   }
 );
 
-// ── Channel Scheduler ──────────────────────────────────────────────────────────
-// Each niche fires at its optimal UTC hour (staggered across the US daytime
-// window). The cron runs at all 4 hours; on each tick, only the niche whose
-// publish hour matches the current hour gets triggered.
-//
-//   Financial Forensics → 15:00 UTC (11 AM EST)
-//   Stoic Philosophy    → 17:00 UTC ( 1 PM EST)
-//   Urban Survival      → 19:00 UTC ( 3 PM EST)
-//   SaaS & AI Tools     → 21:00 UTC ( 5 PM EST)
 export const channelScheduler = inngest.createFunction(
   {
     id: 'channel-scheduler',
@@ -388,7 +393,6 @@ export const channelScheduler = inngest.createFunction(
   }
 );
 
-// ── Analytics Sync ─────────────────────────────────────────────────────────────
 export const syncAnalyticsCron = inngest.createFunction(
   {
     id: 'sync-analytics',

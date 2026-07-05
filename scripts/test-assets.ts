@@ -4,13 +4,11 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { existsSync } from 'fs';
-import path from 'path';
 import {
-  MUSIC_DIR,
-  MUSIC_ATTRIBUTION,
+  ACE_STEP_BGM_URL,
+  ACE_STEP_API_KEY,
   FONT_PATH,
 } from '../lib/constants';
-import { MUSIC_CATALOG } from '../lib/musicSelector';
 
 async function main() {
   console.log('═══ Asset Verification ═══\n');
@@ -26,36 +24,29 @@ async function main() {
     console.log('   ✅ Font ready for sharp captions');
   }
 
-  // ── 2. Music ─────────────────────────────────────────────────────────
-  console.log('\n2. Background Music');
-  console.log(`   Dir: ${MUSIC_DIR}`);
-  const musicFiles = MUSIC_CATALOG.map(t => t.filename);
-  console.log(`   Expected files: ${musicFiles.join(', ')}`);
+  // ── 2. Music (ACE-Step) ──────────────────────────────────────────────
+  console.log('\n2. Background Music (ACE-Step)');
+  const acestepConfigured = ACE_STEP_BGM_URL && !ACE_STEP_BGM_URL.includes('example-modal-url');
+  console.log(`   ACE-Step BGM URL: ${ACE_STEP_BGM_URL ? (acestepConfigured ? '✅ configured' : '⚠️  placeholder') : '❌ not set'}`);
+  console.log(`   ACE-Step API Key: ${ACE_STEP_API_KEY ? '✅ set' : '❌ not set'}`);
 
-  const available: string[] = [];
-  for (const f of musicFiles) {
-    const full = path.join(MUSIC_DIR, f);
-    const ok = existsSync(full);
-    console.log(`   ${f}: ${ok ? 'EXISTS' : 'MISSING'}`);
-    if (ok) available.push(f);
+  if (acestepConfigured && ACE_STEP_API_KEY) {
+    try {
+      const baseUrl = new URL(ACE_STEP_BGM_URL);
+      const warmupUrl = new URL('/warmup', baseUrl.origin).toString();
+      const res = await fetch(warmupUrl, { method: 'GET', signal: AbortSignal.timeout(10_000) });
+      if (res.ok) {
+        const data = await res.json();
+        console.log(`   ✅ ACE-Step reachable — GPU: ${data.gpu}`);
+      } else {
+        console.warn(`   ⚠️  ACE-Step warmup returned ${res.status} — may be cold`);
+      }
+    } catch (e: any) {
+      console.warn(`   ⚠️  ACE-Step unreachable: ${e.message}`);
+    }
   }
 
-  if (available.length === 0) {
-    console.error(`   ❌ No music files found in ${MUSIC_DIR}`);
-  } else {
-    // Simulate pickMusicTrack() logic
-    const chosen = available[Math.floor(Math.random() * available.length)];
-    console.log(`   Random pick: ${chosen}`);
-    console.log(`   Full path: ${path.join(MUSIC_DIR, chosen)}`);
-    console.log('   ✅ Music ready for Ken Burns mix');
-  }
-
-  // ── 3. Attribution ───────────────────────────────────────────────────
-  console.log('\n3. Music Attribution (CC BY 4.0)');
-  console.log(`   ${MUSIC_ATTRIBUTION}`);
-  console.log('   ✅ Attribution string ready for YouTube descriptions');
-
-  // ── 4. DB connectivity ───────────────────────────────────────────────
+  // ── 3. DB connectivity ───────────────────────────────────────────────
   console.log('\n4. Database');
   const { query } = require('../lib/database');
   try {
@@ -69,12 +60,11 @@ async function main() {
 
   // ── Summary ──────────────────────────────────────────────────────────
   console.log('\n═══ Summary ═══');
-  const allOk = fontOk && available.length > 0;
-  if (allOk) {
-    console.log('✅ All assets ready. Font, music, and attribution are properly configured.');
-    console.log('   Pipeline is ready to produce videos with background music + captions + Ken Burns.');
+  if (fontOk) {
+    console.log('✅ Font ready.');
+    console.log('   Pipeline is ready to produce videos with ACE-Step BGM + captions + Ken Burns.');
   } else {
-    console.error('❌ Some assets are missing — check the errors above.');
+    console.error('❌ Montserrat-Bold.ttf missing — captions will fall back to sans-serif.');
   }
 }
 

@@ -69,7 +69,7 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
         for w_text in shot["text"].split():
             target_words.append({
                 "text": w_text,
-                "clean": re.sub(r'[^a-z0-9]', '', w_text.lower()),
+                "clean": re.sub(r'[^a-z]', '', w_text.lower()), # Stripped numbers to force purely phonetic matches
                 "shot_idx": s_idx
             })
 
@@ -83,22 +83,29 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
     MAX_GAP_PER_WORD = 0.6
     MIN_GAP = -0.05
 
+    def is_match(target, candidate):
+        if target == candidate:
+            return True
+        if len(target) >= 4 and len(candidate) >= 4:
+            return target in candidate or candidate in target
+        return False
+
     w_idx = 0
     t_idx = 0
     while t_idx < len(target_words) and w_idx < len(words):
         t_clean = target_words[t_idx]["clean"]
-        w_clean = re.sub(r'[^a-z0-9]', '', words[w_idx]["text"].lower())
-        candidate = w_idx if t_clean == w_clean else None
+        w_clean = re.sub(r'[^a-z]', '', words[w_idx]["text"].lower())
+        
+        candidate = w_idx if is_match(t_clean, w_clean) else None
 
         if candidate is None:
             for look in range(1, RESYNC_WINDOW):
                 if w_idx + look < len(words):
-                    cand_clean = re.sub(r'[^a-z0-9]', '', words[w_idx + look]["text"].lower())
-                    if cand_clean == t_clean:
+                    cand_clean = re.sub(r'[^a-z]', '', words[w_idx + look]["text"].lower())
+                    if is_match(t_clean, cand_clean):
                         candidate = w_idx + look
                         break
 
-        accepted = False
         if candidate is not None:
             w = words[candidate]
             prev_end = last_matched_end(t_idx)
@@ -108,10 +115,10 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
                 target_words[t_idx]["start"] = w["start"]
                 target_words[t_idx]["end"] = w["end"]
                 w_idx = candidate + 1
-                accepted = True
 
         t_idx += 1
 
+    # Fill in the blanks for missed words
     for i in range(len(target_words)):
         if "start" not in target_words[i]:
             prev_t = last_matched_end(i)
@@ -153,11 +160,6 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
 
 
 def build_continuous_ass(shot_boundaries: list) -> str:
-    """
-    Kinetic .ass subtitles. Scales highlighted words up (\\fscx130\\fscy130)
-    and colors them gold so they pop — replacing the old imageGenerator.ts
-    burnCaption logic directly in the video stream.
-    """
     ass_content = [
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -243,8 +245,6 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         if not words:
             raise Exception(f"[{job_id}] Whisper returned no words for narration — cannot align shots.")
 
-        print(f"[{job_id}] whisper words: {[(w['text'], round(w['start'], 2)) for w in words]}")
-
         actual_duration = get_audio_duration(master_audio)
         coverage = words[-1]["end"] / actual_duration
         if coverage < 0.6:
@@ -256,13 +256,14 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
 
         shot_boundaries = slice_words_by_shot(words, shots, actual_duration)
 
+        # Degenerate alignment kill-switch
         durations = [max(end - start, 0) for start, end, _ in shot_boundaries]
         total_dur = sum(durations)
         if total_dur > 0 and max(durations) / total_dur > 0.6:
             raise Exception(
                 f"[{job_id}] Degenerate shot alignment: one shot consumed "
                 f"{max(durations)/total_dur:.0%} of runtime — Whisper alignment "
-                f"likely desynced. Aborting instead of rendering a broken video."
+                f"desynced. Aborting instead of rendering a broken video."
             )
 
         ass_path = f"{work_dir}/captions.ass"
@@ -275,8 +276,9 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             duration = max(end_time - start_time, 0.35)
             frames = max(int(round(duration * FPS)), 1)
 
+            # Ken Burns alternating Zoompan effect
             zoom_expr = "zoom+0.0006" if i % 2 == 0 else "zoom-0.0006"
-            scale_expr = "1.0" if i % 2 == 0 else "1.15"
+            scale_expr = "1.0" if i % 2 == 0 else "1.12"
 
             out_shot = f"{work_dir}/shot_rendered_{i}.mp4"
             subprocess.run([
@@ -305,6 +307,8 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         ], check=True, capture_output=True, timeout=120)
 
         final_out = f"{work_dir}/final_{job_id}.mp4"
+        
+        # Audio Ducking (Sidechain compression)
         filter_complex = "[1:a]volume=0.35[bg_vol]; [bg_vol][0:a]sidechaincompress=threshold=-28dB:ratio=4:attack=5:release=50[bg_ducked]; [0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
 
         subprocess.run([
@@ -358,7 +362,6 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
 
 from fastapi import Request, HTTPException
 
-
 @app.function(secrets=[modal.Secret.from_name("cloudinary")])
 @modal.fastapi_endpoint(method="POST")
 async def trigger_render(request: Request):
@@ -380,3 +383,4 @@ async def trigger_render(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
     return {"status": "queued", "jobId": job_id}
+    

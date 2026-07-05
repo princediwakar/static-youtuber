@@ -1,4 +1,5 @@
 // lib/topicGenerator.ts
+// lib/topicGenerator.ts
 import { z } from 'zod';
 import { chatCompletion, extractJson } from './deepseek';
 import { query } from './database';
@@ -14,14 +15,15 @@ import {
 } from './constants';
 import type { FormatTemplate } from './constants';
 
-// Cleaned, single-source-of-truth schema
 const ShotSchema = z.object({
   id: z.number(),
   visual_prompt: z.string()
     .min(30, 'Image prompt must be at least 30 characters')
     .max(600, 'Image prompt must be ≤600 chars'),
-  text: z.string().refine(t => t.trim().split(/\s+/).length >= 3, {
-    message: 'Min 3 words per shot',
+  text: z.string().refine(t => t.trim().split(/\s+/).length >= 1, {
+    message: 'Min 1 word per shot',
+  }).refine(t => t.trim().split(/\s+/).length <= 15, {
+    message: 'Max 15 words per shot to maintain pacing',
   }).refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
   is_conclusion: z.boolean().default(false),
 });
@@ -102,7 +104,7 @@ LENGTH MANDATE (CRITICAL):
 
 CONTENT POLICY (STRICT):
 - Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma. 
-- You must build tension psychologically. Focus on the situation, the ticking clock, and the stakes, NOT the physical blood. (e.g., "The minutes slipped away" instead of "Blood poured from the wound").
+- You must build tension psychologically. Focus on the situation, the ticking clock, and the stakes, NOT the physical blood.
 
 TONE MANDATE:
 ${toneInstruction}
@@ -115,7 +117,6 @@ STORYTELLING RULES:
 5. NO CTAs. No "subscribe", "like", or "thanks for watching".
 
 CAPTION READABILITY:
-- Every sentence is a visual unit. Keep them short — 8 to 14 words max.
 - Write for the ear AND the eye. Subject → verb → object. Clean and direct.
 
 OUTPUT:
@@ -160,16 +161,16 @@ Your job is to take a completed narrative script and slice it into exactly ${sho
 FORMAT: ${formatTemplate}
 VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'dossier'}
 
-VOICEOVER & PACING (CRITICAL HARD-LIMITS):
-- VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or rephrase a single word of the narrative below. 
-- LENGTH LIMITS: EVERY shot MUST be between 3 and 11 words, AND absolutely no more than 75 characters. A 1 or 2 word shot will crash the pipeline.
-- WRITE FOR AUDIO PACING: TTS engines interpret punctuation as physical time in milliseconds.
+VOICEOVER & PACING (CRITICAL MANDATE):
+- VERBATIM SLICING ONLY: Do NOT rewrite or paraphrase the narrative below.
+- You must slice the narrative into highly aggressive, punchy "Visual Beats". A Visual Beat is a single concept that takes 1 to 3 seconds to say out loud.
+- WORD LIMIT: No shot may contain more than 15 words.
+- NUMBER FORMATTING RULE: Do not use digits or symbols. Write out ALL numbers as words (e.g., write "twenty six" instead of "26", write "one point four billion dollars" instead of "$1.4B"). This ensures perfect text-to-speech synchronization.
 - Use ellipses (...) to force dramatic pauses (300-500ms) before critical reveals.
 - Use em-dashes (—) for mid-thought hard pauses that signal a shift.
-- Never end a shot mid-thought on an article (a, an, the) or preposition (on, in, to).
-- Every mid-sequence shot (is_conclusion: false) MUST end with a comma (,), ellipsis (...), or em-dash (—) to force a micro-pause. Bare endings make the TTS accelerate uncontrollably.
+- Never split a single thought awkwardly across two shots just to keep it short.
+- Every mid-sequence shot (is_conclusion: false) MUST end with a comma (,), ellipsis (...), or em-dash (—) to force a micro-pause.
 - The final shot (is_conclusion: true) MUST end with terminal punctuation (., !, or ?).
-- NEVER spell out numbers. Use digits (e.g., "4.5 million", "$1.4 billion", "2009").
 
 VISUAL AESTHETIC (FLUX.1):
 ${VISUAL_AESTHETIC_ANCHOR}
@@ -179,33 +180,17 @@ ${VISUAL_AESTHETIC_ANCHOR}
 - CRITICAL: The environment must have NO written words, NO signs, and NO text of any kind.
 
 CENSORSHIP & NSFW GUARDRAILS (ZERO TOLERANCE):
-- The image generation API will permanently ban you for gore, violence, or nudity.
 - FORBIDDEN WORDS: blood, bloody, wound, severed, arterial, flesh, visceral, raw, bare chest, corpse, dead, murder.
-- THE PG-13 METAPHOR RULE: Imply trauma through equipment, shadows, and environment, NEVER anatomy.
-- BAD: "A bloody severed artery spurting dark blood on a bare chest."
-- GOOD: "A distressed tactical uniform, torn fabric, red emergency lighting, medical gauze being hastily applied in deep shadows."
 - Focus on the gear, the environment, and the urgency. Keep anatomy out of frame or completely obscured in darkness.
-
-VOICE PROFILE SELECTION:
-Available voices — pick the ONE that best matches the story's tone:
-- dee-smith-american-male: HQ professional American male voice. African American millennial male. Versatile range — business, commercial, narrative, conversational, urban, hype. Use for commercial ads, brand storytelling, e-learning, or energetic narration. Fiverr Pro.
-- phil-freeman-american-male: Award-winning deep male voice. Offers American and British accents. Authoritative, corporate, deep, dramatic. Use for high-stakes investigations, historical epics, cinematic trailers, or when the story needs gravitas. Clients include Discovery, NordVPN, Kansas City Chiefs. Fiverr Pro.
-- jon-british-male: Deep, authoritative British male. Use for grave investigative stories, financial crimes, historical weight, or when the narrative demands a commanding presence.
-- mallory-handford-american-female: Warm, professional American female. Use for corporate, business, or human-interest stories that need a trustworthy, polished delivery.
-- melissa-harlow-american-female: Natural, conversational American female. Use for relatable everyday stories, personal anecdotes, or when the narrative needs to feel intimate.
-- kylie-hinze-american-female: Upbeat, energetic American female. Use for motivational, positive, or fast-paced stories that need enthusiasm.
-- kelli-winkler-american-female: Neutral, clear American female. Use for tech explainers, instructional content, or when you need a balanced, non-intrusive narrator.
 
 JSON SCHEMA TO FOLLOW:
 {
   "fact_check_and_sources": [
-    { "claim": "Exact fact 1", "source": "Source context 1" },
-    { "claim": "Exact fact 2", "source": "Source context 2" },
-    { "claim": "Exact fact 3", "source": "Source context 3" }
-  ], // MUST BE EXACTLY 3 OR MORE ITEMS. DO NOT PROVIDE FEWER THAN 3.
+    { "claim": "Exact fact 1", "source": "Source context 1" }
+  ],
   "visual_world": "MUST EXACTLY MATCH THE VISUAL WORLD SPECIFIED ABOVE",
   "format_template": "${formatTemplate}",
-  "voiceName": "the voice profile you selected for this story",
+  "voiceName": "phil-freeman-american-male",
   "title": "5-100 chars, no period",
   "description": "Video description",
   "tags": ["lowercase", "hyphenated"],
@@ -264,31 +249,7 @@ function shotsMatchNarrative(narrative: string, shots: { text: string }[]): { ok
     }
   }
   const ratio = matched / narrativeWords.length;
-  return { ok: ratio >= 0.85, ratio };
-}
-
-// ─── REPAIR PASS: deterministic shot splitting before validation ──────────
-function repairShotLengths(shots: { text: string; id: number; is_conclusion?: boolean }[], maxChars = 75): any[] {
-  const out: any[] = [];
-  for (const shot of shots) {
-    if (shot.text.length <= maxChars) { out.push(shot); continue; }
-    
-    const words = shot.text.split(' ');
-    const midpoint = Math.ceil(words.length / 2);
-    let a = words.slice(0, midpoint).join(' ');
-    let b = words.slice(midpoint).join(' ');
-    
-    if (a.length > maxChars) {
-      a = words.slice(0, 3).join(' ');
-      b = words.slice(3).join(' ');
-    }
-    
-    const bWords = b.split(' ').length;
-    out.push({ ...shot, text: a, is_conclusion: false });
-    // Guarantee no orphan words slip into Zod
-    out.push({ ...shot, id: shot.id + 0.5, text: bWords < 3 ? b + '...' : b });
-  }
-  return out;
+  return { ok: ratio >= 0.80, ratio };
 }
 
 // ─── QUALITY GATE ────────────────────────────────────────────────────────────
@@ -366,11 +327,6 @@ export async function generateScript(
       );
 
       validationFeedback = '';
-
-      // Deterministic repair: split any shot that exceeds the char limit
-      if (parsed && typeof parsed === 'object' && 'shots' in (parsed as any)) {
-        (parsed as any).shots = repairShotLengths((parsed as any).shots);
-      }
 
       let validated: z.infer<typeof SlideshowScriptSchema>;
       try {

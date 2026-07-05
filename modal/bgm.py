@@ -1,5 +1,7 @@
+# modal/bgm.py
+# modal/bgm.py
 """
-ACE-Step 1.5 instrumental BGM generation on Modal (T4 GPU).
+ACE-Step 1.5 instrumental BGM generation on Modal (A10G GPU).
 
 One-time setup:
   modal volume create bgm-model-cache
@@ -7,13 +9,6 @@ One-time setup:
 
 Deploy:
   modal deploy modal/bgm.py
-
-Smoke test:
-  curl -X POST <endpoint_url> \
-       -H "Authorization: Bearer <ACE_STEP_API_KEY>" \
-       -H "Content-Type: application/json" \
-       -d '{"prompt": "Dark electronic underscore, building tension...", "duration": 30}' \
-       --output test_bgm.mp3
 """
 
 import os
@@ -23,14 +18,9 @@ import modal
 from fastapi import Header, HTTPException, status
 from pydantic import BaseModel
 
-# ── Volume for model weights ────────────────────────────────────────────────
 checkpoints_dir = "/opt/ace-step/checkpoints"
 model_cache = modal.Volume.from_name("bgm-model-cache", create_if_missing=True)
 
-# ── Container image ───────────────────────────────────────────────────────────
-# Following the official ACE-Step 1.5 Modal example: clone the tagged release
-# repo and install from the local directory so uv resolves nano-vllm (a local
-# path dependency) correctly.
 image = (
     modal.Image.from_registry(
         "nvidia/cuda:13.0.0-cudnn-devel-ubuntu22.04", add_python="3.12"
@@ -52,21 +42,17 @@ image = (
 
 app = modal.App("bgm-generator", image=image)
 
-
-# ── Request schema ────────────────────────────────────────────────────────────
 class BGMRequest(BaseModel):
     prompt: str
     duration: float = 60.0
-    format: str = "mp3"  # mp3 or wav
+    format: str = "mp3"
 
 
-# ── Model class ───────────────────────────────────────────────────────────────
 @app.cls(
-    gpu="T4",
+    gpu="A10G",
     timeout=300,
     volumes={checkpoints_dir: model_cache},
     secrets=[modal.Secret.from_name("acestep-secrets")],
-    # T4 (16 GB) fits one ACE-Step inference at a time with 1.7B LM + DiT
     max_containers=1,
 )
 class BGMGenerator:
@@ -75,7 +61,7 @@ class BGMGenerator:
         """
         Loads ACE-Step 1.5 models once per container lifecycle.
         DiT: acestep-v15-turbo (8 inference steps, fast)
-        LM:  acestep-5Hz-lm-1.7B (fits T4 16 GB cleanly with vLLM backend)
+        LM:  acestep-5Hz-lm-1.7B
         """
         from acestep.handler import AceStepHandler
         from acestep.llm_inference import LLMHandler
@@ -108,7 +94,6 @@ class BGMGenerator:
         print(f"[ACE-Step] Models loaded. DiT: acestep-v15-turbo, LM: {lm_model_name}")
 
     def _generate(self, prompt: str, duration: float, format: str) -> bytes:
-        """Run ACE-Step inference. lyrics=[Instrumental] forces instrumental mode."""
         from acestep.inference import GenerationConfig, GenerationParams, generate_music
 
         params = GenerationParams(
@@ -138,18 +123,20 @@ class BGMGenerator:
         audio_path = result.audios[0]["path"]
         return Path(audio_path).read_bytes()
 
+    @modal.fastapi_endpoint(method="GET")
+    async def warmup(self):
+        """
+        Dummy endpoint to force Modal to spin up the container and run @modal.enter().
+        Returns immediately once models are loaded in VRAM.
+        """
+        return {"status": "warm", "gpu": "A10G"}
+
     @modal.fastapi_endpoint(method="POST")
     async def generate_bgm(
         self,
         payload: BGMRequest,
         authorization: str = Header(default=""),
     ):
-        """
-        POST /generate-bgm
-        Headers:  Authorization: Bearer <ACE_STEP_API_KEY>
-        Body:     {"prompt": "description...", "duration": 90}
-        Returns:  audio/mpeg binary
-        """
         expected_key = os.environ.get("ACE_STEP_API_KEY", "")
         if expected_key:
             token = authorization.removeprefix("Bearer ").strip()
@@ -176,16 +163,4 @@ class BGMGenerator:
         print(f"[ACE-Step] Done — {len(audio_bytes):,} bytes")
 
         from fastapi.responses import Response
-
         return Response(content=audio_bytes, media_type=content_type)
-
-
-@app.local_entrypoint()
-def main():
-    print("Deploy:  modal deploy modal/bgm.py")
-    print("Test:")
-    print('  curl -X POST <endpoint_url> \\')
-    print('       -H "Authorization: Bearer $ACE_STEP_API_KEY" \\')
-    print('       -H "Content-Type: application/json" \\')
-    print("       -d '{\"prompt\": \"Dark electronic underscore, building tension\", \"duration\": 30}' \\")
-    print("       --output test_bgm.mp3")
