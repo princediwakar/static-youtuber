@@ -59,6 +59,31 @@ async function callF5Tts(text: string, voiceName: string): Promise<Buffer> {
   }
 }
 
+function getWavDuration(buffer: Buffer): number {
+  let offset = 12;
+  let sampleRate = 0;
+  let channels = 0;
+  let bitsPerSample = 0;
+  let dataSize = 0;
+
+  while (offset + 8 <= buffer.length) {
+    const chunkId = buffer.toString('ascii', offset, offset + 4);
+    const chunkSize = buffer.readUInt32LE(offset + 4);
+    if (chunkId === 'fmt ') {
+      channels = buffer.readUInt16LE(offset + 8);
+      sampleRate = buffer.readUInt32LE(offset + 12);
+      bitsPerSample = buffer.readUInt16LE(offset + 22);
+    } else if (chunkId === 'data') {
+      dataSize = chunkSize;
+      break;
+    }
+    offset += 8 + chunkSize;
+  }
+
+  if (!sampleRate || !dataSize) throw new Error('Invalid WAV — missing fmt or data chunk');
+  return dataSize / (sampleRate * channels * (bitsPerSample / 8));
+}
+
 /**
  * Generates a voice-cloned narration track for the full script text.
  * Returns the audio as a WAV buffer (F5-TTS Modal endpoint outputs WAV).
@@ -66,17 +91,18 @@ async function callF5Tts(text: string, voiceName: string): Promise<Buffer> {
 export async function generateNarrativeSpeech(
   fullText: string,
   voiceName: string
-): Promise<{ audioBuffer: Buffer; engine: string }> {
+): Promise<{ audioBuffer: Buffer; engine: string; durationMs: number }> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       console.log(
         `[AudioEngine] F5-TTS attempt ${attempt}/${MAX_RETRIES} — ${fullText.length} chars with voice '${voiceName}'`
       );
       const audioBuffer = await callF5Tts(fullText, voiceName);
+      const durationMs = Math.round(getWavDuration(audioBuffer) * 1000);
       console.log(
-        `[AudioEngine] F5-TTS success — ${audioBuffer.byteLength.toLocaleString()} bytes`
+        `[AudioEngine] F5-TTS success — ${audioBuffer.byteLength.toLocaleString()} bytes, ${durationMs}ms`
       );
-      return { audioBuffer, engine: 'f5_tts' };
+      return { audioBuffer, engine: 'f5_tts', durationMs };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[AudioEngine] Attempt ${attempt} failed: ${message}`);

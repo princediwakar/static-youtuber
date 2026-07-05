@@ -109,9 +109,30 @@ export const generateShort = inngest.createFunction(
 
     const { script, jobId, format_template, niche, variant, topic } = scriptResult;
 
-    // ── Step 2: Parallel Asset Generation (Images, Audio, BGM, Thumbnail) ────
-    // thumbnailUrl unused here — publish step reads it from DB; dropped to avoid TS noUnusedLocals
-    const [imageUrls, narrationAudioUrl, musicUrl] = await Promise.all([
+    // ── Step 2a: Generate Narration (runs first to get exact duration for BGM) ──
+    const { url: narrationAudioUrl, durationMs: _narrationDurationMs } = await step.run('generate-narration', async () => {
+      const job = await db.getJob(jobId);
+      if (job?.narration_audio_url) return { url: job.narration_audio_url, durationMs: 0 };
+
+      const creds = await getAccountCredentials(accountId);
+      const rawText = script.shots.map((s: Shot) => s.text).join(' ');
+      const sanitizedText = rawText
+        .replace(/[‘’`]/g, "'")
+        .replace(/[“”]/g, '"')
+        .replace(/—/g, '... ')
+        .replace(/[^\x00-\x7F]/g, '');
+
+      const { audioBuffer, durationMs } = await generateNarrativeSpeech(sanitizedText, script.voiceName);
+      const url = await uploadSlideAudio(audioBuffer, jobId, 0, creds);
+
+      await db.updateJob(jobId, { narration_audio_url: url });
+      return { url, durationMs };
+    });
+
+    const narrationDurationSec = Math.ceil(_narrationDurationMs / 1000) || 60;
+
+    // ── Step 2b: Parallel Remaining Assets (Images, BGM, Thumbnail) ────────────
+    const [imageUrls, musicUrl] = await Promise.all([
       
       // Task A: Generate All Images (with internal idempotency)
       step.run('generate-all-images', async () => {
@@ -154,41 +175,21 @@ export const generateShort = inngest.createFunction(
         return urls;
       }),
 
-      // Task B: Generate Narration
-      step.run('generate-narration', async () => {
-        const job = await db.getJob(jobId);
-        if (job?.narration_audio_url) return job.narration_audio_url;
-
-        const creds = await getAccountCredentials(accountId);
-        const rawText = script.shots.map((s: Shot) => s.text).join(' ');
-        const sanitizedText = rawText
-          .replace(/[‘’`]/g, "'") 
-          .replace(/[“”]/g, '"')  
-          .replace(/—/g, '... ')  
-          .replace(/[^\x00-\x7F]/g, ''); 
-        
-        const { audioBuffer } = await generateNarrativeSpeech(sanitizedText, script.voiceName);
-        const url = await uploadSlideAudio(audioBuffer, jobId, 0, creds);
-        
-        await db.updateJob(jobId, { narration_audio_url: url });
-        return url;
-      }),
-
-      // Task C: Select Background Music
+      // Task B: Select Background Music
       step.run('select-music', async () => {
         const job = await db.getJob(jobId);
         if (job?.music_url) return job.music_url;
 
         const creds = await getAccountCredentials(accountId);
         const narrationText = script.shots.map((s: Shot) => s.text).join(' ');
-        const { buffer } = await selectMusicTrack(script.title, niche, format_template, script.visual_world, narrationText);
+        const { buffer } = await selectMusicTrack(script.title, niche, format_template, script.visual_world, narrationText, narrationDurationSec);
         const url = await uploadMusicTrack(buffer, jobId, creds);
         
         await db.updateJob(jobId, { music_url: url });
         return url;
       }),
 
-      // Task D: Generate Thumbnail
+      // Task C: Generate Thumbnail
       step.run('generate-thumbnail', async () => {
         const job = await db.getJob(jobId);
         if (job?.thumbnail_url) return job.thumbnail_url;

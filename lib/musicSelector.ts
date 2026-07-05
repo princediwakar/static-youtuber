@@ -76,13 +76,6 @@ function pickMusicPrompt(niche: string, formatTemplate: FormatTemplate, title: s
   return `${base} — underscore: ${title}`;
 }
 
-function estimateDuration(narrationText?: string): number {
-  if (!narrationText) return 60;
-  const wordCount = narrationText.split(/\s+/).length;
-  const estimatedSeconds = Math.ceil((wordCount / 150) * 60) + 5;
-  return Math.max(30, Math.min(estimatedSeconds, 90));
-}
-
 async function generateWithAceStep(prompt: string, duration: number): Promise<Buffer> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -124,7 +117,8 @@ export async function selectMusicTrack(
   niche: string,
   formatTemplate: FormatTemplate,
   _visualWorld: string,
-  narrationText?: string,
+  narrationText: string,
+  durationSeconds: number,
 ): Promise<{ buffer: Buffer; filename: string; title: string }> {
   
   if (!ACE_STEP_BGM_URL || ACE_STEP_BGM_URL.includes('example-modal-url')) {
@@ -132,7 +126,7 @@ export async function selectMusicTrack(
   }
 
   const prompt = pickMusicPrompt(niche, formatTemplate, scriptTitle);
-  const duration = estimateDuration(narrationText);
+  const duration = Math.max(30, Math.min(durationSeconds, 90));
 
   console.log(`[MusicSelector] ${niche}/${formatTemplate} → ${duration}s BGM: "${prompt.slice(0, 100)}..."`);
 
