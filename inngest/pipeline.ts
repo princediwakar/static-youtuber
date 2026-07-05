@@ -158,7 +158,8 @@ export const generateShort = inngest.createFunction(
       if (job?.music_url) return job.music_url;
 
       const creds = await getAccountCredentials(accountId);
-      const { buffer, filename } = await selectMusicTrack(script.title, niche, script.visual_world);
+      const narrationText = script.shots.map((s: Shot) => s.tts_text).join(' ');
+      const { buffer, filename } = await selectMusicTrack(script.title, niche, script.visual_world, narrationText);
       const url = await uploadMusicTrack(buffer, jobId, creds);
       await db.updateJob(jobId, { music_url: url });
       return url;

@@ -58,6 +58,10 @@ export const CF_AI_SLIDE_HEIGHT = 1344;
 export const F5_TTS_URL = process.env.F5_TTS_URL || '';
 export const F5_TTS_API_KEY = process.env.F5_TTS_API_KEY || '';
 
+// ACE-Step BGM Modal endpoint (instrumental music generation)
+export const ACE_STEP_BGM_URL = process.env.ACE_STEP_BGM_URL || '';
+export const ACE_STEP_API_KEY = process.env.ACE_STEP_API_KEY || '';
+
 // ─── Music ─────────────────────────────────────────────────────────────────────
 export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
 export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/';
