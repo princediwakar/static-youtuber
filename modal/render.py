@@ -168,7 +168,7 @@ def build_continuous_ass(shot_boundaries: list) -> str:
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        "Style: Default,Montserrat,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,4,2,80,80,672,1",
+        "Style: Default,Montserrat,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,4,8,80,80,1080,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -187,7 +187,7 @@ def build_continuous_ass(shot_boundaries: list) -> str:
             for j, w in enumerate(words_data):
                 clean_word = w['text'].strip()
                 if j == i:
-                    line_text += f"{{\\c&H00D7FF&}}{{\\b1}}{clean_word}{{\\b0}}{{\\c&HFFFFFF&}} "
+                    line_text += f"{{\\c&H00D7FF&}}{clean_word}{{\\c&HFFFFFF&}} "
                 else:
                     line_text += f"{clean_word} "
 
@@ -307,7 +307,8 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         final_out = f"{work_dir}/final_{job_id}.mp4"
         
         # Audio Ducking (Sidechain compression)
-        filter_complex = "[1:a]volume=0.35[bg_vol]; [bg_vol][0:a]sidechaincompress=threshold=-28dB:ratio=4:attack=5:release=50[bg_ducked]; [0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        # Open up the base volume and relax the threshold to around -22dB
+        filter_complex = "[1:a]volume=0.75[bg_vol]; [bg_vol][0:a]sidechaincompress=threshold=-22dB:ratio=4:attack=5:release=50[bg_ducked]; [0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
 
         subprocess.run([
             "ffmpeg", "-y", "-i", master_audio, "-stream_loop", "-1", "-i", bg_music_path, "-i", captioned_out,

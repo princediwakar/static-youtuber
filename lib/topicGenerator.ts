@@ -168,11 +168,8 @@ VOICEOVER & PACING (CRITICAL MANDATE):
 - DUAL-FORMAT RULE: You must output TWO versions of the text for every shot:
   1. 'caption_text': Optimized for on-screen reading. USE digits and symbols to keep it concise (e.g., "$1.4B", "26", "100%").
   2. 'tts_text': Optimized for perfect audio generation. Spell out ALL numbers and symbols exactly as they should be spoken (e.g., "one point four billion dollars", "twenty six", "one hundred percent").
-- Use ellipses (...) to force dramatic pauses (300-500ms) before critical reveals in both text fields.
-- Use em-dashes (—) for mid-thought hard pauses that signal a shift.
-- Never split a single thought awkwardly across two shots just to keep it short.
-- Every mid-sequence shot (is_conclusion: false) MUST end with a comma (,), ellipsis (...), or em-dash (—) to force a micro-pause.
-- The final shot (is_conclusion: true) MUST end with terminal punctuation (., !, or ?).
+- PRESERVE ORIGINAL PUNCTUATION: Slice the text at natural grammatical boundaries (clauses, sentences). Do NOT rewrite, merge, or alter the original sentence structure.
+- You may append ellipses (...) to a shot to force a dramatic TTS pause, but otherwise, the text must remain strictly verbatim.
 
 VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 - morgan-freeman-your-inner-voice: Deep, warm, gravelly, authoritative narration. Wise, calm, memorable. Rich bass tones, highly storytelling-oriented.
