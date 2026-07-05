@@ -118,6 +118,11 @@ STORYTELLING RULES:
 4. End with a devastating conclusion. The final sentence must recontextualize the whole story.
 5. NO CTAs. No "subscribe", "like", or "thanks for watching".
 
+PACING & SYNTAX (CRITICAL):
+- Write strictly in short, punchy sentences.
+- NO sentence may exceed 15 words.
+- Avoid compound sentences with multiple clauses. Use periods heavily.
+
 CAPTION READABILITY:
 - Write for the ear AND the eye. Subject → verb → object. Clean and direct.
 
@@ -170,7 +175,9 @@ VOICEOVER & PACING (CRITICAL MANDATE):
 - DUAL-FORMAT RULE: You must output TWO versions of the text for every shot:
   1. 'caption_text': Optimized for on-screen reading. USE digits and symbols to keep it concise (e.g., "$1.4B", "26", "100%").
   2. 'tts_text': Optimized for perfect audio generation. Spell out ALL numbers and symbols exactly as they should be spoken (e.g., "one point four billion dollars", "twenty six", "one hundred percent").
-- PRESERVE ORIGINAL PUNCTUATION: Slice the text at natural grammatical boundaries (clauses, sentences). Do NOT rewrite, merge, or alter the original sentence structure.
+- VERBATIM RULE: Do NOT rewrite, summarize, or paraphrase any text. Every word must match the original narrative exactly.
+- If a sentence from the narrative is long, you MUST split it across multiple consecutive shots to respect the 12-word / 80-character limit.
+- Do not summarize or rewrite to save space. Just cut the sentence into pieces and put the next piece on the next shot.
 - You may append ellipses (...) to a shot to force a dramatic TTS pause, but otherwise, the text must remain strictly verbatim.
 
 VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
@@ -227,7 +234,7 @@ ${narrative}
 Slice this narrative into the exact JSON schema.`;
 
   if (validationFeedback) {
-    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS — FIX ALL OF THESE IMMEDIATELY:\n${validationFeedback}`;
+    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS:\n${validationFeedback}\n\nCRITICAL FIX INSTRUCTIONS:\nTo fix character/word limit errors, DO NOT paraphrase, summarize, or delete words. Instead, SPLIT the long text across multiple consecutive shots. Maintain 100% verbatim text from the narrative.`;
   }
 
   const raw = await chatCompletion(
