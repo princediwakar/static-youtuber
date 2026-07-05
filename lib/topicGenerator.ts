@@ -97,23 +97,25 @@ Your job is to write a highly compelling, fact-dense narrative script for a YouT
 
 LENGTH MANDATE (CRITICAL):
 - ABSOLUTE MAXIMUM OF 125 WORDS.
-- If you write 126 words, the video will exceed 60 seconds and fail completely.
-- Be ruthless with your editing. Cut the filler.
+- If you write 126 words, the video will exceed 60 seconds and fail completely. Cut the filler.
+
+CONTENT POLICY (STRICT):
+- Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma. 
+- You must build tension psychologically. Focus on the situation, the ticking clock, and the stakes, NOT the physical blood. (e.g., "The minutes slipped away" instead of "Blood poured from the wound").
 
 TONE MANDATE:
 ${toneInstruction}
 
 STORYTELLING RULES:
-1. Ground everything in reality. Use the exact dates, names, and numbers provided. Do not hallucinate.
+1. Ground everything in reality. Use the exact dates, names, and numbers provided.
 2. Hook them instantly. The first sentence must present a jarring fact or cognitive dissonance.
 3. Build tension. Use transition words. Let the story flow with cause and effect.
 4. End with a devastating conclusion. The final sentence must recontextualize the whole story.
 5. NO CTAs. No "subscribe", "like", or "thanks for watching".
 
 CAPTION READABILITY:
-- Every sentence is a visual unit. Keep them short — 8 to 14 words max. No run-ons.
-- Write for the ear AND the eye. Break walls of text.
-- Subject → verb → object. Clean and direct.
+- Every sentence is a visual unit. Keep them short — 8 to 14 words max.
+- Write for the ear AND the eye. Subject → verb → object. Clean and direct.
 
 OUTPUT:
 Output pure prose. NO JSON. NO formatting. Just the story.`;
@@ -157,42 +159,39 @@ Your job is to take a completed narrative script and slice it into exactly ${sho
 FORMAT: ${formatTemplate}
 VISUAL WORLD: ${niche === 'Financial Forensics' ? 'dossier' : niche === 'Stoic Philosophy' ? 'dark-cinematic' : niche === 'Urban Survival' ? 'tactical' : 'dossier'}
 
-VOICEOVER & PACING (CRITICAL):
-- CRITICAL — VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or rephrase a single word of the narrative below. Every shot's "text" must be an exact, verbatim, contiguous substring of the narrative — you are only choosing WHERE to cut it into shots, never changing the wording, spelling, or punctuation. All shots get re-joined in order into ONE continuous voiceover; any paraphrasing here will desync the captions, the audio, and the on-screen timing.
-- LENGTH LIMITS: EVERY shot MUST be between 3 and 11 words, AND absolutely no more than 75 characters (including spaces/punctuation). A 1 or 2 word shot is a validation failure — never create orphans.
-- WRITE FOR AUDIO PACING: TTS engines interpret punctuation as physical time in milliseconds. You are engineering a vocal performance, not writing text.
+VOICEOVER & PACING (CRITICAL HARD-LIMITS):
+- VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or rephrase a single word of the narrative below. 
+- LENGTH LIMITS: EVERY shot MUST be between 3 and 11 words, AND absolutely no more than 75 characters. A 1 or 2 word shot will crash the pipeline.
+- WRITE FOR AUDIO PACING: TTS engines interpret punctuation as physical time in milliseconds.
 - Use ellipses (...) to force dramatic pauses (300-500ms) before critical reveals.
 - Use em-dashes (—) for mid-thought hard pauses that signal a shift.
-- Never end a shot mid-thought on an article (a, an, the), preposition (on, in, to), or conjunction (and, but).
-  BAD: "He lost it all on a" -> "bad bet."
-  GOOD: "He lost it all—" -> "on a single, bad bet."
-- Every mid-sequence shot (is_conclusion: false) MUST end with a comma (,), ellipsis (...), or em-dash (—) to force a micro-pause that creates natural breath rhythm. Do NOT leave the end of a chunk bare without punctuation — bare endings make the TTS accelerate into the next chunk.
+- Never end a shot mid-thought on an article (a, an, the) or preposition (on, in, to).
+- Every mid-sequence shot (is_conclusion: false) MUST end with a comma (,), ellipsis (...), or em-dash (—) to force a micro-pause. Bare endings make the TTS accelerate uncontrollably.
 - The final shot (is_conclusion: true) MUST end with terminal punctuation (., !, or ?).
 - NEVER spell out numbers. Use digits (e.g., "4.5 million", "$1.4 billion", "2009").
-- Never let a shot run to more than 3 wrapped lines at ~32 chars/line — any longer and the caption overlay will overflow the screen.
 
 VISUAL AESTHETIC (FLUX.1):
 ${VISUAL_AESTHETIC_ANCHOR}
 - Write a highly descriptive, cinematic paragraph using natural language describing the specific scene.
-- KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Even if a sentence spans two shots, advance the camera. Change the angle (e.g., "wide shot" to "extreme macro close-up"), change the lighting, or shift the focus to a new object. Never let the viewer stare at the same composition.
-- NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS. Duplicate prompts are a generation failure. Each shot must have a unique visual_prompt.
-- Describe exactly what is in the frame, where it is located, and the specific lighting.
-- CRITICAL: The image will have text overlaid on it later. You must explicitly describe the environment as having NO written words, NO signs, and NO text of any kind.
-CENSORSHIP & NSFW GUARDRAILS (CRITICAL):
-- The image generation API has strict safety filters against gore, violence, and nudity.
-- FORBIDDEN WORDS: Do NOT use words like blood, bloody, wound, severed, arterial, flesh, visceral, raw, or bare chest in the visual_prompt.
-- THE PG-13 RULE: You must IMPLY trauma through the environment and equipment, not anatomy.
-- BAD (Will Crash API): "A bloody severed artery spurting dark blood on a bare chest."
-- GOOD (Will Pass API): "A distressed tactical uniform, torn fabric, red emergency lighting, medical gauze being hastily applied to a leg in shadows."
-- Focus on the gear (tourniquets, gauze packages), the chaotic environment, the urgency of the hands, and dramatic lighting. Keep the anatomy obscured in deep shadow or out of frame.
+- KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Change angles, lighting, or focus. 
+- NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS. 
+- CRITICAL: The environment must have NO written words, NO signs, and NO text of any kind.
+
+CENSORSHIP & NSFW GUARDRAILS (ZERO TOLERANCE):
+- The image generation API will permanently ban you for gore, violence, or nudity.
+- FORBIDDEN WORDS: blood, bloody, wound, severed, arterial, flesh, visceral, raw, bare chest, corpse, dead, murder.
+- THE PG-13 METAPHOR RULE: Imply trauma through equipment, shadows, and environment, NEVER anatomy.
+- BAD: "A bloody severed artery spurting dark blood on a bare chest."
+- GOOD: "A distressed tactical uniform, torn fabric, red emergency lighting, medical gauze being hastily applied in deep shadows."
+- Focus on the gear, the environment, and the urgency. Keep anatomy out of frame or completely obscured in darkness.
 
 JSON SCHEMA TO FOLLOW:
 {
   "fact_check_and_sources": [
-    { "claim": "fact 1", "source": "context 1" },
-    { "claim": "fact 2", "source": "context 2" },
-    { "claim": "fact 3", "source": "context 3" }
-  ], // CRITICAL: YOU MUST PROVIDE 3 OR MORE ITEMS
+    { "claim": "Exact fact 1", "source": "Source context 1" },
+    { "claim": "Exact fact 2", "source": "Source context 2" },
+    { "claim": "Exact fact 3", "source": "Source context 3" }
+  ], // MUST BE EXACTLY 3 OR MORE ITEMS. DO NOT PROVIDE FEWER THAN 3.
   "visual_world": "MUST EXACTLY MATCH THE VISUAL WORLD SPECIFIED ABOVE",
   "format_template": "${formatTemplate}",
   "title": "5-100 chars, no period",
@@ -201,12 +200,12 @@ JSON SCHEMA TO FOLLOW:
   "shots": [
     {
       "id": 1,
-      "visual_prompt": "cinematic paragraph describing the scene...",
-      "text": "The perfectly paced voiceover line. Use commas naturally.",
+      "visual_prompt": "cinematic paragraph describing the scene... NO GORE. NO TEXT.",
+      "text": "The perfectly paced voiceover line. Use commas naturally,",
       "is_conclusion": false
     }
   ],
-  "thumbnailPrompt": "30-500 char thumbnail desc"
+  "thumbnailPrompt": "30-500 char thumbnail desc. STRICTLY PG-13. NO GORE."
 }
 Only the LAST shot must have is_conclusion: true.`;
 
@@ -219,7 +218,7 @@ ${narrative}
 Slice this narrative into the exact JSON schema.`;
 
   if (validationFeedback) {
-    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS — FIX ALL OF THESE:\n${validationFeedback}`;
+    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS — FIX ALL OF THESE IMMEDIATELY:\n${validationFeedback}`;
   }
 
   const raw = await chatCompletion(
@@ -261,16 +260,20 @@ function repairShotLengths(shots: { text: string; id: number; is_conclusion?: bo
   const out: any[] = [];
   for (const shot of shots) {
     if (shot.text.length <= maxChars) { out.push(shot); continue; }
+    
     const words = shot.text.split(' ');
     const midpoint = Math.ceil(words.length / 2);
     let a = words.slice(0, midpoint).join(' ');
     let b = words.slice(midpoint).join(' ');
+    
     if (a.length > maxChars) {
       a = words.slice(0, 3).join(' ');
       b = words.slice(3).join(' ');
     }
+    
     const bWords = b.split(' ').length;
     out.push({ ...shot, text: a, is_conclusion: false });
+    // Guarantee no orphan words slip into Zod
     out.push({ ...shot, id: shot.id + 0.5, text: bWords < 3 ? b + '...' : b });
   }
   return out;
@@ -284,7 +287,7 @@ async function scoreScript(
   minScore: number,
 ): Promise<QualityScore> {
   const prompt = `You are the final quality controller for a ${niche} YouTube Shorts channel. 
-Evaluate this script against the provided raw research data.
+Evaluate this script against the provided raw research data and strict safety policies.
 
 RESEARCH CONTEXT (TRUTH):
 ${researchContext}
@@ -303,6 +306,9 @@ SCORING RUBRIC (0-10):
 - visual_entropy (0-10): Are images varied?
 - visual_coherence (0-10): Are images cohesive?
 - caption_flow (0-10): If you read just the text in sequence, does it read smoothly?
+
+CRITICAL CENSORSHIP CHECK:
+If ANY visual_prompt contains explicit gore, blood, or visceral anatomy descriptions, you MUST score 'overall' as 0 and set 'approved' to false. State the exact trigger word in the 'issues' array.
 
 Output JSON:
 { "specificity": 0, "hook_strength": 0, "information_density": 0, "tone_calibration": 0, "pacing": 0, "visual_entropy": 0, "visual_coherence": 0, "caption_flow": 0, "overall": 0, "issues": ["string"], "approved": boolean }`;
@@ -350,8 +356,6 @@ export async function generateScript(
       validationFeedback = '';
 
       // Deterministic repair: split any shot that exceeds the char limit
-      // before hitting the validator, so we don't waste retries on something
-      // we can fix deterministically.
       if (parsed && typeof parsed === 'object' && 'shots' in (parsed as any)) {
         (parsed as any).shots = repairShotLengths((parsed as any).shots);
       }
@@ -411,8 +415,9 @@ export async function generateScript(
         };
       }
       lastScore = score;
+      validationFeedback = `Quality Gate Failed. Issues: ${score.issues.join(' | ')}`;
     }
-    // Now surfaces the exact LLM issues instead of failing silently.
+    
     if (lastScore && !lastScore.approved) {
       throw new Error(`Script generation failed after all retries. Final LLM critique: ${lastScore.issues.join(' | ')}`);
     }
