@@ -7,6 +7,22 @@ export type CaptionValidationResult = {
   errors: string[];
 };
 
+// Only the two fields the validator actually needs — a full CaptionStyle
+// (from getCaptionStyle()) satisfies this too, so callers can just pass
+// that straight through without picking fields out of it first.
+export type CaptionWidthLimits = {
+  maxCharsPerLine: number;
+  maxChars: number;
+};
+
+// Falls back to the original Montserrat-tuned globals if a caller doesn't
+// pass per-aesthetic limits — keeps this backward compatible with any other
+// call site that predates the per-niche font change.
+const DEFAULT_WIDTH_LIMITS: CaptionWidthLimits = {
+  maxCharsPerLine: CAPTION_MAX_CHARS_PER_LINE,
+  maxChars: CAPTION_MAX_CHARS,
+};
+
 type Shot = {
   caption_text: string;
   index: number;
@@ -34,7 +50,11 @@ function stripDirectorTags(text: string): string {
   return text.replace(/\[.*?\]\s*/g, '').trim();
 }
 
-export function validateShotCaption(shot: Shot): CaptionValidationResult {
+export function validateShotCaption(
+  shot: Shot,
+  widthLimits: CaptionWidthLimits = DEFAULT_WIDTH_LIMITS,
+): CaptionValidationResult {
+  const { maxCharsPerLine, maxChars } = widthLimits;
   const warnings: string[] = [];
   const errors: string[] = [];
 
@@ -46,16 +66,16 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
   
   const words = cleaned.split(/\s+/);
 
-  const overflowWords = words.filter(w => w.length > CAPTION_MAX_CHARS_PER_LINE);
+  const overflowWords = words.filter(w => w.length > maxCharsPerLine);
   if (overflowWords.length > 0) {
     errors.push(
-      `Shot ${shot.index}: words exceed caption width (${CAPTION_MAX_CHARS_PER_LINE} chars): ` +
+      `Shot ${shot.index}: words exceed caption width (${maxCharsPerLine} chars): ` +
       overflowWords.map(w => `"${w}" (${w.length})`).join(', ')
     );
   }
 
-  if (cleaned.length > CAPTION_MAX_CHARS) {
-    errors.push(`Shot ${shot.index}: ${cleaned.length} chars — exceeds ${CAPTION_MAX_CHARS} char limit.`);
+  if (cleaned.length > maxChars) {
+    errors.push(`Shot ${shot.index}: ${cleaned.length} chars — exceeds ${maxChars} char limit.`);
   }
 
 
@@ -65,7 +85,7 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
     warnings.push(`Shot ${shot.index}: ${words.length} words — target ≤12.`);
   }
 
-  const lines = simulateWordWrap(cleaned, CAPTION_MAX_CHARS_PER_LINE);
+  const lines = simulateWordWrap(cleaned, maxCharsPerLine);
   if (lines.length > 3) {
     errors.push(`Shot ${shot.index}: wraps to ${lines.length} caption lines — max is 3.`);
   } else if (lines.length === 3) {
@@ -83,12 +103,15 @@ export function validateShotCaption(shot: Shot): CaptionValidationResult {
   };
 }
 
-export function validateAllCaptions(shots: Array<{ caption_text: string }>): CaptionValidationResult {
+export function validateAllCaptions(
+  shots: Array<{ caption_text: string }>,
+  widthLimits: CaptionWidthLimits = DEFAULT_WIDTH_LIMITS,
+): CaptionValidationResult {
   const allWarnings: string[] = [];
   const allErrors: string[] = [];
 
   shots.forEach((shot, i) => {
-    const result = validateShotCaption({ caption_text: shot.caption_text, index: i + 1 });
+    const result = validateShotCaption({ caption_text: shot.caption_text, index: i + 1 }, widthLimits);
     allWarnings.push(...result.warnings);
     allErrors.push(...result.errors);
   });

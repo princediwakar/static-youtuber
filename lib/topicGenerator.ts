@@ -11,6 +11,7 @@ import {
   QUALITY_GATE_MAX_RETRIES,
   FORMAT_TEMPLATE_WEIGHTS,
   TEMPLATE_SHOT_COUNTS,
+  getCaptionStyle,
 } from './constants';
 import type { FormatTemplate } from './constants';
 
@@ -351,8 +352,14 @@ export async function generateScript(
         throw zodErr;
       }
 
-      // Validate caption text for on-screen rendering constraints
-      const captionValidation = validateAllCaptions(validated.shots.map(s => ({ caption_text: s.caption_text })));
+      // Validate caption text for on-screen rendering constraints — using
+      // this aesthetic's own font metrics, not the Montserrat-tuned global
+      // default, since a condensed stencil face and a wide display serif
+      // don't fit the same character count per line at the same size.
+      const captionValidation = validateAllCaptions(
+        validated.shots.map(s => ({ caption_text: s.caption_text })),
+        getCaptionStyle(aesthetic.id),
+      );
       if (!captionValidation.valid) {
         validationFeedback = captionValidation.errors.join('\n');
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;

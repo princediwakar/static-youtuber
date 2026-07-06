@@ -21,12 +21,13 @@ function cachePath(hash: string): string {
   return path.join(CACHE_DIR, `${hash}.jpg`);
 }
 
-// The model is now part of the hash. Flipping CF_AI_IMAGE_MODEL (e.g. schnell
-// -> flux-2-dev) used to be able to silently serve back a cached image that
-// was actually rendered by the *other* model, since the old hash only covered
-// prompt/width/height/steps.
-function contentHash(model: string, prompt: string, width: number, height: number, steps: number): string {
-  return createHash('sha256').update(`${model}|${prompt}|${width}|${height}|${steps}`).digest('hex').slice(0, 16);
+// The model (and, for flux-2, the guidance scale) is now part of the hash.
+// Flipping CF_AI_IMAGE_MODEL (e.g. schnell -> flux-2-dev), or tuning
+// CF_AI_IMAGE_GUIDANCE_FLUX2, used to be able to silently serve back a
+// cached image rendered under different settings, since the old hash only
+// covered prompt/width/height/steps.
+function contentHash(model: string, prompt: string, width: number, height: number, steps: number, guidance: number): string {
+  return createHash('sha256').update(`${model}|${prompt}|${width}|${height}|${steps}|${guidance}`).digest('hex').slice(0, 16);
 }
 
 function resolveAccounts(): { token: string; accountId: string }[] {
@@ -42,8 +43,16 @@ function resolveAccounts(): { token: string; accountId: string }[] {
   return pairs;
 }
 
+// Matches on the 'flux-2-' family prefix rather than a bare 'flux-2'
+// substring, so a hypothetical future model like '@cf/black-forest-labs/
+// flux-2.1-schnell' (dot, not hyphen, after the "2") won't accidentally get
+// routed into the multipart/FormData path. This has only been verified
+// against Cloudflare's docs for flux-2-dev specifically — flux-2-pro/-max/
+// -flex are assumed to share the same multipart contract since they're all
+// part of the same FLUX.2 partnership announcement, but that assumption
+// hasn't been individually confirmed against each of their docs pages.
 function isFlux2(model: string): boolean {
-  return model.includes('flux-2');
+  return model.includes('flux-2-');
 }
 
 function defaultStepsFor(model: string): number {
@@ -64,7 +73,7 @@ export async function generateImage(
 
   ensureCacheDir();
 
-  const hash = contentHash(model, prompt, width, height, resolvedSteps);
+  const hash = contentHash(model, prompt, width, height, resolvedSteps, CF_AI_IMAGE_GUIDANCE_FLUX2);
   const cachedPath = cachePath(hash);
   if (existsSync(cachedPath)) {
     return readFileSync(cachedPath);

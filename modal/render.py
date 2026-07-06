@@ -252,6 +252,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
 
     work_dir = f"/tmp/{job_id}"
     os.makedirs(work_dir, exist_ok=True)
+    print(f"[{job_id}] Starting render — account={account_id}, visual_world={visual_world or 'default'}, shots={len(shots)}")
 
     def send_failure_callback(error_msg: str):
         if not callback_url:

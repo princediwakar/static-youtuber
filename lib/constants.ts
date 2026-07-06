@@ -148,12 +148,32 @@ export const CLOUDINARY_EXPIRE_DAYS = 7;
 // its own copy of these .ttf files under assets/fonts/ — download the
 // family from fonts.google.com for that case, since that path doesn't go
 // through modal/render.py's build.
+//
+// `maxCharsPerLine`/`maxChars` are NOT copy-pasted from CAPTION_MAX_CHARS_
+// PER_LINE/CAPTION_MAX_CHARS above — those were tuned for Montserrat, and a
+// condensed stencil face fits meaningfully more characters per line than a
+// wide display serif at the same point size. These were derived by actually
+// loading each static instance with fontTools, computing a frequency-
+// weighted average glyph width (English letter frequencies + inter-word
+// spaces, not a flat a-z average), and scaling Montserrat's existing tuned
+// 32/80 by the ratio of that average width to Montserrat's — so whatever
+// real-world slack was already baked into 32/80 (kerning, hinting, the
+// video's actual safe margins) carries over proportionally instead of being
+// replaced by a from-scratch geometric guess. Re-run that measurement if the
+// per-niche fonts ever change:
+//   Montserrat (baseline)                          ratio 1.000  32 / 80
+//   Space Grotesk        (tech-minimalist)         ratio 1.083  34 / 85
+//   Fraunces 72pt Black  (finance-editorial)        ratio 1.134  36 / 90
+//   Cinzel Black         (stoic-zen)                ratio 0.923  29 / 72
+//   Big Shoulders Stencil Display (survival-technical) ratio 1.510  48 / 120
 export type CaptionStyle = {
   fontFamily: string;
   fontFile: string;
   textColor: string;
   strokeColor: string;
   accentColor: string;
+  maxCharsPerLine: number;
+  maxChars: number;
 };
 
 export const CAPTION_STYLES: Record<string, CaptionStyle> = {
@@ -163,6 +183,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
     textColor: '#F3EFE6',
     strokeColor: '#1B2A4A',
     accentColor: '#FF6B35',
+    maxCharsPerLine: 34,
+    maxChars: 85,
   },
   'finance-editorial': {
     // Google's Fraunces ships as a variable font only; instancing it to a
@@ -174,6 +196,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
     textColor: '#E8E3D8',
     strokeColor: '#14151A',
     accentColor: '#C81D25',
+    maxCharsPerLine: 36,
+    maxChars: 90,
   },
   'stoic-zen': {
     // Same story as Fraunces above: instancing Cinzel's variable font to
@@ -183,6 +207,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
     textColor: '#EDE3D0',
     strokeColor: '#2B2A28',
     accentColor: '#B5624B',
+    maxCharsPerLine: 29,
+    maxChars: 72,
   },
   'survival-technical': {
     // The Google Fonts family is "Big Shoulders Stencil Display" (there's
@@ -193,6 +219,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
     textColor: '#D8CBA3',
     strokeColor: '#1C1C1A',
     accentColor: '#A8501D',
+    maxCharsPerLine: 48,
+    maxChars: 120,
   },
 };
 
@@ -203,6 +231,8 @@ export function getCaptionStyle(aestheticId: string): CaptionStyle {
     textColor: '#FFFFFF',
     strokeColor: '#000000',
     accentColor: '#FFD23F',
+    maxCharsPerLine: CAPTION_MAX_CHARS_PER_LINE,
+    maxChars: CAPTION_MAX_CHARS,
   };
 }
 
