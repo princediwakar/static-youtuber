@@ -95,10 +95,14 @@ def get_audio_duration(path: str) -> float:
     return float(result.stdout.strip())
 
 
-def align_narration(audio_path: str, full_text: str) -> list:
+def align_narration(audio_path: str) -> list:
     import whisper_timestamped as whisper
     model = whisper.load_model("small")
-    results = whisper.transcribe(model, audio_path, language="en", initial_prompt=full_text)
+    # Do NOT pass initial_prompt — feeding the full narration text causes Whisper
+    # to hallucinate temporally compressed timestamps (it "knows" what's coming
+    # and rushes through alignment), which is the primary cause of degenerate
+    # one-shot-consuming-80%-of-runtime failures.
+    results = whisper.transcribe(model, audio_path, language="en")
 
     words = []
     for segment in results.get("segments", []):
@@ -127,7 +131,11 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
         return 0.0
 
     RESYNC_WINDOW = 24
-    MAX_GAP_PER_WORD = 0.6
+    # 1.0s per word — relaxed from 0.6 to accommodate F5-TTS voice-cloned audio
+    # which has non-standard prosody and 450ms inter-chunk silences. The tighter
+    # 0.6 value was rejecting valid matches and leaving large unmatched spans that
+    # the interpolator then distributed catastrophically.
+    MAX_GAP_PER_WORD = 1.0
     MIN_GAP = -0.05
 
     def is_match(target, candidate):
@@ -208,8 +216,28 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
         boundaries[i][1] = boundaries[i+1][0]
 
     if boundaries:
-        boundaries[-1][1] = max(total_duration + 10.0, boundaries[-1][0] + 1.0)
+        # End exactly at the audio duration (no +10.0 overshoot — that was
+        # inflating the last shot by 10s and causing it to breach the 60%
+        # degenerate-alignment kill-switch even on healthy renders).
+        boundaries[-1][1] = max(total_duration, boundaries[-1][0] + 1.0)
 
+    return boundaries
+
+
+def proportional_split(shots: list, total_duration: float) -> list:
+    """Fallback: distribute total_duration proportionally by word-count per shot.
+    Used when Whisper alignment is degenerate so the render still succeeds."""
+    word_counts = [max(len(shot["spoken_text"].split()), 1) for shot in shots]
+    total_words = sum(word_counts)
+    boundaries = []
+    cursor = 0.0
+    for i, count in enumerate(word_counts):
+        frac = count / total_words
+        end = cursor + total_duration * frac
+        boundaries.append([cursor, end, []])
+        cursor = end
+    if boundaries:
+        boundaries[-1][1] = total_duration
     return boundaries
 
 def build_continuous_ass(shot_boundaries: list, shots: list, caption_style: dict) -> str:
@@ -288,32 +316,35 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             "-c:a", "libmp3lame", "-b:a", "128k", master_audio
         ], check=True, capture_output=True, timeout=120)
 
-        full_text = " ".join(shot["spoken_text"].replace("—", "— ").replace("–", "– ").replace("-", "- ").replace("/", "/ ").strip() for shot in shots)
-        words = align_narration(master_audio, full_text)
+        actual_duration = get_audio_duration(master_audio)
+        words = align_narration(master_audio)
 
         if not words:
-            raise Exception(f"[{job_id}] Whisper returned no words for narration — cannot align shots.")
+            print(f"[{job_id}] WARNING: Whisper returned no words — falling back to proportional split.")
+            shot_boundaries = proportional_split(shots, actual_duration)
+        else:
+            coverage = words[-1]["end"] / actual_duration
+            if coverage < 0.6:
+                print(
+                    f"[{job_id}] WARNING: Whisper only transcribed {words[-1]['end']:.1f}s of a "
+                    f"{actual_duration:.1f}s narration ({coverage:.0%} coverage) — "
+                    f"falling back to proportional split instead of aborting."
+                )
+                shot_boundaries = proportional_split(shots, actual_duration)
+            else:
+                shot_boundaries = slice_words_by_shot(words, shots, actual_duration)
 
-        actual_duration = get_audio_duration(master_audio)
-        coverage = words[-1]["end"] / actual_duration
-        if coverage < 0.6:
-            raise Exception(
-                f"[{job_id}] Whisper only transcribed {words[-1]['end']:.1f}s of a "
-                f"{actual_duration:.1f}s narration ({coverage:.0%} coverage) — "
-                f"alignment unreliable, aborting instead of producing a truncated video."
-            )
-
-        shot_boundaries = slice_words_by_shot(words, shots, actual_duration)
-
-        # Degenerate alignment kill-switch
-        durations = [max(end - start, 0) for start, end, _ in shot_boundaries]
-        total_dur = sum(durations)
-        if total_dur > 0 and max(durations) / total_dur > 0.6:
-            raise Exception(
-                f"[{job_id}] Degenerate shot alignment: one shot consumed "
-                f"{max(durations)/total_dur:.0%} of runtime — Whisper alignment "
-                f"desynced. Aborting instead of rendering a broken video."
-            )
+                # Degenerate alignment guard — fall back to proportional split
+                # rather than aborting, so the render always produces a usable video.
+                durations = [max(end - start, 0) for start, end, _ in shot_boundaries]
+                total_dur = sum(durations)
+                if total_dur > 0 and max(durations) / total_dur > 0.6:
+                    worst = max(durations) / total_dur
+                    print(
+                        f"[{job_id}] WARNING: Degenerate shot alignment — one shot consumed "
+                        f"{worst:.0%} of runtime. Falling back to word-count proportional split."
+                    )
+                    shot_boundaries = proportional_split(shots, actual_duration)
 
         ass_path = f"{work_dir}/captions.ass"
         with open(ass_path, "w") as f:
