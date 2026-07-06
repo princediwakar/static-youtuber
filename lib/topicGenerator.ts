@@ -200,9 +200,10 @@ VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 VISUAL AESTHETIC (FLUX.1):
 You must write a scene description that fits this visual world: ${aestheticInstruction}
 - Write a highly descriptive paragraph using natural language describing the specific scene.
-- KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Change angles, lighting, or focus. 
-- NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS. 
-- CRITICAL: The environment must have NO written words, NO signs, and NO text of any kind.
+- KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Change angles, lighting, or focus.
+- NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS.
+- HARD BAN ON THESE OVERUSED AI LOOKS — never describe: glassmorphism, frosted/liquid glass panels, glossy soft-3D renders, pastel gradient blobs, isometric miniature dioramas, generic bento-grid layouts, neon wireframes, or sumi-e ink wash. If your instinct reaches for one of these, describe the material and light instead (paper grain, ink, stone, patina, halftone dot, contour line).
+- CRITICAL: The environment must have NO written words, NO signs, NO legible letters or numbers, and NO text of any kind — this includes fake labels on maps, redaction stamps, inscriptions, or document text. Represent documents/maps/carvings with blank marks, plain bars, or abstract lines only, never characters that could be misread as words.
 
 CENSORSHIP & NSFW GUARDRAILS (ZERO TOLERANCE):
 - FORBIDDEN WORDS: blood, bloody, wound, severed, arterial, flesh, visceral, raw, bare chest, corpse, dead, murder.
@@ -287,6 +288,9 @@ SCORING RUBRIC (0-10):
 
 CRITICAL CENSORSHIP CHECK:
 If ANY visual_prompt contains explicit gore, blood, or visceral anatomy descriptions, you MUST score 'overall' as 0 and set 'approved' to false. State the exact trigger word in the 'issues' array.
+
+CRITICAL STYLE-DRIFT CHECK:
+If ANY visual_prompt describes glassmorphism, frosted/liquid glass, glossy soft-3D renders, pastel gradient blobs, isometric dioramas, bento grids, neon wireframes, sumi-e ink wash, or any legible text/letters/numbers in the scene, you MUST score 'overall' as 0 and set 'approved' to false. State the exact offending phrase in the 'issues' array.
 
 Output JSON:
 { "specificity": 0, "hook_strength": 0, "information_density": 0, "tone_calibration": 0, "pacing": 0, "visual_entropy": 0, "visual_coherence": 0, "caption_flow": 0, "overall": 0, "issues": ["string"], "approved": boolean }`;

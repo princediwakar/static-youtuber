@@ -2,7 +2,12 @@
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
-import { CF_AI_IMAGE_MODEL } from './constants';
+import {
+  CF_AI_IMAGE_MODEL,
+  CF_AI_IMAGE_STEPS,
+  CF_AI_IMAGE_STEPS_FLUX2,
+  CF_AI_IMAGE_GUIDANCE_FLUX2,
+} from './constants';
 
 const CACHE_DIR = path.join('/tmp', 'cache', 'flux');
 
@@ -16,8 +21,12 @@ function cachePath(hash: string): string {
   return path.join(CACHE_DIR, `${hash}.jpg`);
 }
 
-function contentHash(prompt: string, width: number, height: number, steps: number): string {
-  return createHash('sha256').update(`${prompt}|${width}|${height}|${steps}`).digest('hex').slice(0, 16);
+// The model is now part of the hash. Flipping CF_AI_IMAGE_MODEL (e.g. schnell
+// -> flux-2-dev) used to be able to silently serve back a cached image that
+// was actually rendered by the *other* model, since the old hash only covered
+// prompt/width/height/steps.
+function contentHash(model: string, prompt: string, width: number, height: number, steps: number): string {
+  return createHash('sha256').update(`${model}|${prompt}|${width}|${height}|${steps}`).digest('hex').slice(0, 16);
 }
 
 function resolveAccounts(): { token: string; accountId: string }[] {
@@ -33,18 +42,29 @@ function resolveAccounts(): { token: string; accountId: string }[] {
   return pairs;
 }
 
+function isFlux2(model: string): boolean {
+  return model.includes('flux-2');
+}
+
+function defaultStepsFor(model: string): number {
+  return isFlux2(model) ? CF_AI_IMAGE_STEPS_FLUX2 : CF_AI_IMAGE_STEPS;
+}
+
 export async function generateImage(
   prompt: string,
   width: number,
   height: number,
-  steps: number = 4,
+  steps?: number,
   retries: number = 6,
 ): Promise<Buffer> {
   const accounts = resolveAccounts();
+  const model = CF_AI_IMAGE_MODEL;
+  const resolvedSteps = steps ?? defaultStepsFor(model);
+  const flux2 = isFlux2(model);
 
   ensureCacheDir();
 
-  const hash = contentHash(prompt, width, height, steps);
+  const hash = contentHash(model, prompt, width, height, resolvedSteps);
   const cachedPath = cachePath(hash);
   if (existsSync(cachedPath)) {
     return readFileSync(cachedPath);
@@ -57,17 +77,41 @@ export async function generateImage(
     // Cycle through accounts on retryable failures — if one account is
     // rate-limited, the next attempt tries the other account.
     const { token, accountId } = shuffled[(attempt - 1) % shuffled.length];
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${CF_AI_IMAGE_MODEL}`;
+    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
+
+    // flux-2-dev takes multipart/form-data, not a JSON body — different
+    // request shape entirely from flux-1-schnell. Never set Content-Type
+    // manually on the multipart branch; fetch derives the boundary itself.
+    const fetchInit: RequestInit = flux2
+      ? {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: (() => {
+            const form = new FormData();
+            form.append('prompt', prompt);
+            form.append('width', String(width));
+            form.append('height', String(height));
+            form.append('steps', String(resolvedSteps));
+            form.append('guidance', String(CF_AI_IMAGE_GUIDANCE_FLUX2));
+            return form;
+          })(),
+        }
+      : {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          // Cloudflare's documented field name for flux-1-schnell is `steps`
+          // (max 8) — the previous version of this file sent `num_steps`,
+          // which isn't a documented parameter for this model. `num_steps`
+          // is still included here as a harmless hedge in case some deployed
+          // model revision expects it, but `steps` is the one that's real.
+          body: JSON.stringify({ prompt, width, height, steps: resolvedSteps, num_steps: resolvedSteps }),
+        };
 
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt, width, height, num_steps: steps }),
-      });
+      const res = await fetch(url, fetchInit);
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => 'unknown');

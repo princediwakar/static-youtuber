@@ -24,6 +24,7 @@ import {
   ACCOUNT_NICHE,
   NICHE_PUBLISH_HOUR_UTC,
   ACE_STEP_WARMUP_URL,
+  getCaptionStyle,
 } from '@/lib/constants';
 import { getAccountCredentials } from '@/lib/accountService';
 import { uploadToYouTube } from '@/lib/youtubeUpload';
@@ -229,6 +230,16 @@ export const generateShort = inngest.createFunction(
           body: JSON.stringify({
             jobId,
             accountId,
+            // NEW: which visual world this job belongs to, plus the resolved
+            // font/color style for it. Your Modal render script (not part of
+            // this change — it wasn't shared) will need to actually read
+            // caption_style.fontFile / textColor / strokeColor and apply them
+            // in its ffmpeg drawtext filter for captions to pick up the new
+            // per-niche typography. Until that's wired up, adding these
+            // fields here is inert — the render service will just ignore
+            // keys it doesn't recognize.
+            visual_world: script.visual_world,
+            caption_style: getCaptionStyle(script.visual_world),
             shots: script.shots.map((shot: Shot, i: number) => ({
               image_url: imageUrls[i],
               caption_text: shot.caption_text,

@@ -15,18 +15,52 @@ image = (
         "whisper-timestamped",
         "requests",
         "cloudinary",
-        "fastapi"
+        "fastapi",
+        "fonttools",
     )
     .run_commands(
         "mkdir -p /usr/share/fonts/truetype/montserrat",
         "curl -L -o /usr/share/fonts/truetype/montserrat/Montserrat-Bold.ttf 'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Bold.ttf'",
-        "fc-cache -f -v"
+    )
+    .run_commands(
+        # Per-niche display fonts (see CAPTION_STYLES in lib/constants.ts).
+        # Google Fonts ships all four of these as variable fonts only — there
+        # is no flat "-Bold.ttf" to curl the way Montserrat above works — so
+        # each is downloaded as its variable source and then cut down to one
+        # static instance with fonttools. Verified by hand that this produces
+        # correctly name-tabled, correctly weighted static faces that
+        # fontconfig indexes cleanly:
+        #   SpaceGrotesk-Bold.ttf              -> family "Space Grotesk", style "Bold"
+        #   Cinzel-Black.ttf                   -> family "Cinzel Black"      (weight folds into the name)
+        #   BigShouldersStencilDisplay-Bold.ttf-> family "Big Shoulders Stencil Display", style "Bold"
+        #   Fraunces-Black.ttf                 -> family "Fraunces 72pt Black" (weight+opsz fold into the name)
+        # The exact family strings above MUST match CAPTION_STYLES.fontFamily
+        # in lib/constants.ts, or libass will silently fail to match and fall
+        # back to whatever fontconfig's default happens to be.
+        "mkdir -p /tmp/fontbuild /usr/share/fonts/truetype/custom",
+        "curl -L -o /tmp/fontbuild/SpaceGrotesk.ttf 'https://raw.githubusercontent.com/google/fonts/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf'",
+        "curl -L -o /tmp/fontbuild/Cinzel.ttf 'https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel%5Bwght%5D.ttf'",
+        "curl -L -o /tmp/fontbuild/BigShouldersStencilDisplay.ttf 'https://raw.githubusercontent.com/google/fonts/main/ofl/bigshouldersstencildisplay/BigShouldersStencilDisplay%5Bwght%5D.ttf'",
+        "curl -L -o /tmp/fontbuild/Fraunces.ttf 'https://raw.githubusercontent.com/google/fonts/main/ofl/fraunces/Fraunces%5BSOFT,WONK,opsz,wght%5D.ttf'",
+        "fonttools varLib.instancer /tmp/fontbuild/SpaceGrotesk.ttf wght=700 --update-name-table -o /usr/share/fonts/truetype/custom/SpaceGrotesk-Bold.ttf",
+        "fonttools varLib.instancer /tmp/fontbuild/Cinzel.ttf wght=900 --update-name-table -o /usr/share/fonts/truetype/custom/Cinzel-Black.ttf",
+        "fonttools varLib.instancer /tmp/fontbuild/BigShouldersStencilDisplay.ttf wght=700 --update-name-table -o /usr/share/fonts/truetype/custom/BigShouldersStencilDisplay-Bold.ttf",
+        "fonttools varLib.instancer /tmp/fontbuild/Fraunces.ttf wght=900 opsz=72 SOFT=0 WONK=1 --update-name-table -o /usr/share/fonts/truetype/custom/Fraunces-Black.ttf",
+        "fc-cache -f -v",
     )
 )
 
 app = modal.App("slideshow-render", image=image)
 
 FPS = 30
+
+# Used when a job doesn't pass caption_style at all (older enqueued jobs,
+# manual test calls, etc.) — the same look the pipeline always had.
+DEFAULT_CAPTION_STYLE = {
+    "fontFamily": "Montserrat",
+    "textColor": "#FFFFFF",
+    "strokeColor": "#000000",
+}
 
 
 def format_ass_time(seconds: float) -> str:
@@ -39,6 +73,17 @@ def format_ass_time(seconds: float) -> str:
     if centisecs == 100:
         centisecs = 99
     return f"{hours}:{minutes:02d}:{secs:02d}.{centisecs:02d}"
+
+
+def hex_to_ass_color(hex_color: str, alpha: str = "00") -> str:
+    """Convert a '#RRGGBB' web color to ASS/SSA's '&HAABBGGRR' format.
+    ASS stores color channels in reverse (BGR) order, and alpha is inverted —
+    00 is fully opaque, FF is fully transparent."""
+    h = (hex_color or "#FFFFFF").lstrip("#")
+    if len(h) != 6:
+        h = "FFFFFF"
+    r, g, b = h[0:2], h[2:4], h[4:6]
+    return f"&H{alpha}{b}{g}{r}".upper()
 
 
 def get_audio_duration(path: str) -> float:
@@ -167,7 +212,11 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
 
     return boundaries
 
-def build_continuous_ass(shot_boundaries: list, shots: list) -> str:
+def build_continuous_ass(shot_boundaries: list, shots: list, caption_style: dict) -> str:
+    style = {**DEFAULT_CAPTION_STYLE, **(caption_style or {})}
+    primary_colour = hex_to_ass_color(style.get("textColor"), alpha="00")
+    outline_colour = hex_to_ass_color(style.get("strokeColor"), alpha="00")
+
     ass_content = [
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -177,7 +226,7 @@ def build_continuous_ass(shot_boundaries: list, shots: list) -> str:
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        "Style: Default,Montserrat,72,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,4,8,80,80,1080,1",
+        f"Style: Default,{style['fontFamily']},72,{primary_colour},&H000000FF,{outline_colour},&H80000000,-1,0,0,0,100,100,0,0,1,4,4,8,80,80,1080,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -197,7 +246,7 @@ def build_continuous_ass(shot_boundaries: list, shots: list) -> str:
     return "\n".join(ass_content)
 
 @app.function(cpu=8.0, timeout=600, secrets=[modal.Secret.from_name("cloudinary")])
-def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str):
+def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str, visual_world: str = None, caption_style: dict = None):
     import cloudinary.uploader
     import requests
 
@@ -267,7 +316,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
 
         ass_path = f"{work_dir}/captions.ass"
         with open(ass_path, "w") as f:
-            f.write(build_continuous_ass(shot_boundaries, shots))
+            f.write(build_continuous_ass(shot_boundaries, shots, caption_style))
 
         rendered_shots = []
         for i, (shot, img_path) in enumerate(zip(shots, img_paths)):
@@ -372,15 +421,18 @@ async def trigger_render(request: Request):
     audio_url = payload.get("audio_url")
     music_url = payload.get("music_url")
     callback_url = payload.get("callback_url")
+    # New, optional — see lib/constants.ts CAPTION_STYLES / getCaptionStyle().
+    # Missing/older payloads fall back to DEFAULT_CAPTION_STYLE (Montserrat).
+    visual_world = payload.get("visual_world")
+    caption_style = payload.get("caption_style")
 
     if not all([job_id, account_id, shots, audio_url, music_url, callback_url]):
         raise HTTPException(status_code=400, detail="Missing required fields")
 
     try:
-        render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url)
+        render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style)
     except Exception as e:
         print(f"[trigger_render] render_video.spawn() failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
     return {"status": "queued", "jobId": job_id}
-    
