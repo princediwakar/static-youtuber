@@ -274,7 +274,7 @@ def build_continuous_ass(shot_boundaries: list, shots: list, caption_style: dict
     return "\n".join(ass_content)
 
 @app.function(cpu=8.0, timeout=600, secrets=[modal.Secret.from_name("cloudinary")])
-def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str, visual_world: str = None, caption_style: dict = None):
+def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str, visual_world: str = None, caption_style: dict = None, shot_audio_urls: list = None):
     import cloudinary.uploader
     import requests
 
@@ -300,51 +300,89 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             return filename
 
         img_paths = [f"{work_dir}/img_{i}.jpg" for i in range(len(shots))]
-        master_audio_raw = f"{work_dir}/narration_raw.mp3"
         bg_music_path = f"{work_dir}/bg_music.mp3"
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             tasks = [executor.submit(download_asset, shot["image_url"], img_paths[i]) for i, shot in enumerate(shots)]
-            tasks.append(executor.submit(download_asset, audio_url, master_audio_raw))
             tasks.append(executor.submit(download_asset, music_url, bg_music_path))
+
+            if shot_audio_urls and len(shot_audio_urls) == len(shots):
+                shot_audio_paths = [f"{work_dir}/shot_audio_{i}.mp3" for i in range(len(shots))]
+                for i, url in enumerate(shot_audio_urls):
+                    tasks.append(executor.submit(download_asset, url, shot_audio_paths[i]))
+            else:
+                master_audio_raw = f"{work_dir}/narration_raw.mp3"
+                tasks.append(executor.submit(download_asset, audio_url, master_audio_raw))
+
             for task in tasks:
                 task.result()
 
-        master_audio = f"{work_dir}/narration_trimmed.mp3"
-        subprocess.run([
-            "ffmpeg", "-y", "-i", master_audio_raw,
-            "-c:a", "libmp3lame", "-b:a", "128k", master_audio
-        ], check=True, capture_output=True, timeout=120)
+        if shot_audio_urls and len(shot_audio_urls) == len(shots):
+            # ── Per-shot TTS path: exact timing by construction, no Whisper ──
+            print(f"[{job_id}] Using per-shot TTS — {len(shot_audio_urls)} shot audio files")
 
-        actual_duration = get_audio_duration(master_audio)
-        words = align_narration(master_audio)
+            # Get duration of each shot's audio
+            shot_durations = [get_audio_duration(p) for p in shot_audio_paths]
+            for i, dur in enumerate(shot_durations):
+                print(f"[{job_id}] Shot {i} audio duration: {dur:.2f}s")
 
-        if not words:
-            print(f"[{job_id}] WARNING: Whisper returned no words — falling back to proportional split.")
-            shot_boundaries = proportional_split(shots, actual_duration)
+            # Build shot_boundaries directly from known durations
+            cursor = 0.0
+            shot_boundaries = []
+            for i, dur in enumerate(shot_durations):
+                shot_boundaries.append([cursor, cursor + dur, []])
+                cursor += dur
+
+            # Concatenate all per-shot audios into the master narration track
+            concat_list = f"{work_dir}/narration_concat.txt"
+            with open(concat_list, "w") as f:
+                for p in shot_audio_paths:
+                    f.write(f"file '{p}'\n")
+
+            master_audio = f"{work_dir}/narration_trimmed.mp3"
+            subprocess.run([
+                "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list,
+                "-c:a", "libmp3lame", "-b:a", "128k", master_audio
+            ], check=True, capture_output=True, timeout=120)
         else:
-            coverage = words[-1]["end"] / actual_duration
-            if coverage < 0.6:
-                print(
-                    f"[{job_id}] WARNING: Whisper only transcribed {words[-1]['end']:.1f}s of a "
-                    f"{actual_duration:.1f}s narration ({coverage:.0%} coverage) — "
-                    f"falling back to proportional split instead of aborting."
-                )
+            # ── Legacy path: monolithic audio + Whisper alignment ──
+            print(f"[{job_id}] Using legacy monolithic audio + Whisper alignment")
+
+            master_audio_raw = f"{work_dir}/narration_raw.mp3"
+            master_audio = f"{work_dir}/narration_trimmed.mp3"
+            subprocess.run([
+                "ffmpeg", "-y", "-i", master_audio_raw,
+                "-c:a", "libmp3lame", "-b:a", "128k", master_audio
+            ], check=True, capture_output=True, timeout=120)
+
+            actual_duration = get_audio_duration(master_audio)
+            words = align_narration(master_audio)
+
+            if not words:
+                print(f"[{job_id}] WARNING: Whisper returned no words — falling back to proportional split.")
                 shot_boundaries = proportional_split(shots, actual_duration)
             else:
-                shot_boundaries = slice_words_by_shot(words, shots, actual_duration)
-
-                # Degenerate alignment guard — fall back to proportional split
-                # rather than aborting, so the render always produces a usable video.
-                durations = [max(end - start, 0) for start, end, _ in shot_boundaries]
-                total_dur = sum(durations)
-                if total_dur > 0 and max(durations) / total_dur > 0.6:
-                    worst = max(durations) / total_dur
+                coverage = words[-1]["end"] / actual_duration
+                if coverage < 0.6:
                     print(
-                        f"[{job_id}] WARNING: Degenerate shot alignment — one shot consumed "
-                        f"{worst:.0%} of runtime. Falling back to word-count proportional split."
+                        f"[{job_id}] WARNING: Whisper only transcribed {words[-1]['end']:.1f}s of a "
+                        f"{actual_duration:.1f}s narration ({coverage:.0%} coverage) — "
+                        f"falling back to proportional split instead of aborting."
                     )
                     shot_boundaries = proportional_split(shots, actual_duration)
+                else:
+                    shot_boundaries = slice_words_by_shot(words, shots, actual_duration)
+
+                    # Degenerate alignment guard — fall back to proportional split
+                    durations = [max(end - start, 0) for start, end, _ in shot_boundaries]
+                    total_dur = sum(durations)
+                    if total_dur > 0 and max(durations) / total_dur > 0.6:
+                        worst = max(durations) / total_dur
+                        print(
+                            f"[{job_id}] WARNING: Degenerate shot alignment — one shot consumed "
+                            f"{worst:.0%} of runtime. Falling back to word-count proportional split."
+                        )
+                        shot_boundaries = proportional_split(shots, actual_duration)
 
         ass_path = f"{work_dir}/captions.ass"
         with open(ass_path, "w") as f:
@@ -390,7 +428,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         
         # Audio Ducking (Sidechain compression)
         # Open up the base volume and relax the threshold to around -22dB
-        filter_complex = "[1:a]volume=0.75[bg_vol]; [bg_vol][0:a]sidechaincompress=threshold=-22dB:ratio=4:attack=5:release=50[bg_ducked]; [0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        filter_complex = "[1:a]volume=0.6[bg_vol]; [bg_vol][0:a]sidechaincompress=threshold=-22dB:ratio=4:attack=5:release=50[bg_ducked]; [0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2:weights=2 1[aout]"
 
         subprocess.run([
             "ffmpeg", "-y", "-i", master_audio, "-stream_loop", "-1", "-i", bg_music_path, "-i", captioned_out,
@@ -457,12 +495,16 @@ async def trigger_render(request: Request):
     # Missing/older payloads fall back to DEFAULT_CAPTION_STYLE (Montserrat).
     visual_world = payload.get("visual_world")
     caption_style = payload.get("caption_style")
+    # Per-shot TTS — when present, bypasses Whisper alignment entirely
+    shot_audio_urls = payload.get("shot_audio_urls")
 
-    if not all([job_id, account_id, shots, audio_url, music_url, callback_url]):
+    if not all([job_id, account_id, shots, music_url, callback_url]):
         raise HTTPException(status_code=400, detail="Missing required fields")
+    if not shot_audio_urls and not audio_url:
+        raise HTTPException(status_code=400, detail="Must provide either shot_audio_urls or audio_url")
 
     try:
-        render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style)
+        render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls)
     except Exception as e:
         print(f"[trigger_render] render_video.spawn() failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

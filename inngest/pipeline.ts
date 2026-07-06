@@ -4,7 +4,7 @@ import { NonRetriableError } from 'inngest';
 import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
 import type { Shot } from '@/lib/types';
 import { generateImage } from '@/lib/cloudflareAi';
-import { generateNarrativeSpeech } from '@/lib/audioEngine';
+import { generateShotSpeech } from '@/lib/audioEngine';
 import { selectMusicTrack } from '@/lib/musicSelector';
 import {
   uploadSlideImage,
@@ -110,27 +110,48 @@ export const generateShort = inngest.createFunction(
 
     const { script, jobId, format_template, niche, variant, topic } = scriptResult;
 
-    // ── Step 2a: Generate Narration (runs first to get exact duration for BGM) ──
-    const { url: narrationAudioUrl, durationMs: _narrationDurationMs } = await step.run('generate-narration', async () => {
+    // ── Step 2a: Generate Narration (per-shot, parallel, to eliminate F5-TTS hallucination bleed) ──
+    const { shotAudioUrls, narrationDurationMs } = await step.run('generate-narration', async () => {
       const job = await db.getJob(jobId);
-      if (job?.narration_audio_url) return { url: job.narration_audio_url, durationMs: 0 };
+      if (job?.shot_audio_urls) return { shotAudioUrls: job.shot_audio_urls, narrationDurationMs: 0 };
 
       const creds = await getAccountCredentials(accountId);
-      const rawText = script.shots.map((s: Shot) => s.spoken_text).join(' ');
-      const sanitizedText = rawText
-        .replace(/[‘’`]/g, "'")
-        .replace(/[“”]/g, '"')
-        .replace(/—/g, '... ')
-        .replace(/[^\x00-\x7F]/g, '');
+      const CONCURRENCY_LIMIT = 5;
 
-      const { audioBuffer, durationMs } = await generateNarrativeSpeech(sanitizedText, script.voiceName);
-      const url = await uploadSlideAudio(audioBuffer, jobId, 0, creds);
+      const results: { audioBuffer: Buffer; durationMs: number }[] = [];
 
-      await db.updateJob(jobId, { narration_audio_url: url });
-      return { url, durationMs };
+      for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
+        const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
+        const batch = script.shots.slice(batchStart, batchEnd);
+
+        const batchResults = await Promise.all(
+          batch.map((shot: Shot, offset: number) => {
+            const globalIndex = batchStart + offset;
+            const rawText = shot.spoken_text;
+            const sanitized = rawText
+              .replace(/[‘’`]/g, "'")
+              .replace(/[“”]/g, '"')
+              .replace(/—/g, '... ')
+              .replace(/[^\x00-\x7F]/g, '');
+            return generateShotSpeech(sanitized, script.voiceName, globalIndex);
+          })
+        );
+
+        batchResults.forEach((r) => results.push(r));
+      }
+
+      const urls: string[] = [];
+      for (let i = 0; i < results.length; i++) {
+        const url = await uploadSlideAudio(results[i].audioBuffer, jobId, i, creds);
+        urls.push(url);
+      }
+
+      const totalDurationMs = results.reduce((sum, r) => sum + r.durationMs, 0);
+      await db.updateJob(jobId, { shot_audio_urls: urls });
+      return { shotAudioUrls: urls, narrationDurationMs: totalDurationMs };
     });
 
-    const narrationDurationSec = Math.ceil(_narrationDurationMs / 1000) || 60;
+    const narrationDurationSec = Math.ceil(narrationDurationMs / 1000) || 60;
 
     // ── Step 2b: Parallel Remaining Assets (Images, BGM, Thumbnail) ────────────
     const [imageUrls, musicUrl] = await Promise.all([
@@ -244,8 +265,9 @@ export const generateShort = inngest.createFunction(
               image_url: imageUrls[i],
               caption_text: shot.caption_text,
               spoken_text: shot.spoken_text,
+              audio_url: shotAudioUrls[i],
             })),
-            audio_url: narrationAudioUrl,
+            shot_audio_urls: shotAudioUrls,
             music_url: musicUrl,
             callback_url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/webhooks/modal`,
           }),

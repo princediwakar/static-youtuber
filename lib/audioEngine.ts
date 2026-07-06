@@ -85,8 +85,47 @@ function getWavDuration(buffer: Buffer): number {
 }
 
 /**
+ * Generates a voice-cloned narration track for a single shot's text.
+ * Returns the audio as a WAV buffer (F5-TTS Modal endpoint outputs WAV).
+ */
+export async function generateShotSpeech(
+  shotText: string,
+  voiceName: string,
+  shotIndex: number
+): Promise<{ audioBuffer: Buffer; engine: string; durationMs: number }> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(
+        `[AudioEngine] Shot ${shotIndex} F5-TTS attempt ${attempt}/${MAX_RETRIES} — ${shotText.length} chars with voice '${voiceName}'`
+      );
+      const audioBuffer = await callF5Tts(shotText, voiceName);
+      const durationMs = Math.round(getWavDuration(audioBuffer) * 1000);
+      console.log(
+        `[AudioEngine] Shot ${shotIndex} F5-TTS success — ${audioBuffer.byteLength.toLocaleString()} bytes, ${durationMs}ms`
+      );
+      return { audioBuffer, engine: 'f5_tts', durationMs };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[AudioEngine] Shot ${shotIndex} attempt ${attempt} failed: ${message}`);
+      if (attempt === MAX_RETRIES) {
+        throw new Error(
+          `[AudioEngine] CRITICAL: F5-TTS shot ${shotIndex} failed after ${MAX_RETRIES} attempts. Last error: ${message}`
+        );
+      }
+      const backoffMs = attempt * 5_000;
+      console.log(`[AudioEngine] Shot ${shotIndex} retrying in ${backoffMs / 1000}s...`);
+      await new Promise((res) => setTimeout(res, backoffMs));
+    }
+  }
+
+  throw new Error(`[AudioEngine] Unreachable pipeline execution state for shot ${shotIndex}`);
+}
+
+/**
  * Generates a voice-cloned narration track for the full script text.
  * Returns the audio as a WAV buffer (F5-TTS Modal endpoint outputs WAV).
+ *
+ * @deprecated Use generateShotSpeech for per-shot TTS to avoid F5-TTS hallucination bleed.
  */
 export async function generateNarrativeSpeech(
   fullText: string,

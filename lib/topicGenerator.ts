@@ -175,18 +175,20 @@ Each shot has TWO text fields for different modalities:
    - Keep symbols and abbreviations as-is from the narrative (e.g., "$1.4B", "26%", "CEO").
    - This is what the viewer reads on screen — short, scannable, punchy.
 
-2. "spoken_text" — The phonetically expanded version of the caption, fed to F5-TTS for voiceover and to Whisper for timestamp alignment.
-   - Expand ALL abbreviations, symbols, and shorthand into full phonetic words.
-   - "$1.4B" → "one point four billion dollars"
-   - "26%" → "twenty six percent"
-   - "reCAPTCHA" → "re captcha"
-   - "CEO" → "C E O"
-   - "Duolingo" → "duo lingo"
-   - "$6.5 billion" → "six point five billion dollars"
-   - "500M" → "five hundred million"
-   - "Luis von Ahn" → "lweece von ahn" (keep as proper name)
-   - If the caption text is already phonetic, spoken_text equals caption_text.
-   - spoken_text is what TTS will say and Whisper will hear — it MUST phonetically match the audio exactly.
+2. "spoken_text" — Nearly identical to caption_text. The ONLY change allowed is converting digit-form numbers to their spoken word equivalents.
+   RULE: spoken_text = caption_text, with ONLY these substitutions:
+   - Digit sequences → spoken number words. Examples:
+     - "7 years" → "seven years"
+     - "20 times" → "twenty times"
+     - "$1.4B" → "one point four billion dollars"
+     - "26%" → "twenty-six percent"
+     - "500M" → "five hundred million"
+   DO NOT CHANGE ANYTHING ELSE:
+   - Acronyms and abbreviations stay as-is: "POW" → "POW", "CEO" → "CEO", "FBI" → "FBI".
+     Whisper transcribes spoken acronyms as the full word ("POW"), not letter-by-letter ("P O W").
+   - Proper names, brand names, and all other words are VERBATIM from caption_text.
+   - If caption_text contains no digits, spoken_text is IDENTICAL to caption_text.
+   - Never add, remove, or reorder words beyond the digit→word substitution.
 
 VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 - morgan-freeman-your-inner-voice: Deep, warm, gravelly, authoritative narration. Wise, calm, memorable. Rich bass tones, highly storytelling-oriented.
@@ -226,7 +228,7 @@ JSON SCHEMA TO FOLLOW:
       "id": 1,
       "visual_prompt": "cinematic paragraph describing the scene... NO GORE. NO TEXT.",
       "caption_text": "The visually punchy, abbreviated text for the screen (e.g., '$6.5B').",
-      "spoken_text": "The exact phonetic spelling for the voiceover and Whisper alignment (e.g., 'six point five billion dollars').",
+      "spoken_text": "IDENTICAL to caption_text except digits become words (e.g., 'six point five billion dollars'). Acronyms like POW, CEO stay as-is.",
       "is_conclusion": false
     }
   ],

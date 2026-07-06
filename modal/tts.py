@@ -273,16 +273,17 @@ class F5TTSModel:
         audio_parts: list = []
         sample_rate: int = 24_000  # F5-TTS default; will be set from first chunk
 
-        silence_frames = int(sample_rate * 0.45)  # 450 ms — actual human breath pause
 
         for i, chunk in enumerate(chunks):
             print(f"[F5-TTS] Chunk {i + 1}/{len(chunks)}: {chunk!r}")
             audio_np, sr = self._infer_chunk(chunk, voice_name)
             sample_rate = sr
             audio_parts.append(audio_np)
-            if i < len(chunks) - 1:
-                # Add a brief silence between sentences for natural pacing
-                audio_parts.append(np.zeros(silence_frames, dtype=np.float32))
+            # No artificial silence between chunks — F5-TTS already generates
+            # natural trailing silence after sentence-ending punctuation. Adding
+            # a manual gap on top of that created 600-700ms dead air at chunk
+            # boundaries (which land at arbitrary sentence splits, not intentional
+            # dramatic pauses), causing the "stuck on a slide" effect.
 
         combined = np.concatenate(audio_parts, axis=0) if audio_parts else np.zeros(1, dtype=np.float32)
 
