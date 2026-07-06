@@ -221,7 +221,7 @@ JSON SCHEMA TO FOLLOW:
   "format_template": "${formatTemplate}",
   "voiceName": "pick the best match from the voice catalog above",
   "title": "5-100 chars, no period",
-  "description": "Video description",
+  "description": "SEO-optimized 1-2 paragraph hook that grabs attention, summarizes what the viewer will learn, and includes relevant keywords for discoverability",
   "tags": ["lowercase", "hyphenated"],
   "shots": [
     {

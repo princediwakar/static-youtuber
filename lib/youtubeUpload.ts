@@ -109,5 +109,18 @@ export async function uploadToYouTube(
 
 function buildDescription(script: SlideshowScript): string {
   const aiDisclosure = '\n\nℹ This content was produced with AI tools and has been flagged accordingly.';
-  return `${script.description}${aiDisclosure}`.substring(0, 5000);
+  const hashtags = script.tags.slice(0, 8).map(t => `#${t.replace(/[\s-]+/g, '')}`).join(' ');
+  const keyMoments = script.shots
+    .filter(s => !s.is_conclusion && s.caption_text.length > 10)
+    .slice(0, 8)
+    .map(s => `• ${s.caption_text}`)
+    .join('\n');
+  const parts = [
+    script.description,
+    '',
+    keyMoments ? `Key moments:\n${keyMoments}` : '',
+    hashtags ? `\n${hashtags}` : '',
+    aiDisclosure,
+  ];
+  return parts.filter(Boolean).join('\n').substring(0, 5000);
 }
