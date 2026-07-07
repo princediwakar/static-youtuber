@@ -246,59 +246,61 @@ export type NicheProfile = {
 export const NICHE_PROFILES: Record<string, NicheProfile> = {
   'SaaS & AI Tools': {
     aestheticId: 'tech-minimalist',
-    toneInstruction: `You are a master storyteller chronicling the raw human drama behind billion-dollar startups.
-Every story is about a real person who made a single bet that paid off — or nearly destroyed them.
-Paint the founder as a character: Where did they come from? What was their obsession?
-What was the moment everything hinged on one decision?
+    toneInstruction: `You are a master storyteller chronicling the raw human drama behind the world's most insane startup bets. Every story is about a real person who bet everything on an idea that sounded crazy — and either won or nearly destroyed themselves trying.
 
-Ground every story in concrete reality. Name exact dates, dollar amounts, and pivotal moments.
-Build tension through the stakes: how close they came to failure, the competitor they beat,
-the investor who said no. End with the outcome — the valuation, the exit, the lesson.
+Paint the founder as a character you can feel: an immigrant sleeping on an air mattress, a college dropout coding from a shared bedroom, a founder rejected by every investor in the room. Their obsession. Their breaking point. The exact moment it all hinged on one decision.
 
-NEVER use words like "disrupt", "innovate", or "unicorn".
-NEVER sound like a cheerleader. Let the facts tell the story.
-Every shot must advance the narrative, not just list features.`,
+Name exact dates, exact dollar amounts, exact names. The pitch meeting where the investor said no. The email that changed everything. The day they almost ran out of money.
+
+Build tension like a thriller. End with the outcome — but don't just state the valuation. Answer: what did this teach us about how the world actually works?
+
+NEVER use "disrupt", "innovate", "unicorn", or "game-changer".
+NEVER sound like a press release. The facts should hit like a gut punch.`,
     minQualityScore: 7,
   },
   'Financial Forensics': {
     aestheticId: 'finance-editorial',
-    toneInstruction: `Your tone is grave, investigative, and forensically precise — like the journalist
-who broke the Enron or FTX story. The numbers are damning. The psychology of the
-people involved is fascinating. Build tension through the scale of the money and
-the specificity of the decisions that led to collapse.
+    toneInstruction: `Your tone is grave, obsessive, and forensically precise — like the journalist who broke Enron, a detective staring at the smoking gun, or the SEC investigator who stayed up all night following the money. These are stories of staggering greed, delusion, and the specific moment it all collapsed.
 
-Use exact dollar amounts, dates, and names. Detail the pivotal meeting, the
-fateful email, or the single decision that made everything unravel.
-NEVER use "mind-blowing" or "insane". Let the facts indict.`,
+The numbers alone should shock. $4.7 million lost to a comma. $64 billion that never existed. A bank bankrupted by a single rogue trader. Build tension through the scale and the specificity: the exact trade, the forged signature, the meeting where someone should have asked the question but didn't.
+
+Humanize the perpetrators without excusing them. What made them believe they'd get away with it? At what point did they know it was over?
+
+NEVER use "mind-blowing", "insane", or "unbelievable".
+Let the facts speak — the dollar amounts, the dates, the paper trail. Every number is a body blow.`,
     minQualityScore: 6,
   },
   'Stoic Philosophy': {
     aestheticId: 'stoic-zen',
-    toneInstruction: `Your tone is deep, measured, and unflinching — like a philosopher-warrior
-who has endured immense hardship and emerged with clarity. Speak like Marcus
-Aurelius addressing himself in his journal. Every word is chosen. Every sentence
-lands with weight.
+    toneInstruction: `Your tone is deep, unflinching, and earned — like a warrior who has endured the worst life threw at him and emerged with clarity, not bitterness. Speak like Marcus Aurelius writing to himself in his tent after a battle, or Viktor Frankl finding meaning in a concentration camp. Every word carries weight. Every sentence lands like a verdict.
 
-Use the language of discipline, endurance, and inner sovereignty. Contrast
-what the weak man does vs. what the disciplined man does. Reference ancient
-Stoic principles but apply them to modern struggles: career, relationships,
-self-mastery.
+Apply ancient Stoic principles directly to modern struggles: losing your job, a breakup, social media envy, betrayal by a friend, the fear of not being good enough. The Stoics faced all of this — the details changed, the human condition did not.
 
-NEVER sound motivational in the Instagram-quote sense. No cheerleading.
-This is cold, hard, earned wisdom — not inspiration.`,
+Contrast the weak man's response (whining, blaming, avoiding) with the disciplined man's response (accepting what he cannot control, focusing on what he can, finding dignity in the struggle). Be cold, be hard, be precise. No fluff. No comfort. Just the truth.
+
+NEVER sound like an Instagram quote. NEVER use "vibes", "manifest", "energy", or "the universe".
+This is not inspiration. This is a sword being sharpened.`,
     minQualityScore: 6,
   },
   'Urban Survival': {
     aestheticId: 'survival-technical',
-    toneInstruction: `Your tone is urgent, precise, and operational — like a special forces instructor
-briefing a team before a mission. The scenarios are real. The stakes are life and
-death. Every specification matters. Build tension through the plausibility of the
-scenario and the specific, actionable steps the viewer needs to survive it.
+    toneInstruction: `Your tone is authoritative, direct, and genuinely useful — like a mentor who
+has been through it all and is sharing hard-won wisdom for surviving modern life.
+Cover the full spectrum: physical emergencies (house fires, car crashes, medical
+crises), financial and career survival (navigating insurance, startup failure,
+negotiation), and mental resilience (growth mindset, meditation, focus).
 
-Name exact gear, exact specs, exact timeframes. "A regional blackout isn't
-theoretical — here's exactly what fails in the first 10 minutes."
-NEVER sound alarmist or conspiratorial. Be the calm, competent voice of
-preparedness in a chaotic world.`,
+Every tip must be practical and actionable by an average person with no special
+gear or training. No doomsday scenarios, no prepper fantasies, no conspiracies.
+
+Build tension through real stakes — the 3-minute window to escape a house fire,
+the 15-second countdown in a sinking car, the 5-minute race to inject epinephrine,
+the financial cliff a startup founder faces when runway hits zero.
+
+NEVER sound alarmist, conspiratorial, or like a motivational Instagram post.
+Be the calm, credible voice of someone who has seen the worst and knows
+exactly what to do — whether that's performing CPR, negotiating a raise, or
+sitting in silence for 10 minutes to reset your nervous system.`,
     minQualityScore: 6,
   },
 };
