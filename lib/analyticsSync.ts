@@ -414,3 +414,41 @@ export async function recordPublishedVideo(params: {
 
   console.log(`[Analytics] Recorded publish: ${params.youtubeId} (${params.format}, ${params.aestheticId})`);
 }
+
+/**
+ * Returns average view-duration % grouped by (aesthetic_id, format) for a niche,
+ * ordered best-first. Used by the epsilon-greedy format bandit in topicGenerator.
+ * Only considers rows with >10 views to filter statistical noise.
+ */
+export async function getRetentionByConfig(niche: string): Promise<Array<{
+  aestheticId: string;
+  format: string;
+  avgViewDurationPct: number;
+  sampleSize: number;
+}>> {
+  const result = await query<{
+    aesthetic_id: string;
+    format: string;
+    avg_duration: string;
+    sample_size: string;
+  }>(`
+    SELECT aesthetic_id, format,
+           AVG(avg_view_duration_pct) AS avg_duration,
+           COUNT(*)                  AS sample_size
+    FROM slideshow_topics
+    WHERE niche = $1
+      AND aesthetic_id IS NOT NULL
+      AND format IS NOT NULL
+      AND views > 10
+      AND avg_view_duration_pct > 0
+    GROUP BY aesthetic_id, format
+    ORDER BY avg_duration DESC
+  `, [niche]);
+
+  return result.rows.map(r => ({
+    aestheticId: r.aesthetic_id,
+    format: r.format,
+    avgViewDurationPct: parseFloat(r.avg_duration),
+    sampleSize: parseInt(r.sample_size, 10),
+  }));
+}

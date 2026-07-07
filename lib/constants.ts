@@ -44,9 +44,9 @@ export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, numb
 };
 
 export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: number }> = {
-  RAPID_FIRE: { min: 15, max: 18 },
+  RAPID_FIRE: { min: 12, max: 15 },
   SLOW_BURN: { min: 12, max: 12 },
-  THE_LIST: { min: 15, max: 15 },
+  THE_LIST: { min: 12, max: 14 },
 };
 
 // ─── Model config ─────────────────────────────────────────────────────────────

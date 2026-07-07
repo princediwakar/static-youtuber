@@ -1,7 +1,7 @@
 // inngest/pipeline.ts
 import { inngest } from './client';
 import { NonRetriableError } from 'inngest';
-import { generateScript, pickFormatTemplate } from '@/lib/topicGenerator';
+import { generateScript } from '@/lib/topicGenerator';
 import type { Shot } from '@/lib/types';
 import { generateImage } from '@/lib/cloudflareAi';
 import { generateShotSpeech } from '@/lib/audioEngine';
@@ -84,14 +84,15 @@ export const generateShort = inngest.createFunction(
         }
 
         const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
-        const format_template = pickFormatTemplate(niche);
         const variant = Math.random() < 0.5 ? 'A' : 'B';
 
-        const { script, topic } = await generateScript(niche, accountId);
+        // generateScript runs the async bandit internally and returns the chosen
+        // formatTemplate — no separate pickFormatTemplate call needed here.
+        const { script, topic, formatTemplate: chosenFormat } = await generateScript(niche, accountId);
 
-        const jobId = await db.createJob({ account_id: accountId, topic, niche, format_template, script, status: 'script_ready', variant });
+        const jobId = await db.createJob({ account_id: accountId, topic, niche, format_template: chosenFormat, script, status: 'script_ready', variant });
         (event as any).data.jobId = jobId;
-        return { script, jobId, format_template, niche, variant, topic };
+        return { script, jobId, format_template: chosenFormat, niche, variant, topic };
       }),
 
       step.run('warmup-bgm-gpu', async () => {
@@ -217,7 +218,12 @@ export const generateShort = inngest.createFunction(
         if (job?.thumbnail_url) return job.thumbnail_url;
 
         const creds = await getAccountCredentials(accountId);
-        const thumbBuffer = await generateThumbnail(script.title, script.thumbnailPrompt, niche);
+        // Change 8: hook_intro (first ~4 words of shot 1) is a stronger attention
+        // signal than the SEO-optimized title. Combine both for maximum impact.
+        const thumbText = script.hook_intro
+          ? `${script.hook_intro.slice(0, 40)} — ${script.title}`
+          : script.title;
+        const thumbBuffer = await generateThumbnail(thumbText, script.thumbnailPrompt, niche);
         const url = await uploadThumbnail(thumbBuffer, jobId, creds);
         
         await db.updateJob(jobId, { thumbnail_url: url });

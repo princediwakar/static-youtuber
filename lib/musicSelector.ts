@@ -126,7 +126,7 @@ export async function selectMusicTrack(
   }
 
   const prompt = pickMusicPrompt(niche, formatTemplate, scriptTitle);
-  const duration = Math.max(30, Math.min(durationSeconds, 90));
+  const duration = Math.max(30, Math.min(durationSeconds, 60));
 
   console.log(`[MusicSelector] ${niche}/${formatTemplate} → ${duration}s BGM: "${prompt.slice(0, 100)}..."`);
 

@@ -4,6 +4,7 @@ import { chatCompletion, extractJson } from './deepseek';
 import { query } from './database';
 import { SlideshowScript } from './types';
 import { validateAllCaptions } from './captionValidator';
+import { getRetentionByConfig } from './analyticsSync';
 import {
   AESTHETICS,
   NICHE_PROFILES,
@@ -104,12 +105,35 @@ export async function releaseTopic(id: number): Promise<void> {
   await query(`UPDATE slideshow_topics SET used = FALSE, used_at = NULL WHERE id = $1`, [id]);
 }
 
-export function pickFormatTemplate(niche: string): FormatTemplate {
+// Epsilon-greedy bandit: exploit the best-performing (aesthetic, format) pair
+// 85% of the time; explore randomly 15% of the time.
+// Falls back to niche weights when there are fewer than 3 data points.
+const EPSILON = 0.15;
+
+function pickFormatTemplateSync(niche: string): FormatTemplate {
   const weights = FORMAT_TEMPLATE_WEIGHTS[niche] ?? { RAPID_FIRE: 0.4, SLOW_BURN: 0.3, THE_LIST: 0.3 };
   const rand = Math.random();
   if (rand < weights.RAPID_FIRE) return 'RAPID_FIRE';
   if (rand < weights.RAPID_FIRE + weights.SLOW_BURN) return 'SLOW_BURN';
   return 'THE_LIST';
+}
+
+export async function pickFormatTemplate(niche: string, aestheticId: string): Promise<FormatTemplate> {
+  // Explore: ignore past data and pick randomly
+  if (Math.random() < EPSILON) {
+    return pickFormatTemplateSync(niche);
+  }
+
+  // Exploit: pick the format with the highest avg retention for this aesthetic
+  try {
+    const retention = await getRetentionByConfig(niche);
+    const best = retention.find(r => r.aestheticId === aestheticId && r.sampleSize >= 3);
+    if (best) return best.format as FormatTemplate;
+  } catch (err) {
+    console.warn('[TopicGenerator] Bandit query failed, falling back to niche weights:', err);
+  }
+
+  return pickFormatTemplateSync(niche);
 }
 
 // ─── PASS 1: NARRATIVE GENERATION ─────────────────────────────────────────────
@@ -118,8 +142,10 @@ async function generateNarrative(topic: string, researchContext: string, toneIns
 Your job is to write a highly compelling, fact-dense narrative script for a YouTube Short.
 
 LENGTH MANDATE (CRITICAL):
-- ABSOLUTE MAXIMUM OF 125 WORDS.
-- If you write 126 words, the video will exceed 60 seconds and fail completely. Cut the filler.
+- TARGET 90-110 WORDS, ABSOLUTE MAX 120.
+- At ~2.5 words/second (F5-TTS pace), 110 words ≈ 44s — ideal for the current
+  30-45 second Shorts sweet spot. Videos approaching 60s need 2× the retention
+  to clear the same ranking gate.
 
 CONTENT POLICY (STRICT):
 - Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma. 
@@ -130,10 +156,16 @@ ${toneInstruction}
 
 STORYTELLING RULES:
 1. Ground everything in reality. Use the exact dates, names, and numbers provided.
-2. Hook them instantly. The first sentence must present a jarring fact or cognitive dissonance.
+2. Hook them instantly. The first sentence must present a verbal, question-shaped or
+   claim-shaped hook (e.g., "Here's why the 1987 crash almost repeated in 2008") —
+   not just a visual/cognitive description. The hook should feel like it answers a
+   question a viewer arrived with (YouTube Shorts search intent mode).
 3. Build tension. Use transition words. Let the story flow with cause and effect.
 4. End with a devastating conclusion. The final sentence must recontextualize the whole story.
 5. NO CTAs. No "subscribe", "like", or "thanks for watching".
+   Exception: ending on a genuinely debatable claim (supported by research) is
+   encouraged — it invites organic discussion in comments without an explicit CTA.
+   Prefer this over an airtight, universally-agreed conclusion when the topic allows.
 
 PACING & SYNTAX (CRITICAL):
 - Write strictly in short, punchy sentences.
@@ -236,8 +268,8 @@ JSON SCHEMA TO FOLLOW:
   "visual_world": "MUST EXACTLY MATCH THE VISUAL WORLD SPECIFIED ABOVE",
   "format_template": "${formatTemplate}",
   "voiceName": "pick the best match from the voice catalog above",
-  "title": "5-100 chars, no period",
-  "description": "SEO-optimized 1-2 paragraph hook that grabs attention, summarizes what the viewer will learn, and includes relevant keywords for discoverability",
+  "title": "5-100 chars, no period. Front-load the key claim or keyword in the first ~40 characters (mobile truncation point). Should read like a search snippet.",
+  "description": "SEO-optimized 1-2 paragraphs. FIRST SENTENCE must restate the core fact in natural searchable language (this is what appears in Shorts search snippets). Subsequent sentences summarize what the viewer learns. Include relevant keywords.",
   "tags": ["lowercase", "hyphenated"],
   "shots": [
     {
@@ -250,6 +282,12 @@ JSON SCHEMA TO FOLLOW:
   ],
   "thumbnailPrompt": "30-500 char thumbnail desc. STRICTLY PG-13. NO GORE."
 }
+LOOP DESIGN FOR REPLAY:
+The final shot's closing phrase should echo the opening line's concept or question,
+so that a replay feels deliberate rather than abrupt. If shot 1's hook is a question,
+the last caption should resonate with it — not end on a definitive period that closes
+the loop completely.
+
 Only the LAST shot must have is_conclusion: true.`;
 
   let userPrompt = `TOPIC: ${topic}
@@ -334,10 +372,11 @@ Output JSON:
 export async function generateScript(
   niche: string,
   accountId: string,
-): Promise<{ script: SlideshowScript; topic: string }> {
+): Promise<{ script: SlideshowScript; topic: string; formatTemplate: string }> {
   const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
   const aesthetic = AESTHETICS[profile.aestheticId] ?? Object.values(AESTHETICS)[0];
-  const formatTemplate = pickFormatTemplate(niche);
+  // Async bandit: exploits highest-retention format 85% of the time
+  const formatTemplate = await pickFormatTemplate(niche, profile.aestheticId);
 
   const reserved = await reserveTopic(niche, accountId);
   
@@ -432,6 +471,7 @@ export async function generateScript(
             hook_intro,
           },
           topic: reserved.topic,
+          formatTemplate,
         };
       }
       lastScore = score;

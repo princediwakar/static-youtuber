@@ -254,7 +254,7 @@ def build_continuous_ass(shot_boundaries: list, shots: list, caption_style: dict
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Default,{style['fontFamily']},72,{primary_colour},&H000000FF,{outline_colour},&H80000000,-1,0,0,0,100,100,0,0,1,4,4,8,80,80,1080,1",
+        f"Style: Default,{style['fontFamily']},72,{primary_colour},&H000000FF,{outline_colour},&H80000000,-1,0,0,0,100,100,0,0,1,4,4,8,120,120,1080,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -408,8 +408,19 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             # first frame of the shot, then lets every subsequent frame
             # accumulate zoom_expr on top of the previous frame — restoring
             # the intended continuous 1.0<->1.12 Ken Burns ramp.
-            zoom_expr = "zoom+0.0006" if i % 2 == 0 else "zoom-0.0006"
-            scale_expr = "1.0" if i % 2 == 0 else "1.12"
+            # Loop engineering: force the last shot to always zoom OUT
+            # (scale_expr=1.12, zoom_expr="zoom-0.0006") so it ends near 1.0 —
+            # matching shot 0's starting zoom and making the replay cut seamless.
+            # Without this, an even-indexed last shot would start at 1.0 and
+            # zoom IN, creating a jarring jump back to shot 0 (also at 1.0).
+            # Note: only changes behaviour when len(shots)-1 is even (i.e.,
+            # 12-shot or 14-shot videos); odd-indexed last shots already zoom out.
+            if i == len(shots) - 1:
+                zoom_expr = "zoom-0.0006"
+                scale_expr = "1.12"
+            else:
+                zoom_expr = "zoom+0.0006" if i % 2 == 0 else "zoom-0.0006"
+                scale_expr = "1.0" if i % 2 == 0 else "1.12"
 
             out_shot = f"{work_dir}/shot_rendered_{i}.mp4"
             subprocess.run([
