@@ -395,13 +395,26 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             frames = max(int(round(duration * FPS)), 1)
 
             # Ken Burns alternating Zoompan effect
+            #
+            # BUGFIX: the zoom expression used to be
+            #   if(eq(mod(on,2),0), scale_expr, zoom_expr)
+            # which re-seeds `zoom` back to the constant scale_expr on EVERY
+            # even frame, not just the first one. Since zoompan's `zoom` self-
+            # reference means "previous frame's output zoom", that reset wipes
+            # out the accumulated increment every other frame — the net effect
+            # measured in testing was zero visible motion across the whole
+            # shot (verified: a 150-frame/5s render moved a reference marker
+            # by 0 px). `eq(on,0)` seeds the start zoom exactly once, on the
+            # first frame of the shot, then lets every subsequent frame
+            # accumulate zoom_expr on top of the previous frame — restoring
+            # the intended continuous 1.0<->1.12 Ken Burns ramp.
             zoom_expr = "zoom+0.0006" if i % 2 == 0 else "zoom-0.0006"
             scale_expr = "1.0" if i % 2 == 0 else "1.12"
 
             out_shot = f"{work_dir}/shot_rendered_{i}.mp4"
             subprocess.run([
                 "ffmpeg", "-y", "-loop", "1", "-i", img_path,
-                "-vf", f"scale=1080:1920,zoompan=z='if(eq(mod(on,2),0),{scale_expr},{zoom_expr})':d={frames}:s=1080x1920:fps={FPS}",
+                "-vf", f"scale=1080:1920,zoompan=z='if(eq(on,0),{scale_expr},{zoom_expr})':d={frames}:s=1080x1920:fps={FPS}",
                 "-frames:v", str(frames), "-r", str(FPS),
                 "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p", "-an", out_shot
             ], check=True, capture_output=True, timeout=120)

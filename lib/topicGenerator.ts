@@ -59,11 +59,27 @@ const QualityScoreSchema = z.object({
   visual_entropy: z.number().min(0).max(10),
   visual_coherence: z.number().min(0).max(10),
   caption_flow: z.number().min(0).max(10),
+  // Does the title/thumbnail promise match what the final shot actually
+  // delivers? Title/description/thumbnailPrompt weren't previously part of
+  // the scored payload at all, so a misleading hook could sail through —
+  // this dimension plus the payload change below close that gap. YouTube's
+  // 2026 Shorts ranking treats a mismatched setup/payoff as a negative
+  // satisfaction signal, distinct from raw hook_strength (which only judges
+  // shot 1 in isolation, not whether the ending pays it off).
+  hook_payoff_match: z.number().min(0).max(10),
   overall: z.number().min(0).max(10),
   issues: z.array(z.string()),
   approved: z.boolean(),
 });
 type QualityScore = z.infer<typeof QualityScoreSchema>;
+
+// All per-dimension score fields, excluding `overall`/`issues`/`approved` —
+// used to enforce the "no dimension below floor" half of the quality gate
+// in code rather than trusting the model's self-reported `approved` alone.
+const QUALITY_SCORE_DIMENSIONS = [
+  'specificity', 'hook_strength', 'information_density', 'tone_calibration',
+  'pacing', 'visual_entropy', 'visual_coherence', 'caption_flow', 'hook_payoff_match',
+] as const;
 
 export async function reserveTopic(niche: string, accountId: string): Promise<{ id: number; topic: string; research_context: string }> {
   let result = await query<{ id: number; topic: string; research_context: string }>(`
@@ -276,6 +292,9 @@ ${researchContext}
 
 SCRIPT TO EVALUATE:
 ${JSON.stringify({
+  title: script.title,
+  description: script.description,
+  thumbnailPrompt: script.thumbnailPrompt,
   shots: script.shots.map(s => ({ caption_text: s.caption_text, spoken_text: s.spoken_text, visual_prompt: s.visual_prompt }))
 }, null, 2)}
 
@@ -288,6 +307,7 @@ SCORING RUBRIC (0-10):
 - visual_entropy (0-10): Are images varied?
 - visual_coherence (0-10): Are images cohesive?
 - caption_flow (0-10): If you read just the text in sequence, does it read smoothly?
+- hook_payoff_match (0-10): Does the title and thumbnailPrompt accurately represent what the shots actually deliver? A viewer who reads the title/thumbnail then watches the whole thing should feel the payoff matched the promise — score low for any bait-and-switch, exaggeration, or unresolved tease.
 
 CRITICAL CENSORSHIP CHECK:
 If ANY visual_prompt contains explicit gore, blood, or visceral anatomy descriptions, you MUST score 'overall' as 0 and set 'approved' to false. State the exact trigger word in the 'issues' array.
@@ -295,8 +315,11 @@ If ANY visual_prompt contains explicit gore, blood, or visceral anatomy descript
 CRITICAL STYLE-DRIFT CHECK:
 If ANY visual_prompt describes glassmorphism, frosted/liquid glass, glossy soft-3D renders, pastel gradient blobs, isometric dioramas, bento grids, neon wireframes, sumi-e ink wash, or any legible text/letters/numbers in the scene, you MUST score 'overall' as 0 and set 'approved' to false. State the exact offending phrase in the 'issues' array.
 
+APPROVAL RULE:
+Set 'approved' to true ONLY IF 'overall' >= ${minScore} AND every individual dimension score is >= 5. Otherwise set 'approved' to false, even if 'overall' alone clears ${minScore}.
+
 Output JSON:
-{ "specificity": 0, "hook_strength": 0, "information_density": 0, "tone_calibration": 0, "pacing": 0, "visual_entropy": 0, "visual_coherence": 0, "caption_flow": 0, "overall": 0, "issues": ["string"], "approved": boolean }`;
+{ "specificity": 0, "hook_strength": 0, "information_density": 0, "tone_calibration": 0, "pacing": 0, "visual_entropy": 0, "visual_coherence": 0, "caption_flow": 0, "hook_payoff_match": 0, "overall": 0, "issues": ["string"], "approved": boolean }`;
 
   const raw = await chatCompletion(
     [{ role: 'user', content: prompt }],
@@ -369,7 +392,24 @@ export async function generateScript(
       }
 
       const score = await scoreScript(validated, reserved.research_context, niche, profile.minQualityScore);
-      if (score.approved || attempt === QUALITY_GATE_MAX_RETRIES) {
+
+      // BUGFIX: profile.minQualityScore used to be passed into scoreScript()
+      // and never used — the prompt never told the model what the bar was,
+      // and this code only checked score.approved (a boolean the model
+      // invented on its own judgment with no code-side floor). Belt-and-
+      // suspenders: the prompt above now states the threshold explicitly,
+      // and this still re-checks it here rather than trusting the model's
+      // self-grading alone.
+      const passesFloor = score.overall >= profile.minQualityScore &&
+        QUALITY_SCORE_DIMENSIONS.every(dim => score[dim] >= 5);
+      if (score.approved && !passesFloor) {
+        console.warn(
+          `[TopicGenerator] Quality gate: model self-reported approved=true but score ` +
+          `(overall=${score.overall}, min=${profile.minQualityScore}) failed the code-side floor. Treating as not approved.`
+        );
+      }
+
+      if ((score.approved && passesFloor) || attempt === QUALITY_GATE_MAX_RETRIES) {
         const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
         const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
         return {
