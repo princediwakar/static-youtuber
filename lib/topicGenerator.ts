@@ -239,7 +239,6 @@ Each shot has TWO text fields for different modalities:
    - Never add, remove, or reorder words beyond the digit→word substitution.
 
 VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
-- morgan-freeman-your-inner-voice: Deep, warm, gravelly, authoritative narration. Wise, calm, memorable. Rich bass tones, highly storytelling-oriented.
 - mallory-handford-american-female: Bright, conversational, friendly girl-next-door American female. Compelling, versatile, modern.
 - melissa-harlow-american-female: Conversational, natural, energetic American female. Warm, relatable, good for narration and explainers.
 - jon-british-male: Professional, clear, experienced British male. Polished, versatile narration.
