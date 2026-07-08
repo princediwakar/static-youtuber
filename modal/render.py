@@ -58,7 +58,7 @@ FPS = 30
 # manual test calls, etc.) — the same look the pipeline always had.
 DEFAULT_CAPTION_STYLE = {
     "fontFamily": "Montserrat",
-    "textColor": "#FFFFFF",
+    "textColor": "#FFD23F",
     "strokeColor": "#000000",
 }
 
