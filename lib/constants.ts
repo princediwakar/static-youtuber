@@ -41,7 +41,7 @@ export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: nu
 };
 
 // LLM config (Modal vLLM endpoint)
-export const MODAL_LLM_URL = process.env.MODAL_LLM_URL || 'https://princediwakar--llm-server-fastapi-app.modal.run';
+export const MODAL_LLM_URL = process.env.MODAL_LLM_URL || 'https://princediwakar25--llm-server-fastapi-app.modal.run';
 
 // FLUX.1 [schnell] — fast + cheap.
 export const CF_AI_IMAGE_MODEL = process.env.CF_AI_IMAGE_MODEL || '@cf/black-forest-labs/flux-1-schnell';
