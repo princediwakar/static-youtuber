@@ -127,8 +127,7 @@ async function executeAssetPipeline(
             })
           );
         });
-        
-        batchUrls.forEach((url, offset) => { urls[batchStart + offset] = url; });
+        batchUrls.forEach((url: string, offset: number) => { urls[batchStart + offset] = url; });
         await step.run(`save-images-batch-${batchStart}`, () => db.updateJob(jobId, { shot_image_urls: urls }));
       }
 
