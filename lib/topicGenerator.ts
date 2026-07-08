@@ -1,6 +1,6 @@
 // lib/topicGenerator.ts
 import { z } from 'zod';
-import { chatCompletion, extractJson } from './deepseek';
+import { chatCompletion, extractJson } from './llm';
 import { query } from './database';
 import { SlideshowScript } from './types';
 import { validateAllCaptions } from './captionValidator';

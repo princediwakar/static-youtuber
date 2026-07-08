@@ -1,33 +1,25 @@
-// Path: lib/deepseek.ts
-import { DEEPSEEK_TEXT_MODEL } from './constants';
-const DEEPSEEK_BASE = 'https://api.deepseek.com/beta/chat/completions';
+// Path: lib/llm.ts
+import { MODAL_LLM_URL } from './constants';
 
 export async function chatCompletion(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
   options: { temperature?: number; maxTokens?: number; responseJson?: boolean; timeout?: number } = {},
 ): Promise<string> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) throw new Error('DEEPSEEK_API_KEY is not set');
+  const llmUrl = `${MODAL_LLM_URL}/v1/chat/completions`;
 
   const { temperature = 0.7, maxTokens = 4096, responseJson = false, timeout = 120_000 } = options;
 
   const body: Record<string, unknown> = {
-    model: DEEPSEEK_TEXT_MODEL,
     messages,
     temperature,
     max_tokens: maxTokens,
-    // deepseek-v4-pro defaults to thinking ENABLED, which burns max_tokens
-    // budget on internal reasoning — leaving zero tokens for the response.
-    // Must explicitly disable for non-reasoning workloads (JSON mode, prose).
-    thinking: { type: 'disabled' },
   };
 
   if (responseJson) {
     body.response_format = { type: 'json_object' };
   }
 
-  // DeepSeek JSON mode occasionally returns empty content (documented caveat).
-  // Retry once with a slightly different temperature to shake the latent space.
+  // Sometimes models need a nudge or might fail on a single attempt due to cluster scaling
   for (let attempt = 0; attempt < 2; attempt++) {
     let currentMessages = [...messages];
     let fullContent = '';
@@ -38,10 +30,9 @@ export async function chatCompletion(
       const timer = setTimeout(() => controller.abort(), timeout);
 
       try {
-        const res = await fetch(DEEPSEEK_BASE, {
+        const res = await fetch(llmUrl, {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -54,7 +45,7 @@ export async function chatCompletion(
 
         if (!res.ok) {
           const errorBody = await res.text().catch(() => 'unknown');
-          throw new Error(`DeepSeek API error ${res.status}: ${errorBody.slice(0, 500)}`);
+          throw new Error(`Modal LLM API error ${res.status}: ${errorBody.slice(0, 500)}`);
         }
 
         const json = await res.json();
@@ -64,10 +55,8 @@ export async function chatCompletion(
         fullContent += content;
 
         if (finishReason === 'length' || finishReason === 'max_tokens') {
-          console.log(`[DeepSeek] Hit max_tokens, continuing generation (chunk ${continuation + 1})...`);
+          console.log(`[LLM] Hit max_tokens, continuing generation (chunk ${continuation + 1})...`);
           
-          // The API expects a single trailing assistant message for prefix continuation.
-          // If we already added one in a previous loop, replace it.
           if (currentMessages[currentMessages.length - 1].role === 'assistant') {
             currentMessages.pop();
           }
@@ -86,11 +75,11 @@ export async function chatCompletion(
     }
 
     if (attempt === 0) {
-      console.warn('[DeepSeek] Empty content or failed continuation on attempt 1, retrying with jittered temperature...');
+      console.warn('[LLM] Empty content or failed continuation on attempt 1, retrying with jittered temperature...');
     }
   }
 
-  throw new Error('DeepSeek returned empty content or failed to complete after all attempts');
+  throw new Error('LLM returned empty content or failed to complete after all attempts');
 }
 
 export function extractJson(raw: string): unknown {

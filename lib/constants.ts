@@ -40,8 +40,8 @@ export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: nu
   DEEP_DIVE:  { min: 30, max: 60 }, // long-form only — never selected by shorts bandit
 };
 
-// ─── Model config ─────────────────────────────────────────────────────────────
-export const DEEPSEEK_TEXT_MODEL = process.env.DEEPSEEK_TEXT_MODEL || 'deepseek-v4-pro'; // deepseek-chat deprecated 2026-07-24
+// LLM config (Modal vLLM endpoint)
+export const MODAL_LLM_URL = process.env.MODAL_LLM_URL || 'https://princediwakar--llm-server-fastapi-app.modal.run';
 
 // FLUX.1 [schnell] — fast + cheap.
 export const CF_AI_IMAGE_MODEL = process.env.CF_AI_IMAGE_MODEL || '@cf/black-forest-labs/flux-1-schnell';

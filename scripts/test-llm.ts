@@ -1,5 +1,5 @@
-// Smoke test for DeepSeek API
-// Usage: npx tsx scripts/test-deepseek.ts
+// Smoke test for Modal LLM API
+// Usage: npx tsx scripts/test-llm.ts
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -18,17 +18,14 @@ function loadEnv() {
   return env;
 }
 
-const DEEPSEEK_BASE = 'https://api.deepseek.com/v1/chat/completions';
-
-async function callDeepSeek(
-  apiKey: string,
+async function callLLM(
+  baseUrl: string,
   messages: { role: string; content: string }[],
   responseJson: boolean,
   label: string,
 ) {
   console.log(`\n=== ${label} ===`);
   const body: Record<string, unknown> = {
-    model: 'deepseek-chat',
     messages,
     temperature: 0.7,
   };
@@ -37,10 +34,9 @@ async function callDeepSeek(
   }
 
   const start = performance.now();
-  const res = await fetch(DEEPSEEK_BASE, {
+  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
@@ -63,24 +59,24 @@ async function callDeepSeek(
 
 async function main() {
   const env = loadEnv();
-  const apiKey = env.DEEPSEEK_API_KEY;
+  const baseUrl = env.MODAL_LLM_URL;
 
-  if (!apiKey) {
-    console.error('DEEPSEEK_API_KEY not found in .env.local');
+  if (!baseUrl) {
+    console.error('MODAL_LLM_URL not found in .env.local');
     process.exit(1);
   }
 
-  console.log('API key found — length:', apiKey.length);
+  console.log('Modal LLM URL found:', baseUrl);
 
   // Test 1: Basic chat
-  const basic = await callDeepSeek(apiKey, [
-    { role: 'user', content: 'Say "DeepSeek API is working" and nothing else.' },
+  const basic = await callLLM(baseUrl, [
+    { role: 'user', content: 'Say "Modal LLM is working" and nothing else.' },
   ], false, 'Test 1: Basic chat');
 
   if (!basic) process.exit(1);
 
-  // Test 2: JSON mode (crucial for script generation)
-  const jsonResult = await callDeepSeek(apiKey, [
+  // Test 2: JSON mode
+  const jsonResult = await callLLM(baseUrl, [
     { role: 'system', content: 'You are a JSON generator. Output ONLY valid JSON. No markdown.' },
     { role: 'user', content: 'Return a JSON object with fields: name (string), score (number 1-10). Topic: the moon landing.' },
   ], true, 'Test 2: JSON mode');
@@ -99,27 +95,6 @@ async function main() {
     console.error('Raw:', jsonResult.slice(0, 400));
     process.exit(1);
   }
-
-  // Test 3: JSON mode WITHOUT "JSON" in prompt (plan says this should 400)
-  console.log('\n=== Test 3: JSON mode WITHOUT "JSON" keyword (expect 400) ===');
-  const res = await fetch(DEEPSEEK_BASE, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: 'Return a list of three colors.' },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.7,
-    }),
-  });
-  const errJson = await res.json();
-  console.log(`Status: ${res.status} —`, JSON.stringify(errJson, null, 2).slice(0, 300));
 
   console.log('\n✅ All critical tests passed.');
 }
