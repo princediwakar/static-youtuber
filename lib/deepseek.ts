@@ -66,9 +66,13 @@ export async function chatCompletion(
 
         if (finishReason === 'length' || finishReason === 'max_tokens') {
           console.log(`[DeepSeek] Hit max_tokens, continuing generation (chunk ${continuation + 1})...`);
-          // To continue, we append the partial response as an assistant message.
-          // DeepSeek supports this seamlessly.
-          currentMessages.push({ role: 'assistant', content, prefix: true } as any);
+          
+          // The API expects a single trailing assistant message for prefix continuation.
+          // If we already added one in a previous loop, replace it.
+          if (currentMessages[currentMessages.length - 1].role === 'assistant') {
+            currentMessages.pop();
+          }
+          currentMessages.push({ role: 'assistant', content: fullContent, prefix: true } as any);
         } else {
           isComplete = true;
           break;
