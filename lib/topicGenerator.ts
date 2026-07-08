@@ -263,20 +263,22 @@ CENSORSHIP & NSFW GUARDRAILS (ZERO TOLERANCE):
 JSON SCHEMA TO FOLLOW:
 {
   "fact_check_and_sources": [
-    { "claim": "Exact fact 1", "source": "Source context 1" }
+    { "claim": "Exact fact 1", "source": "Source context 1" },
+    { "claim": "MUST provide at least 3 facts", "source": "Source 2" },
+    { "claim": "Fact 3", "source": "Source 3" }
   ],
   "visual_world": "MUST EXACTLY MATCH THE VISUAL WORLD SPECIFIED ABOVE",
   "format_template": "${formatTemplate}",
   "voiceName": "pick the best match from the voice catalog above",
   "title": "5-100 chars, no period. Front-load the key claim or keyword in the first ~40 characters (mobile truncation point). Should read like a search snippet.",
   "description": "SEO-optimized 1-2 paragraphs. FIRST SENTENCE must restate the core fact in natural searchable language (this is what appears in Shorts search snippets). Subsequent sentences summarize what the viewer learns. Include relevant keywords.",
-  "tags": ["lowercase", "hyphenated"],
+  "tags": ["must", "have", "at-least", "five", "tags"],
   "shots": [
     {
       "id": 1,
       "visual_prompt": "cinematic paragraph describing the scene... NO GORE. NO TEXT.",
       "caption_text": "The visually punchy, abbreviated text for the screen (e.g., '$6.5B').",
-      "spoken_text": "IDENTICAL to caption_text except digits become words (e.g., 'six point five billion dollars'). Acronyms like POW, CEO stay as-is.",
+      "spoken_text": "IDENTICAL to caption_text except digits become words (e.g., 'six point five billion dollars'). Acronyms like POW, CEO stay as-is. FINAL SHOT MUST END WITH TERMINAL PUNCTUATION (. ! ?)",
       "is_conclusion": false
     }
   ],
@@ -299,7 +301,7 @@ ${narrative}
 Slice this narrative into the exact JSON schema.`;
 
   if (validationFeedback) {
-    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS:\n${validationFeedback}\n\nCRITICAL FIX INSTRUCTIONS:\nTo fix character/word limit errors, DO NOT paraphrase, summarize, or delete words. Instead, SPLIT the long text across multiple consecutive shots. Maintain 100% verbatim text from the narrative.`;
+    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS:\n${validationFeedback}\n\nCRITICAL FIX INSTRUCTIONS:\n1. To fix character/word limit errors, DO NOT paraphrase, summarize, or delete words. Instead, SPLIT the long text across multiple consecutive shots. Maintain 100% verbatim text from the narrative.\n2. Fix ALL array length constraints (tags, fact checks).\n3. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
   }
 
   const raw = await chatCompletion(
@@ -645,20 +647,24 @@ CENSORSHIP (ZERO TOLERANCE):
 JSON SCHEMA:
 {
   "fact_check_and_sources": [
-    { "claim": "Exact fact", "source": "Source context" }
+    { "claim": "Exact fact 1", "source": "Source context 1" },
+    { "claim": "MUST provide at least 5 facts", "source": "Source 2" },
+    { "claim": "Fact 3", "source": "Source 3" },
+    { "claim": "Fact 4", "source": "Source 4" },
+    { "claim": "Fact 5", "source": "Source 5" }
   ],
   "visual_world": "MUST MATCH THE VISUAL WORLD ABOVE",
   "format_template": "DEEP_DIVE",
   "voiceName": "pick from catalog",
   "title": "5-100 chars. Front-load the key claim. Reads like a YouTube search result.",
   "description": "SEO-optimized 2-3 paragraphs. First sentence restates the core fact. Include keywords.",
-  "tags": ["lowercase", "hyphenated"],
+  "tags": ["must", "have", "at-least", "five", "tags"],
   "shots": [
     {
       "id": 1,
       "visual_prompt": "Descriptive landscape scene paragraph. NO GORE. NO TEXT.",
       "caption_text": "Verbatim narrative slice (≤15 words).",
-      "spoken_text": "Identical except digits become words.",
+      "spoken_text": "Identical except digits become words. FINAL SHOT MUST END WITH TERMINAL PUNCTUATION (. ! ?)",
       "is_conclusion": false
     }
   ],
@@ -675,7 +681,7 @@ ${narrative}
 Slice this narrative into 30-60 shots using the JSON schema above.`;
 
   if (validationFeedback) {
-    userPrompt += `\n\nPREVIOUS ATTEMPT ERRORS:\n${validationFeedback}\n\nFIX INSTRUCTION: To fix word-limit errors, SPLIT the long text across multiple consecutive shots. Do NOT paraphrase or delete words.`;
+    userPrompt += `\n\nPREVIOUS ATTEMPT ERRORS:\n${validationFeedback}\n\nFIX INSTRUCTIONS:\n1. To fix word-limit errors, SPLIT the long text across multiple consecutive shots. Do NOT paraphrase or delete words.\n2. Fix ALL array length constraints (tags, fact checks).\n3. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
   }
 
   const raw = await chatCompletion(
