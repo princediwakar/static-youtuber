@@ -74,39 +74,44 @@ async function triggerPipeline() {
                    job.status === 'failed' ? '❌ failed' :
                    job.status;
 
-    if (job.video_url) {
-      console.log(`\n🎬 Cloudinary URL: ${job.video_url}`);
-      console.log(`   Job ID: ${job.id}`);
-      console.log(`   Status: ${status}`);
+    if (job.status === 'published' || job.video_url) {
+      if (job.video_url) {
+        console.log(`\n🎬 Cloudinary URL: ${job.video_url}`);
+        console.log(`   Job ID: ${job.id}`);
+        console.log(`   Status: ${status}`);
 
-      // Optionally download locally
-      const downloadPath = path.resolve(__dirname, '..', `output-${job.id}.mp4`);
-      console.log(`\n📥 Downloading to ${downloadPath}...`);
-      try {
-        const response = await fetch(job.video_url);
-        if (response.ok) {
-          const fs = await import('fs');
-          const buffer = Buffer.from(await response.arrayBuffer());
-          fs.writeFileSync(downloadPath, buffer);
-          console.log(`   Saved ${(buffer.length / 1024 / 1024).toFixed(1)} MB locally.`);
-        } else {
-          console.log(`   Download failed (HTTP ${response.status}). Use the Cloudinary URL above.`);
+        // Optionally download locally
+        const downloadPath = path.resolve(__dirname, '..', `output-${job.id}.mp4`);
+        console.log(`\n📥 Downloading to ${downloadPath}...`);
+        try {
+          const response = await fetch(job.video_url);
+          if (response.ok) {
+            const fs = await import('fs');
+            const buffer = Buffer.from(await response.arrayBuffer());
+            fs.writeFileSync(downloadPath, buffer);
+            console.log(`   Saved ${(buffer.length / 1024 / 1024).toFixed(1)} MB locally.`);
+          } else {
+            console.log(`   Download failed (HTTP ${response.status}). Use the Cloudinary URL above.`);
+          }
+        } catch (e: any) {
+          console.log(`   Download failed: ${e.message}. Use the Cloudinary URL above.`);
         }
-      } catch (e: any) {
-        console.log(`   Download failed: ${e.message}. Use the Cloudinary URL above.`);
+      } else {
+        console.log(`\n✅ Job ${job.id} published successfully!`);
       }
-      return;
+      process.exit(0);
     }
 
     if (job.status === 'failed') {
       console.log(`\n❌ Job ${job.id} failed. Check Inngest dashboard or DB for error details.`);
-      return;
+      process.exit(1);
     }
 
     process.stdout.write(`  [${i + 1}] Job ${job.id} → ${status}\r`);
   }
 
   console.log('\n⏰ Timed out waiting for job completion. Check Inngest Cloud dashboard.');
+  process.exit(1);
 }
 
 triggerPipeline().catch((err) => {
