@@ -1,7 +1,6 @@
 // Path: lib/deepseek.ts
 import { DEEPSEEK_TEXT_MODEL } from './constants';
-
-const DEEPSEEK_BASE = 'https://api.deepseek.com/chat/completions';
+const DEEPSEEK_BASE = 'https://api.deepseek.com/beta/chat/completions';
 
 export async function chatCompletion(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
