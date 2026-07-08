@@ -37,7 +37,6 @@ def fastapi_app():
         model=MODEL_NAME,
         max_model_len=8192,
         enforce_eager=False,
-        disable_log_requests=True,
     )
     engine = AsyncLLMEngine.from_engine_args(engine_args)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
