@@ -66,32 +66,35 @@ def fastapi_app():
         )
         
         request_id = str(uuid.uuid4())
-        results_generator = engine.generate(prompt, sampling_params, request_id)
-        
-        final_output = None
-        async for request_output in results_generator:
-            final_output = request_output
+        try:
+            results_generator = engine.generate(prompt, sampling_params, request_id)
             
-        if final_output:
-            text = final_output.outputs[0].text
-            finish_reason = final_output.outputs[0].finish_reason
-            return {
-                "choices": [
-                    {
-                        "message": {
-                            "role": "assistant",
-                            "content": text
-                        },
-                        "finish_reason": finish_reason
+            final_output = None
+            async for request_output in results_generator:
+                final_output = request_output
+                
+            if final_output:
+                text = final_output.outputs[0].text
+                finish_reason = final_output.outputs[0].finish_reason
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": text
+                            },
+                            "finish_reason": finish_reason
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": len(final_output.prompt_token_ids),
+                        "completion_tokens": len(final_output.outputs[0].token_ids),
+                        "total_tokens": len(final_output.prompt_token_ids) + len(final_output.outputs[0].token_ids)
                     }
-                ],
-                "usage": {
-                    "prompt_tokens": len(final_output.prompt_token_ids),
-                    "completion_tokens": len(final_output.outputs[0].token_ids),
-                    "total_tokens": len(final_output.prompt_token_ids) + len(final_output.outputs[0].token_ids)
                 }
-            }
-        
-        return JSONResponse(status_code=500, content={"error": "Generation failed"})
+            
+            return JSONResponse(status_code=500, content={"error": "Generation failed"})
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": f"Generation failed: {e}"})
 
     return web_app

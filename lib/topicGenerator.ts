@@ -448,7 +448,7 @@ export async function generateScript(
         );
       }
 
-      if ((score.approved && passesFloor) || attempt === QUALITY_GATE_MAX_RETRIES) {
+      if (score.approved && passesFloor) {
         const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
         const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
         return {
@@ -478,7 +478,7 @@ export async function generateScript(
       validationFeedback = `Quality Gate Failed. Issues: ${score.issues.join(' | ')}`;
     }
     
-    if (lastScore && !lastScore.approved) {
+    if (lastScore) {
       throw new Error(`Script generation failed after all retries. Final LLM critique: ${lastScore.issues.join(' | ')}`);
     }
     throw new Error('Script generation failed after all retries (No score generated)');
@@ -683,7 +683,7 @@ Slice this narrative into 30-60 shots using the JSON schema above.`;
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ],
-    { temperature: 0.2, maxTokens: 8192, responseJson: true, timeout: 900_000 }
+    { temperature: 0.2, maxTokens: 6000, responseJson: true, timeout: 900_000 }
   );
 
   return extractJson(raw);
@@ -807,7 +807,7 @@ export async function generateLongFormScript(
         );
       }
 
-      if ((score.approved && passesFloor) || attempt === QUALITY_GATE_MAX_RETRIES) {
+      if (score.approved && passesFloor) {
         const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
         const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
         return {
@@ -840,7 +840,7 @@ export async function generateLongFormScript(
       validationFeedback = `Quality Gate Failed. Issues: ${score.issues.join(' | ')}`;
     }
 
-    if (lastScore && !lastScore.approved) {
+    if (lastScore) {
       throw new Error(`Long-form generation failed after all retries. Final critique: ${lastScore.issues.join(' | ')}`);
     }
     throw new Error('Long-form generation failed after all retries (no score generated)');

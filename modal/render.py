@@ -183,7 +183,7 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
         if candidate is None:
             for look in range(1, RESYNC_WINDOW):
                 if w_idx + look < len(words):
-                    cand_clean = re.sub(r'[^a-z]', '', words[w_idx + look]["text"].lower())
+                    cand_clean = re.sub(r'[^a-z0-9]', '', words[w_idx + look]["text"].lower())
                     if is_match(t_clean, cand_clean):
                         candidate = w_idx + look
                         break
@@ -492,10 +492,9 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         # 4. Mix them (amix divides volume by 2 to prevent clipping, so we apply a 2x boost to the final mix)
         filter_complex = (
             "[0:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=1.5,asplit=2[voice_sc][voice_mix]; "
-            "[voice_mix]volume=2.0[voice_mix_boost]; "
             "[1:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.3[bg_vol]; "
             "[bg_vol][voice_sc]sidechaincompress=threshold=-22dB:ratio=4:attack=5:release=50[bg_ducked]; "
-            "[voice_mix_boost][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[mix]; "
+            "[voice_mix][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[mix]; "
             "[mix]volume=2.0[aout]"
         )
 

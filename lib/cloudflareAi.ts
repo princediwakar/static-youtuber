@@ -155,7 +155,8 @@ export async function generateImage(
       }
 
       const buffer = Buffer.from(json.result.image, 'base64');
-      writeFileSync(cachedPath, buffer);
+      const outPath = cachePath(contentHash(model, prompt, width, height, resolvedSteps, CF_AI_IMAGE_GUIDANCE_FLUX2));
+      writeFileSync(outPath, buffer);
       return buffer;
     } catch (err: any) {
       const msg: string = err?.message ?? String(err);
