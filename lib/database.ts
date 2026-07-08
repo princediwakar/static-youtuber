@@ -49,6 +49,7 @@ const JOB_COLUMNS = new Set([
   'inngest_run_id', 'imageBatchName', 'audioBatchName', 'script',
   'shot_image_urls', 'narration_audio_url', 'shot_audio_urls', 'music_url', 'video_url', 'thumbnail_url',
   'youtube_video_id', 'error_message', 'variant',
+  'content_type',  // long-form discriminator
 ]);
 
 // JSONB columns require explicit JSON.stringify — pg does NOT auto-serialize
@@ -80,11 +81,53 @@ export const db = {
     );
     return res.rows[0] ?? null;
   },
-  createJob: async (data: { account_id: string, topic: string, niche: string, format_template: string, script: any, status: string, variant?: string }) => {
+  /** Type-safe resume: only fetches jobs of the given content_type. */
+  getIncompleteJobByType: async (accountId: string, contentType: string) => {
     const res = await query(
-      `INSERT INTO slideshow_jobs (account_id, topic, niche, format_template, script, status, variant)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [data.account_id, data.topic, data.niche, data.format_template, serializeJsonbValue(data.script), data.status, data.variant || null]
+      `SELECT * FROM slideshow_jobs
+       WHERE account_id = $1
+         AND content_type = $2
+         AND status NOT IN ('published', 'failed')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [accountId, contentType]
+    );
+    return res.rows[0] ?? null;
+  },
+  /** Returns the most recent published/assembled job of a given type within the last N hours. */
+  getLastJobByType: async (accountId: string, contentType: string, hours: number) => {
+    const res = await query(
+      `SELECT id FROM slideshow_jobs
+       WHERE account_id = $1
+         AND content_type = $2
+         AND status IN ('published', 'assembled')
+         AND created_at > NOW() - INTERVAL '${hours} hours'
+       LIMIT 1`,
+      [accountId, contentType]
+    );
+    return res.rows[0] ?? null;
+  },
+  createJob: async (data: {
+    account_id: string;
+    topic: string;
+    niche: string;
+    format_template: string;
+    script: any;
+    status: string;
+    variant?: string;
+    content_type?: string;
+  }) => {
+    const res = await query(
+      `INSERT INTO slideshow_jobs
+         (account_id, topic, niche, format_template, script, status, variant, content_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [
+        data.account_id, data.topic, data.niche, data.format_template,
+        serializeJsonbValue(data.script), data.status,
+        data.variant || null,
+        data.content_type || 'shorts',
+      ]
     );
     return res.rows[0].id;
   },

@@ -21,64 +21,34 @@ export const ACCOUNT_YOUTUBE_CHANNEL_ID: Record<string, string> = {
   stoic_shots: 'UCnBL50AkM_6BmvrNlS1rxVw',
 };
 
-// Optimal publish hour per niche (UTC).
-// Staggered across the US daytime window so each channel hits a different
-// sweet spot: videos are indexed by the algorithm 2-3 hours before peak
-// evening viewing (7-10 PM local) and no two pipelines contend for resources.
-export const NICHE_PUBLISH_HOUR_UTC: Record<string, number> = {
-  'Financial Forensics': 15,  // 11 AM EST — finance audience peaks midday + lunch scroll
-  'Stoic Philosophy': 17,  //  1 PM EST — self-improvement, indexed by afternoon reflection window
-  'Urban Survival': 19,  //  3 PM EST — broad US male audience, indexed by evening peak
-  'SaaS & AI Tools': 21,  //  5 PM EST — tech audience scrolls after work / pre-dinner
-};
 
 // ─── Format templates ───────────────────────────────────────────────────────────
-export const FORMAT_TEMPLATES = ['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST'] as const;
+export const FORMAT_TEMPLATES = ['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST', 'DEEP_DIVE'] as const;
 export type FormatTemplate = typeof FORMAT_TEMPLATES[number];
 
 export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, number>> = {
-  'SaaS & AI Tools': { RAPID_FIRE: 0.1, SLOW_BURN: 0.7, THE_LIST: 0.2 },
-  'Financial Forensics': { RAPID_FIRE: 0.8, SLOW_BURN: 0.2, THE_LIST: 0 },
-  'Stoic Philosophy': { RAPID_FIRE: 0, SLOW_BURN: 0.7, THE_LIST: 0.3 },
-  'Urban Survival': { RAPID_FIRE: 0, SLOW_BURN: 0.6, THE_LIST: 0.4 },
+  'SaaS & AI Tools':     { RAPID_FIRE: 0.1, SLOW_BURN: 0.7, THE_LIST: 0.2, DEEP_DIVE: 0 },
+  'Financial Forensics': { RAPID_FIRE: 0.8, SLOW_BURN: 0.2, THE_LIST: 0,   DEEP_DIVE: 0 },
+  'Stoic Philosophy':    { RAPID_FIRE: 0,   SLOW_BURN: 0.7, THE_LIST: 0.3, DEEP_DIVE: 0 },
+  'Urban Survival':      { RAPID_FIRE: 0,   SLOW_BURN: 0.6, THE_LIST: 0.4, DEEP_DIVE: 0 },
 };
 
 export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: number }> = {
   RAPID_FIRE: { min: 12, max: 15 },
-  SLOW_BURN: { min: 12, max: 12 },
-  THE_LIST: { min: 12, max: 14 },
+  SLOW_BURN:  { min: 12, max: 12 },
+  THE_LIST:   { min: 12, max: 14 },
+  DEEP_DIVE:  { min: 30, max: 60 }, // long-form only — never selected by shorts bandit
 };
 
 // ─── Model config ─────────────────────────────────────────────────────────────
 export const DEEPSEEK_TEXT_MODEL = process.env.DEEPSEEK_TEXT_MODEL || 'deepseek-v4-pro'; // deepseek-chat deprecated 2026-07-24
 
-// FLUX.1 [schnell] — fast + cheap. Cloudflare's documented pricing is
-// $0.000053 / 512x512 output tile + $0.00011 / step, so at this pipeline's
-// 768x1344 frame (6 tiles) a full 8-step render is roughly $0.0012/image.
-// Cloudflare caps steps at 8 for this model; 8 renders visibly crisper detail
-// and cleaner texture (grain, halftone, engraving) than the default of 4, at
-// ~2x the generation time. cloudflareAi.ts now sends the correctly-named
-// `steps` field (the old code sent `num_steps`, which isn't a documented
-// parameter for this model — verify your renders actually changed once this
-// ships; it's possible your account was silently getting the default of 4
-// this whole time).
+// FLUX.1 [schnell] — fast + cheap.
 export const CF_AI_IMAGE_MODEL = process.env.CF_AI_IMAGE_MODEL || '@cf/black-forest-labs/flux-1-schnell';
 export const CF_AI_IMAGE_STEPS = Number(process.env.CF_AI_IMAGE_STEPS) || 8; // hard cap for flux-1-schnell
 
 // Optional upgrade path: FLUX.2 [dev] (@cf/black-forest-labs/flux-2-dev) is
-// Black Forest Labs' larger, non-distilled model — Cloudflare's own docs
-// describe it as generating "highly realistic and detailed" images, and it's
-// explicitly able to follow specific hex codes and dense material/texture
-// description far more reliably than schnell, which is exactly what the
-// riso-print / halftone / bas-relief / topographic styles below lean on.
-// The catch is pricing: it's billed PER TILE PER STEP — $0.00041 / output
-// 512x512 tile / step, no flat per-image floor. At this pipeline's 6-tile
-// frame and a typical [dev]-model step count (~20), that's roughly
-// $0.05/image versus ~$0.001 for schnell — a 40-60x jump, multiplied across
-// 12-25 shots/video and 4 channels/day. cloudflareAi.ts already knows how to
-// call it (it needs multipart/form-data, not JSON) — flip the env var below
-// to try it on one channel first and check the bill before rolling it out
-// everywhere:
+// Black Forest Labs' larger, non-distilled model 
 //   CF_AI_IMAGE_MODEL=@cf/black-forest-labs/flux-2-dev
 export const CF_AI_IMAGE_STEPS_FLUX2 = Number(process.env.CF_AI_IMAGE_STEPS_FLUX2) || 20;
 export const CF_AI_IMAGE_GUIDANCE_FLUX2 = Number(process.env.CF_AI_IMAGE_GUIDANCE_FLUX2) || 4;
@@ -137,35 +107,7 @@ export const CLOUDINARY_EXPIRE_DAYS = 7;
 
 // ─── Caption typography + color per visual world ──────────────────────────────
 // One display font + a small palette per aesthetic, so captions look like part
-// of the artwork instead of a generic bold-sans overlay. `fontFamily` here is
-// the exact family string that will show up in `fc-list` once
-// modal/render.py's image build downloads and instances these fonts — see
-// that file's `image = modal.Image...` block, which now fetches all four
-// variable fonts and uses fonttools to cut static weights out of them,
-// matching the values below exactly. `fontFile` is the resulting filename
-// inside that same build. If anything else also burns text onto frames
-// locally (e.g. thumbnailGenerator.ts, which wasn't shared) it would need
-// its own copy of these .ttf files under assets/fonts/ — download the
-// family from fonts.google.com for that case, since that path doesn't go
-// through modal/render.py's build.
-//
-// `maxCharsPerLine`/`maxChars` are NOT copy-pasted from CAPTION_MAX_CHARS_
-// PER_LINE/CAPTION_MAX_CHARS above — those were tuned for Montserrat, and a
-// condensed stencil face fits meaningfully more characters per line than a
-// wide display serif at the same point size. These were derived by actually
-// loading each static instance with fontTools, computing a frequency-
-// weighted average glyph width (English letter frequencies + inter-word
-// spaces, not a flat a-z average), and scaling Montserrat's existing tuned
-// 32/80 by the ratio of that average width to Montserrat's — so whatever
-// real-world slack was already baked into 32/80 (kerning, hinting, the
-// video's actual safe margins) carries over proportionally instead of being
-// replaced by a from-scratch geometric guess. Re-run that measurement if the
-// per-niche fonts ever change:
-//   Montserrat (baseline)                          ratio 1.000  32 / 80
-//   Space Grotesk        (tech-minimalist)         ratio 1.083  34 / 85
-//   Fraunces 72pt Black  (finance-editorial)        ratio 1.134  36 / 90
-//   Cinzel Black         (stoic-zen)                ratio 0.923  29 / 72
-//   Big Shoulders Stencil Display (survival-technical) ratio 1.510  48 / 120
+// of the artwork instead of a generic bold-sans overlay.
 export type CaptionStyle = {
   fontFamily: string;
   fontFile: string;
@@ -187,10 +129,6 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
     maxChars: 85,
   },
   'finance-editorial': {
-    // Google's Fraunces ships as a variable font only; instancing it to a
-    // static wght=900/opsz=72 face (see modal/render.py's image build)
-    // folds those axis values into the family name itself — fontTools
-    // reports the resulting family as "Fraunces 72pt Black", not "Fraunces".
     fontFamily: 'Fraunces 72pt Black',
     fontFile: 'Fraunces-Black.ttf',
     textColor: '#C81D25',
@@ -211,9 +149,7 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
     maxChars: 72,
   },
   'survival-technical': {
-    // The Google Fonts family is "Big Shoulders Stencil Display" (there's
-    // also a separate "...Stencil Text" sibling) — its wght=700 named
-    // instance keeps the plain family name with a real "Bold" subfamily.
+
     fontFamily: 'Big Shoulders Stencil Display',
     fontFile: 'BigShouldersStencilDisplay-Bold.ttf',
     textColor: '#A8501D',
@@ -236,11 +172,85 @@ export function getCaptionStyle(aestheticId: string): CaptionStyle {
   };
 }
 
+// ─── Content types ────────────────────────────────────────────────────────────
+export const CONTENT_TYPES = { SHORTS: 'shorts', LONG: 'long' } as const;
+export type ContentType = typeof CONTENT_TYPES[keyof typeof CONTENT_TYPES];
+
+// ─── Long-form video + image dimensions ──────────────────────────────────────
+export const LONG_VIDEO_WIDTH = 1920;
+export const LONG_VIDEO_HEIGHT = 1080;
+export const LONG_CF_AI_SLIDE_WIDTH = 1344;
+export const LONG_CF_AI_SLIDE_HEIGHT = 768;
+export const LONG_THUMBNAIL_WIDTH = 1920;
+export const LONG_THUMBNAIL_HEIGHT = 1080;
+
+
+export const LONG_FORM_CAPTION_STYLES: Record<string, CaptionStyle & { maxWords: number }> = {
+  'tech-minimalist':    { ...CAPTION_STYLES['tech-minimalist'],    maxCharsPerLine: 58, maxChars: 145, maxWords: 20 },
+  'finance-editorial':  { ...CAPTION_STYLES['finance-editorial'],  maxCharsPerLine: 60, maxChars: 150, maxWords: 20 },
+  'stoic-zen':          { ...CAPTION_STYLES['stoic-zen'],          maxCharsPerLine: 48, maxChars: 120, maxWords: 20 },
+  'survival-technical': { ...CAPTION_STYLES['survival-technical'], maxCharsPerLine: 80, maxChars: 200, maxWords: 20 },
+};
+
+export function getLongFormCaptionStyle(aestheticId: string): CaptionStyle & { maxWords: number } {
+  return LONG_FORM_CAPTION_STYLES[aestheticId] ?? {
+    ...getCaptionStyle(aestheticId),
+    maxCharsPerLine: 55,
+    maxChars: 150,
+    maxWords: 20,
+  };
+}
+
+export const LONG_FORM_PUBLISH_HOUR_UTC = 11;
+
 // ─── Niche profiles ───────────────────────────────────────────────────────────
 export type NicheProfile = {
   aestheticId: string;
   toneInstruction: string;
   minQualityScore: number;
+};
+
+export const LONG_NICHE_PROFILES: Record<string, NicheProfile> = {
+  'SaaS & AI Tools': {
+    aestheticId: 'tech-minimalist',
+    minQualityScore: 7,
+    toneInstruction: `You are a documentary narrator chronicling the raw human drama behind the world's most consequential startup bets. Your audience has chosen to spend 4 minutes with you — reward that with depth.
+
+Write in full paragraphs with flowing sentences (15–25 words). Use subordinate clauses, cause-and-effect transitions, and narrative callbacks. Structure: Hook → Background Context → Pivotal Conflict → Resolution → Modern Significance.
+
+Include exact dates, dollar amounts, and names from the research context. Build tension through accumulating detail. The ending must recontextualize the entire story.
+
+NEVER use "disrupt", "innovate", "unicorn", or "game-changer". NEVER sound like a press release.`,
+  },
+  'Financial Forensics': {
+    aestheticId: 'finance-editorial',
+    minQualityScore: 7,
+    toneInstruction: `You are the investigative journalist who broke Enron, reconstructing a financial crime scene for an audience willing to follow every thread. Your tone is grave, forensically precise, and methodical.
+
+Write in flowing paragraphs, 15–25 words per sentence. Use transitions that build a chronological evidence trail. Structure: The Revelation → The Setup → The Paper Trail → The Collapse → The Reckoning.
+
+Every number is a body blow — the exact trade, the forged signature, the meeting where someone should have asked the question but didn't.
+
+NEVER use "mind-blowing", "insane", or "unbelievable". Let the facts speak.`,
+  },
+  'Stoic Philosophy': {
+    aestheticId: 'stoic-zen',
+    minQualityScore: 7,
+    toneInstruction: `You are Marcus Aurelius writing to himself after a decade of war — earned wisdom, not motivational platitude. Your audience has given you 4 minutes; give them something they'll carry.
+
+Write in measured paragraphs, 15–25 words per sentence. Use contrast (the weak response vs the disciplined response), historical anchoring, and direct address to the modern struggle. Structure: The Principle → Its Ancient Origin → Its Modern Manifestation → The Practice → The Verdict.
+
+NEVER sound like an Instagram quote. NEVER use "vibes", "manifest", "energy", or "the universe".`,
+  },
+  'Urban Survival': {
+    aestheticId: 'survival-technical',
+    minQualityScore: 7,
+    toneInstruction: `You are the calm, credible mentor who has been through the worst and is sharing hard-won knowledge for 4 minutes.
+
+Write in clear, authoritative paragraphs, 15–25 words per sentence. Every claim must be actionable. Use the ticking-clock structure for urgency. Structure: The Scenario → Why Most People Get It Wrong → The Correct Protocol → The Underlying Principle → How to Train for It.
+
+NEVER sound alarmist, conspiratorial, or like a motivational Instagram post.`,
+  },
 };
 
 export const NICHE_PROFILES: Record<string, NicheProfile> = {
@@ -320,16 +330,7 @@ export type Aesthetic = {
 };
 
 // FLUX.1 [schnell] optimized image prefixes.
-//
-// Deliberately moved off the AI-generated-content defaults that have become
-// visual shorthand for "made with an image model" — glassmorphism, glossy
-// soft-3D renders, isometric paper-craft dioramas, generic ink-wash zen. Each
-// world below leans on a real, physical print/material process instead, with
-// an explicit, named 3-4 color palette baked directly into the prompt (FLUX
-// follows concrete material + light + color description far more reliably
-// than abstract style-name-dropping alone). Every prefix still ends with a
-// hard no-text instruction — that part must never be softened, since FLUX
-// reliably mangles any legible text it attempts.
+
 export const AESTHETICS: Record<string, Aesthetic> = {
   'tech-minimalist': {
     id: 'tech-minimalist',

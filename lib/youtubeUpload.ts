@@ -37,7 +37,8 @@ export async function uploadToYouTube(
   videoUrl: string,
   thumbnailBuffer: Buffer,
   script: SlideshowScript,
-  creds: AccountCredentials
+  creds: AccountCredentials,
+  labelAsSynthetic: boolean = true
 ): Promise<UploadResult> {
   const oauth2 = buildOAuth2Client(creds);
   const youtube = google.youtube({ version: 'v3', auth: oauth2 });
@@ -57,7 +58,7 @@ export async function uploadToYouTube(
     await fs.writeFile(tempThumb, new Uint8Array(thumbnailBuffer));
 
     const title = script.title.substring(0, 100);
-    const description = buildDescription(script);
+    const description = buildDescription(script, labelAsSynthetic);
 
     console.log(`[YouTube] Uploading: "${title}"…`);
     const uploadRes = await youtube.videos.insert({
@@ -72,7 +73,7 @@ export async function uploadToYouTube(
         status: {
           privacyStatus: 'unlisted',
           madeForKids: false,
-          containsSyntheticMedia: true,
+          containsSyntheticMedia: labelAsSynthetic,
         },
       },
       media: {
@@ -107,8 +108,8 @@ export async function uploadToYouTube(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildDescription(script: SlideshowScript): string {
-  const aiDisclosure = '\n\nℹ This content was produced with AI tools and has been flagged accordingly.';
+function buildDescription(script: SlideshowScript, labelAsSynthetic: boolean): string {
+  const aiDisclosure = labelAsSynthetic ? '\n\nℹ This content was produced with AI tools and has been flagged accordingly.' : '';
   const hashtags = script.tags.slice(0, 8).map(t => `#${t.replace(/[\s-]+/g, '')}`).join(' ');
   const keyMoments = script.shots
     .filter(s => !s.is_conclusion && s.caption_text.length > 10)

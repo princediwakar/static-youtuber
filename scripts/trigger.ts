@@ -8,12 +8,18 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
 async function triggerPipeline() {
   const { inngest } = await import('../inngest/client');
-  const accountId = process.env.ACCOUNT_ID || 'tech_shots';
 
-  console.log(`🚀 Triggering pipeline for account: ${accountId}\n`);
+  const args = process.argv.slice(2);
+  const contentTypeIdx = args.indexOf('--contentType');
+  const contentType = contentTypeIdx !== -1 ? args[contentTypeIdx + 1] : 'shorts';
+  const accountIdArg = args.find(a => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--contentType');
+  const accountId = process.env.ACCOUNT_ID || accountIdArg || 'tech_shots';
+  const eventName = contentType === 'long' ? 'slideshow/trigger-long' : 'slideshow/trigger';
+
+  console.log(`🚀 Triggering ${contentType} pipeline for account: ${accountId}\n`);
 
   const result = await inngest.send({
-    name: 'slideshow/trigger',
+    name: eventName,
     data: { accountId, skipPublish: true },
   });
 
@@ -29,10 +35,10 @@ async function triggerPipeline() {
 
     const res = await query<{ id: string; status: string; video_url: string | null }>(
       `SELECT id, status, video_url FROM slideshow_jobs
-       WHERE account_id = $1
+       WHERE account_id = $1 AND content_type = $2
        ORDER BY created_at DESC
        LIMIT 1`,
-      [accountId]
+      [accountId, contentType]
     );
 
     if (res.rows.length === 0) {

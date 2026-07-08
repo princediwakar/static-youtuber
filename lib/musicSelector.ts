@@ -2,7 +2,7 @@
 import { ACE_STEP_BGM_URL, ACE_STEP_API_KEY } from './constants';
 import type { FormatTemplate } from './constants';
 
-const FETCH_TIMEOUT_MS = 3 * 60 * 1000;
+const FETCH_TIMEOUT_MS = 8 * 60 * 1000; // 8 min — covers 300s long-form audio; shorts never exceeds 60s
 
 const NICHE_MUSIC_PROMPTS: Record<string, Partial<Record<FormatTemplate, string[]>>> = {
   'Financial Forensics': {
@@ -19,6 +19,10 @@ const NICHE_MUSIC_PROMPTS: Record<string, Partial<Record<FormatTemplate, string[
       'dark synth, pulsing arpeggio, tense, investigative, building intensity, 95bpm',
       'electronic, driving bassline, urgent, mysterious, minimalist percussion, 100bpm',
     ],
+    DEEP_DIVE: [
+      'dark ambient documentary score, slow evolving strings, tense piano motif, investigative, cinematic build, 65bpm',
+      'minimal orchestral, brooding cello ostinato, sparse brass swells, cold and precise, 60bpm',
+    ],
   },
   'Stoic Philosophy': {
     RAPID_FIRE: [
@@ -32,6 +36,10 @@ const NICHE_MUSIC_PROMPTS: Record<string, Partial<Record<FormatTemplate, string[
     THE_LIST: [
       'orchestral, steady build, strings and brass, contemplative yet powerful, 80bpm',
       'cinematic, gradual crescendo, emotional strings, reflective, resolute, 75bpm',
+    ],
+    DEEP_DIVE: [
+      'neoclassical ambient, solo cello, slow evolving string pads, contemplative, meditative depth, 55bpm',
+      'cinematic orchestral, gradual crescendo, emotional but restrained, ancient and timeless, 60bpm',
     ],
   },
   'Urban Survival': {
@@ -47,6 +55,10 @@ const NICHE_MUSIC_PROMPTS: Record<string, Partial<Record<FormatTemplate, string[
       'industrial, mechanical rhythm, dark electronic, urgent, tactical, 95bpm',
       'aggressive synth, heavy percussion, tense, driving, apocalyptic, 100bpm',
     ],
+    DEEP_DIVE: [
+      'dark cinematic, low drones with distant percussion, tactical, methodical build, foreboding, 60bpm',
+      'ambient industrial, slow sub-bass pulse, sparse metallic percussion, ominous, deliberate, 65bpm',
+    ],
   },
   'SaaS & AI Tools': {
     RAPID_FIRE: [
@@ -60,6 +72,10 @@ const NICHE_MUSIC_PROMPTS: Record<string, Partial<Record<FormatTemplate, string[
     THE_LIST: [
       'synthwave, driving bassline, optimistic, retro-future, energetic, modern, 95bpm',
       'electronic, pulsing rhythm, bright, innovative, sleek, motivational, 90bpm',
+    ],
+    DEEP_DIVE: [
+      'ambient electronic documentary score, soft evolving pads, minimal beat, hopeful and reflective, 65bpm',
+      'lo-fi cinematic, warm piano, gentle atmospheric synth, contemplative, optimistic depth, 60bpm',
     ],
   },
 };
@@ -126,7 +142,9 @@ export async function selectMusicTrack(
   }
 
   const prompt = pickMusicPrompt(niche, formatTemplate, scriptTitle);
-  const duration = Math.max(30, Math.min(durationSeconds, 60));
+  // For shorts, narrationDurationSec is already ≤60s in practice.
+  // For long-form, it can be up to 300s — no artificial cap.
+  const duration = Math.max(30, Math.min(durationSeconds, 300));
 
   console.log(`[MusicSelector] ${niche}/${formatTemplate} → ${duration}s BGM: "${prompt.slice(0, 100)}..."`);
 

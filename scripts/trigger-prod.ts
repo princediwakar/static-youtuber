@@ -19,11 +19,17 @@ async function triggerPipeline() {
     eventKey,
   });
 
-  const accountId = process.argv[2] || process.env.ACCOUNT_ID || 'tech_shots';
-  console.log(`Sending trigger to Inngest Cloud for account: ${accountId}…`);
+  const args = process.argv.slice(2);
+  const contentTypeIdx = args.indexOf('--contentType');
+  const contentType = contentTypeIdx !== -1 ? args[contentTypeIdx + 1] : 'shorts';
+  const accountIdArg = args.find(a => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--contentType');
+  const accountId = accountIdArg || process.env.ACCOUNT_ID || 'tech_shots';
+  const eventName = contentType === 'long' ? 'slideshow/trigger-long' : 'slideshow/trigger';
+
+  console.log(`Sending ${contentType} trigger to Inngest Cloud for account: ${accountId}…`);
 
   const result = await inngest.send({
-    name: 'slideshow/trigger',
+    name: eventName,
     data: { accountId },
   });
 

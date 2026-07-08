@@ -14,22 +14,25 @@ export async function POST(request: NextRequest) {
 
   let accountId: string | undefined;
   let jobId: string | undefined;
+  let contentType: string = 'shorts';
   try {
     const body = await request.json();
     accountId = body.accountId;
     jobId = body.jobId;
+    contentType = body.contentType || 'shorts';
   } catch {
     // No JSON body — use the env default
   }
 
   const resolvedAccountId = accountId ?? ACCOUNT_ID;
   const label = jobId ? `retry job ${jobId} (${resolvedAccountId})` : resolvedAccountId;
-  console.log(`[Cron] Triggering slideshow pipeline for: ${label}`);
+  const eventName = contentType === 'long' ? 'slideshow/trigger-long' : 'slideshow/trigger';
+  console.log(`[Cron] Triggering ${contentType} pipeline for: ${label}`);
 
   await inngest.send({
-    name: 'slideshow/trigger',
+    name: eventName,
     data: { accountId: resolvedAccountId, ...(jobId ? { jobId } : {}) },
   });
 
-  return NextResponse.json({ ok: true, message: `Pipeline triggered for ${label}` }, { status: 202 });
+  return NextResponse.json({ ok: true, message: `${contentType} pipeline triggered for ${label}` }, { status: 202 });
 }

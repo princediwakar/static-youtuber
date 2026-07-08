@@ -60,15 +60,15 @@ function wordWrap(text: string, maxChars = 24, maxLines = 3): string[] {
   return lines;
 }
 
-async function addTextOverlay(imageBuffer: Buffer, title: string): Promise<Buffer> {
+async function addTextOverlay(imageBuffer: Buffer, title: string, width: number, height: number): Promise<Buffer> {
   const displayTitle = title.length > 72 ? title.substring(0, 69) + '…' : title;
-  const lines = wordWrap(displayTitle, 24, 3);
+  const maxCharsPerLine = Math.floor(width / (height > width ? 34 : 20)); // landscape vs portrait
+  const lines = wordWrap(displayTitle, maxCharsPerLine, 3);
 
-  const lineHeight = 76;
-  const fontSize = 58;
-  const totalTextHeight = lines.length * lineHeight;
+  const lineHeight = Math.round(height * 0.095);
+  const fontSize = Math.round(height * 0.073);
 
-  const yStart = THUMBNAIL_HEIGHT * 0.75;
+  const yStart = height * 0.75;
 
   const svgLines = lines.map((line, i) => {
     const y = yStart + i * lineHeight;
@@ -103,12 +103,12 @@ async function addTextOverlay(imageBuffer: Buffer, title: string): Promise<Buffe
   });
 
   const svg = `
-    <svg width="${THUMBNAIL_WIDTH}" height="${THUMBNAIL_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       ${svgLines.join('')}
     </svg>`;
 
   return sharp(imageBuffer)
-    .resize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, { fit: 'cover', position: 'centre' })
+    .resize(width, height, { fit: 'cover', position: 'centre' })
     .composite([{ input: Buffer.from(svg), blend: 'over' }])
     .jpeg({ quality: 92 })
     .toBuffer();
@@ -129,13 +129,15 @@ export async function generateThumbnail(
   title: string,
   rawThumbnailPrompt: string,
   niche: string,
+  width: number = THUMBNAIL_WIDTH,
+  height: number = THUMBNAIL_HEIGHT,
 ): Promise<Buffer> {
-  console.log(`[Thumbnail] Generating for: "${title}"`);
+  console.log(`[Thumbnail] Generating for: "${title}" (${width}×${height})`);
 
   const fullPrompt = buildThumbnailPrompt(rawThumbnailPrompt, niche);
 
-  const rawBuffer = await generateImage(fullPrompt, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, 8);
-  const withText = await addTextOverlay(rawBuffer, title);
+  const rawBuffer = await generateImage(fullPrompt, width, height, 8);
+  const withText = await addTextOverlay(rawBuffer, title, width, height);
 
   console.log(`[Thumbnail] Generated: ${(withText.length / 1024).toFixed(0)} KB`);
   return withText;

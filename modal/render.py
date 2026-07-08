@@ -63,6 +63,26 @@ DEFAULT_CAPTION_STYLE = {
 }
 
 
+def get_render_config(content_type: str) -> dict:
+    """Return per-content-type render settings.
+    Shorts: portrait 1080×1920. Long-form: landscape 1920×1080."""
+    if content_type == 'long':
+        return {
+            'play_res_x': 1920, 'play_res_y': 1080,
+            'font_size': 48,
+            'margin_l': 120, 'margin_r': 120, 'margin_v': 60,
+            'scale': '1920:1080', 'size': '1920x1080',
+            'cloudinary_folder': 'ai-slideshow/rendered-long',
+        }
+    return {
+        'play_res_x': 1080, 'play_res_y': 1920,
+        'font_size': 72,
+        'margin_l': 120, 'margin_r': 120, 'margin_v': 1080,
+        'scale': '1080:1920', 'size': '1080x1920',
+        'cloudinary_folder': 'ai-slideshow/rendered',
+    }
+
+
 def format_ass_time(seconds: float) -> str:
     if seconds < 0:
         seconds = 0.0
@@ -240,7 +260,15 @@ def proportional_split(shots: list, total_duration: float) -> list:
         boundaries[-1][1] = total_duration
     return boundaries
 
-def build_continuous_ass(shot_boundaries: list, shots: list, caption_style: dict) -> str:
+def build_continuous_ass(
+    shot_boundaries: list,
+    shots: list,
+    caption_style: dict,
+    play_res_x: int = 1080,
+    play_res_y: int = 1920,
+    font_size: int = 72,
+    margin_v: int = 1080,
+) -> str:
     style = {**DEFAULT_CAPTION_STYLE, **(caption_style or {})}
     primary_colour = hex_to_ass_color(style.get("textColor"), alpha="00")
     outline_colour = hex_to_ass_color(style.get("strokeColor"), alpha="00")
@@ -248,13 +276,13 @@ def build_continuous_ass(shot_boundaries: list, shots: list, caption_style: dict
     ass_content = [
         "[Script Info]",
         "ScriptType: v4.00+",
-        "PlayResX: 1080",
-        "PlayResY: 1920",
+        f"PlayResX: {play_res_x}",
+        f"PlayResY: {play_res_y}",
         "WrapStyle: 1",
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Default,{style['fontFamily']},72,{primary_colour},&H000000FF,{outline_colour},&H80000000,-1,0,0,0,100,100,0,0,1,4,4,8,120,120,1080,1",
+        f"Style: Default,{style['fontFamily']},{font_size},{primary_colour},&H000000FF,{outline_colour},&H80000000,-1,0,0,0,100,100,0,0,1,4,4,8,120,120,{margin_v},1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -273,14 +301,15 @@ def build_continuous_ass(shot_boundaries: list, shots: list, caption_style: dict
 
     return "\n".join(ass_content)
 
-@app.function(cpu=8.0, timeout=600, secrets=[modal.Secret.from_name("cloudinary")])
-def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str, visual_world: str = None, caption_style: dict = None, shot_audio_urls: list = None):
+@app.function(cpu=8.0, timeout=1800, secrets=[modal.Secret.from_name("cloudinary")])
+def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str, visual_world: str = None, caption_style: dict = None, shot_audio_urls: list = None, content_type: str = 'shorts'):
     import cloudinary.uploader
     import requests
 
+    cfg = get_render_config(content_type)
     work_dir = f"/tmp/{job_id}"
     os.makedirs(work_dir, exist_ok=True)
-    print(f"[{job_id}] Starting render — account={account_id}, visual_world={visual_world or 'default'}, shots={len(shots)}")
+    print(f"[{job_id}] Starting render — account={account_id}, content_type={content_type}, visual_world={visual_world or 'default'}, shots={len(shots)}")
 
     def send_failure_callback(error_msg: str):
         if not callback_url:
@@ -386,7 +415,13 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
 
         ass_path = f"{work_dir}/captions.ass"
         with open(ass_path, "w") as f:
-            f.write(build_continuous_ass(shot_boundaries, shots, caption_style))
+            f.write(build_continuous_ass(
+                shot_boundaries, shots, caption_style,
+                play_res_x=cfg['play_res_x'],
+                play_res_y=cfg['play_res_y'],
+                font_size=cfg['font_size'],
+                margin_v=cfg['margin_v'],
+            ))
 
         rendered_shots = []
         for i, (shot, img_path) in enumerate(zip(shots, img_paths)):
@@ -425,7 +460,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
             out_shot = f"{work_dir}/shot_rendered_{i}.mp4"
             subprocess.run([
                 "ffmpeg", "-y", "-loop", "1", "-i", img_path,
-                "-vf", f"scale=1080:1920,zoompan=z='if(eq(on,0),{scale_expr},{zoom_expr})':d={frames}:s=1080x1920:fps={FPS}",
+                "-vf", f"scale={cfg['scale']},zoompan=z='if(eq(on,0),{scale_expr},{zoom_expr})':d={frames}:s={cfg['size']}:fps={FPS}",
                 "-frames:v", str(frames), "-r", str(FPS),
                 "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p", "-an", out_shot
             ], check=True, capture_output=True, timeout=120)
@@ -473,7 +508,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         upload_result = cloudinary.uploader.upload(
             final_out,
             resource_type="video",
-            folder="ai-slideshow/rendered"
+            folder=cfg['cloudinary_folder']
         )
 
         video_url = upload_result['secure_url']
@@ -521,6 +556,8 @@ async def trigger_render(request: Request):
     caption_style = payload.get("caption_style")
     # Per-shot TTS — when present, bypasses Whisper alignment entirely
     shot_audio_urls = payload.get("shot_audio_urls")
+    # content_type: 'shorts' (portrait 1080×1920) or 'long' (landscape 1920×1080)
+    content_type = payload.get("content_type", "shorts")
 
     if not all([job_id, account_id, shots, music_url, callback_url]):
         raise HTTPException(status_code=400, detail="Missing required fields")
@@ -528,7 +565,7 @@ async def trigger_render(request: Request):
         raise HTTPException(status_code=400, detail="Must provide either shot_audio_urls or audio_url")
 
     try:
-        render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls)
+        render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type)
     except Exception as e:
         print(f"[trigger_render] render_video.spawn() failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

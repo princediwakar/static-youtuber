@@ -7,12 +7,14 @@ export type CaptionValidationResult = {
   errors: string[];
 };
 
-// Only the two fields the validator actually needs — a full CaptionStyle
-// (from getCaptionStyle()) satisfies this too, so callers can just pass
-// that straight through without picking fields out of it first.
+// Only the fields the validator actually needs — a full CaptionStyle
+// (from getCaptionStyle() / getLongFormCaptionStyle()) satisfies this too,
+// so callers can pass it straight through without picking fields out.
 export type CaptionWidthLimits = {
   maxCharsPerLine: number;
   maxChars: number;
+  /** Maximum word count per shot. Defaults to 18 (shorts). Long-form uses 20. */
+  maxWords?: number;
 };
 
 // Falls back to the original Montserrat-tuned globals if a caller doesn't
@@ -79,10 +81,12 @@ export function validateShotCaption(
   }
 
 
-  if (words.length > 18) {
-    errors.push(`Shot ${shot.index}: ${words.length} words — too long. Max is 18.`);
-  } else if (words.length > 12) {
-    warnings.push(`Shot ${shot.index}: ${words.length} words — target ≤12.`);
+  const maxWords = widthLimits.maxWords ?? 18;
+  const warnWords = maxWords > 18 ? maxWords - 3 : 12;  // warn at 17 for long-form, 12 for shorts
+  if (words.length > maxWords) {
+    errors.push(`Shot ${shot.index}: ${words.length} words — too long. Max is ${maxWords}.`);
+  } else if (words.length > warnWords) {
+    warnings.push(`Shot ${shot.index}: ${words.length} words — target ≤${warnWords}.`);
   }
 
   const lines = simulateWordWrap(cleaned, maxCharsPerLine);

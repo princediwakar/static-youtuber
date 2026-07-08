@@ -9,10 +9,12 @@ import {
   AESTHETICS,
   NICHE_PROFILES,
   DEFAULT_NICHE_PROFILE,
+  LONG_NICHE_PROFILES,
   QUALITY_GATE_MAX_RETRIES,
   FORMAT_TEMPLATE_WEIGHTS,
   TEMPLATE_SHOT_COUNTS,
   getCaptionStyle,
+  getLongFormCaptionStyle,
 } from './constants';
 import type { FormatTemplate } from './constants';
 
@@ -111,11 +113,11 @@ export async function releaseTopic(id: number): Promise<void> {
 const EPSILON = 0.15;
 
 function pickFormatTemplateSync(niche: string): FormatTemplate {
-  const weights = FORMAT_TEMPLATE_WEIGHTS[niche] ?? { RAPID_FIRE: 0.4, SLOW_BURN: 0.3, THE_LIST: 0.3 };
+  const weights = FORMAT_TEMPLATE_WEIGHTS[niche] ?? { RAPID_FIRE: 0.4, SLOW_BURN: 0.3, THE_LIST: 0.3, DEEP_DIVE: 0 };
   const rand = Math.random();
   if (rand < weights.RAPID_FIRE) return 'RAPID_FIRE';
   if (rand < weights.RAPID_FIRE + weights.SLOW_BURN) return 'SLOW_BURN';
-  return 'THE_LIST';
+  return 'THE_LIST'; // DEEP_DIVE has weight=0 in all shorts niches — never reaches here
 }
 
 export async function pickFormatTemplate(niche: string, aestheticId: string): Promise<FormatTemplate> {
@@ -481,6 +483,368 @@ export async function generateScript(
       throw new Error(`Script generation failed after all retries. Final LLM critique: ${lastScore.issues.join(' | ')}`);
     }
     throw new Error('Script generation failed after all retries (No score generated)');
+  } catch (err) {
+    await releaseTopic(reserved.id);
+    throw err;
+  }
+}
+
+// ─── LONG-FORM SCHEMAS ────────────────────────────────────────────────────────
+
+const LongShotSchema = z.object({
+  id: z.number(),
+  visual_prompt: z.string()
+    .min(30, 'Image prompt must be at least 30 characters')
+    .max(800, 'Image prompt must be ≤800 chars'),
+  caption_text: z.string()
+    .refine(t => t.trim().split(/\s+/).length >= 1, 'Min 1 word')
+    .refine(t => t.trim().split(/\s+/).length <= 20, 'Max 20 words')
+    .refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
+  spoken_text: z.string().min(1),
+  is_conclusion: z.boolean().default(false),
+});
+
+const LongFormScriptSchema = z.object({
+  fact_check_and_sources: z.array(z.object({
+    claim: z.string().min(10),
+    source: z.string().min(5),
+  })).min(5),
+  visual_world: z.enum(['tech-minimalist', 'finance-editorial', 'stoic-zen', 'survival-technical']),
+  format_template: z.literal('DEEP_DIVE'),
+  title: z.string().min(5).max(100),
+  description: z.string().min(50).max(1000),
+  tags: z.array(z.string()).min(5).max(15),
+  voiceName: z.string().min(1),
+  shots: z.array(LongShotSchema).min(30).max(60),
+  thumbnailPrompt: z.string().min(30).max(500),
+}).refine(data => data.shots.filter(s => s.is_conclusion).length === 1, {
+  message: 'Exactly one shot must be marked as the conclusion',
+}).refine(data => data.shots[data.shots.length - 1].is_conclusion, {
+  message: 'The conclusion shot must be the last shot',
+}).refine(data => /[.!?]$/.test(data.shots[data.shots.length - 1].spoken_text.trim()), {
+  message: 'The final shot must end with terminal punctuation',
+});
+
+const LongQualityScoreSchema = z.object({
+  narrative_coherence:  z.number().min(0).max(10),  // hook → synthesis flows
+  factual_depth:        z.number().min(0).max(10),  // specific dates/names/numbers used
+  arc_satisfaction:     z.number().min(0).max(10),  // ending pays off the hook
+  visual_variety:       z.number().min(0).max(10),  // prompts diverse across 30-60 shots
+  information_density:  z.number().min(0).max(10),  // every shot advances narrative
+  tone_calibration:     z.number().min(0).max(10),  // matches long-form niche tone
+  overall:  z.number().min(0).max(10),
+  issues:   z.array(z.string()),
+  approved: z.boolean(),
+});
+type LongQualityScore = z.infer<typeof LongQualityScoreSchema>;
+
+const LONG_QUALITY_DIMENSIONS = [
+  'narrative_coherence', 'factual_depth', 'arc_satisfaction',
+  'visual_variety', 'information_density', 'tone_calibration',
+] as const;
+
+// ─── LONG-FORM PASS 1: NARRATIVE ─────────────────────────────────────────────
+async function generateLongFormNarrative(
+  topic: string,
+  researchContext: string,
+  toneInstruction: string,
+): Promise<string> {
+  const systemPrompt = `You are a documentary narrator and investigative journalist.
+Your job is to write a compelling, fact-dense 3-5 minute deep-dive script.
+
+LENGTH MANDATE (CRITICAL):
+- TARGET 450-750 WORDS.
+- At ~2.5 words/second (F5-TTS pace), 600 words ≈ 4 minutes — the ideal long-form sweet spot.
+
+CONTENT POLICY (STRICT):
+- Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma.
+- Build tension psychologically. Focus on stakes and ticking clocks, NOT physical blood.
+
+TONE MANDATE:
+${toneInstruction}
+
+STRUCTURE MANDATE:
+Hook → Background Context → Deep Exploration (3-4 distinct dimensions) → Modern Relevance → Synthesis
+
+STORYTELLING RULES:
+1. Ground everything in reality. Use exact dates, names, and numbers from the research context.
+2. Hook instantly — first sentence is a claim or question the viewer arrived with.
+3. Use subordinate clauses, cause-and-effect transitions, and narrative callbacks.
+4. Sentences may be 15-25 words. This is prose, not caption bullets.
+5. Ending must recontextualize the whole story.
+6. NO CTAs. No "subscribe", "like", or "thanks for watching".
+
+FORMATTING:
+- Use digits, symbols, and abbreviations for numbers ("$1.4B", "26%", "CEO").
+
+OUTPUT:
+Pure prose. NO JSON. NO formatting headers. Just the story.`;
+
+  const userPrompt = `TOPIC: ${topic}\n\nRESEARCH CONTEXT (TREAT AS ABSOLUTE FACT):\n${researchContext}`;
+
+  const raw = await chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    { temperature: 0.8, maxTokens: 2048, responseJson: false }
+  );
+
+  if (!raw) throw new Error('Long-form Pass 1: DeepSeek returned empty narrative');
+  return raw as string;
+}
+
+// ─── LONG-FORM PASS 2: CHUNKING ───────────────────────────────────────────────
+async function chunkLongFormScriptToJSON(
+  narrative: string,
+  topic: string,
+  researchContext: string,
+  niche: string,
+  aestheticInstruction: string,
+  validationFeedback?: string,
+): Promise<unknown> {
+  const systemPrompt = `You are a precision video editor for a landscape (16:9) documentary channel.
+Slice this narrative into exactly 30-60 consecutive shots, formatted as strict JSON.
+
+FORMAT: DEEP_DIVE
+VISUAL WORLD: ${niche === 'Financial Forensics' ? 'finance-editorial' : niche === 'Stoic Philosophy' ? 'stoic-zen' : niche === 'Urban Survival' ? 'survival-technical' : 'tech-minimalist'}
+
+DUAL-TEXT MANDATE (CRITICAL):
+Each shot has TWO text fields:
+
+1. "caption_text" — Verbatim slice from the narrative, burned onto the landscape 16:9 frame.
+   - VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, or alter the narrative.
+   - WORD LIMIT: No shot may contain more than 15 words.
+   - If a sentence is long, SPLIT across multiple consecutive shots.
+   - Keep symbols and abbreviations ("$1.4B", "26%", "CEO").
+
+2. "spoken_text" — Identical to caption_text EXCEPT digits become spoken words.
+   - "7 years" → "seven years"; "$1.4B" → "one point four billion dollars"; "26%" → "twenty-six percent"
+   - Acronyms stay as-is: "CEO", "FBI", "POW"
+   - Never add, remove, or reorder words beyond digit substitution.
+
+VOICE SELECTION (same catalog as shorts — pick best for long-form niche):
+- phil-freeman-american-male: Deep, rich, authoritative. Best for Financial Forensics / dramatic tech.
+- jon-british-male: Professional, clear, polished. Good for Stoic / editorial.
+- dee-smith-american-male: Dynamic, conversational. Good for SaaS / Urban Survival.
+- mallory-handford-american-female: Bright, compelling. Alternative for any niche.
+- melissa-harlow-american-female: Warm, natural narration.
+
+VISUAL AESTHETIC (FLUX.1 — landscape 1344×768):
+${aestheticInstruction}
+- Write a descriptive paragraph per shot using natural language.
+- KINETIC ENERGY MANDATE: Change the visual prompt for EVERY SINGLE SHOT. Different angles, lighting, focus.
+- NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS.
+- HARD BAN: No glassmorphism, frosted glass, glossy 3D, pastel blobs, isometric dioramas, neon wireframes, sumi-e.
+  Describe material and light instead (paper grain, ink, stone, patina, halftone, contour line).
+- CRITICAL: No written words, signs, legible letters, numbers, or text anywhere in the scene.
+- Landscape frame: compose for 16:9 (wider than tall). Use horizontal scene depth.
+
+CENSORSHIP (ZERO TOLERANCE):
+- FORBIDDEN: blood, bloody, wound, severed, arterial, flesh, visceral, raw, bare chest, corpse, dead, murder.
+
+JSON SCHEMA:
+{
+  "fact_check_and_sources": [
+    { "claim": "Exact fact", "source": "Source context" }
+  ],
+  "visual_world": "MUST MATCH THE VISUAL WORLD ABOVE",
+  "format_template": "DEEP_DIVE",
+  "voiceName": "pick from catalog",
+  "title": "5-100 chars. Front-load the key claim. Reads like a YouTube search result.",
+  "description": "SEO-optimized 2-3 paragraphs. First sentence restates the core fact. Include keywords.",
+  "tags": ["lowercase", "hyphenated"],
+  "shots": [
+    {
+      "id": 1,
+      "visual_prompt": "Descriptive landscape scene paragraph. NO GORE. NO TEXT.",
+      "caption_text": "Verbatim narrative slice (≤15 words).",
+      "spoken_text": "Identical except digits become words.",
+      "is_conclusion": false
+    }
+  ],
+  "thumbnailPrompt": "30-500 char landscape thumbnail. STRICTLY PG-13. NO GORE."
+}
+Only the LAST shot has is_conclusion: true.`;
+
+  let userPrompt = `TOPIC: ${topic}
+RESEARCH CONTEXT: ${researchContext}
+
+NARRATIVE TO CHUNK:
+${narrative}
+
+Slice this narrative into 30-60 shots using the JSON schema above.`;
+
+  if (validationFeedback) {
+    userPrompt += `\n\nPREVIOUS ATTEMPT ERRORS:\n${validationFeedback}\n\nFIX INSTRUCTION: To fix word-limit errors, SPLIT the long text across multiple consecutive shots. Do NOT paraphrase or delete words.`;
+  }
+
+  const raw = await chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    { temperature: 0.2, maxTokens: 8192, responseJson: true }
+  );
+
+  return extractJson(raw);
+}
+
+// ─── LONG-FORM QUALITY GATE ───────────────────────────────────────────────────
+async function scoreLongFormScript(
+  script: z.infer<typeof LongFormScriptSchema>,
+  researchContext: string,
+  niche: string,
+  minScore: number,
+): Promise<LongQualityScore> {
+  const prompt = `You are the final quality controller for a ${niche} YouTube long-form channel.
+Evaluate this deep-dive documentary script against the provided research data.
+
+RESEARCH CONTEXT (TRUTH):
+${researchContext}
+
+SCRIPT TO EVALUATE:
+${JSON.stringify({
+  title: script.title,
+  description: script.description,
+  thumbnailPrompt: script.thumbnailPrompt,
+  shots: script.shots.map(s => ({ caption_text: s.caption_text, spoken_text: s.spoken_text, visual_prompt: s.visual_prompt })),
+}, null, 2)}
+
+SCORING RUBRIC (0-10):
+- narrative_coherence (0-10): Does the story flow logically from hook to synthesis? Does it feel like one continuous documentary, not disconnected clips?
+- factual_depth (0-10): Are specific dates, names, and numbers from the research context woven throughout?
+- arc_satisfaction (0-10): Does the ending pay off the opening hook? Would a viewer feel the full arc was worth 4 minutes of their time?
+- visual_variety (0-10): Are the 30-60 visual prompts genuinely diverse — different angles, locations, lighting, materials? Or repetitive?
+- information_density (0-10): Is every shot advancing the narrative? No filler, no repetition of the same point.
+- tone_calibration (0-10): Does the writing match the deep documentary tone? Flowing sentences, subordinate clauses, not caption bullets?
+
+CRITICAL CENSORSHIP CHECK:
+If ANY visual_prompt contains explicit gore, blood, or visceral anatomy → score overall=0, approved=false.
+
+CRITICAL STYLE-DRIFT CHECK:
+If ANY visual_prompt describes glassmorphism, frosted glass, glossy 3D, isometric dioramas, neon wireframes, sumi-e, or any legible text/numbers → score overall=0, approved=false.
+
+APPROVAL RULE:
+approved=true ONLY IF overall >= ${minScore} AND every dimension >= 5.
+
+Output JSON only:
+{ "narrative_coherence": 0, "factual_depth": 0, "arc_satisfaction": 0, "visual_variety": 0, "information_density": 0, "tone_calibration": 0, "overall": 0, "issues": ["string"], "approved": false }`;
+
+  const raw = await chatCompletion(
+    [{ role: 'user', content: prompt }],
+    { temperature: 0.1, maxTokens: 1024, responseJson: true },
+  );
+
+  if (!raw) throw new Error('Long-form quality gate returned empty response');
+  return LongQualityScoreSchema.parse(extractJson(raw));
+}
+
+// ─── LONG-FORM MAIN PIPELINE ──────────────────────────────────────────────────
+export async function generateLongFormScript(
+  niche: string,
+  accountId: string,
+): Promise<{ script: import('./types').SlideshowScript; topic: string; formatTemplate: string }> {
+  const profile = LONG_NICHE_PROFILES[niche] ?? NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
+  const aesthetic = AESTHETICS[profile.aestheticId] ?? Object.values(AESTHETICS)[0];
+
+  const reserved = await reserveTopic(niche, accountId);
+
+  try {
+    console.log(`[LongForm] Running Pass 1 (Narrative) for topic: ${reserved.topic}`);
+    const narrative = await generateLongFormNarrative(reserved.topic, reserved.research_context, profile.toneInstruction);
+
+    let lastScore: LongQualityScore | null = null;
+    let validationFeedback = '';
+    const captionLimits = getLongFormCaptionStyle(profile.aestheticId);
+
+    for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
+      console.log(`[LongForm] Running Pass 2 (Chunking), attempt ${attempt + 1}`);
+
+      const parsed = await chunkLongFormScriptToJSON(
+        narrative,
+        reserved.topic,
+        reserved.research_context,
+        niche,
+        aesthetic.instruction,
+        validationFeedback || undefined,
+      );
+
+      validationFeedback = '';
+
+      let validated: z.infer<typeof LongFormScriptSchema>;
+      try {
+        validated = LongFormScriptSchema.parse(parsed);
+      } catch (zodErr) {
+        if (zodErr instanceof z.ZodError) {
+          validationFeedback = zodErr.issues.map(i =>
+            `${i.path.length > 0 ? i.path.join('.') + ': ' : ''}${i.message}`
+          ).join('\n');
+          if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
+          throw new Error(`Long-form script validation failed:\n${validationFeedback}`);
+        }
+        throw zodErr;
+      }
+
+      // Caption validation using landscape char limits (maxWords=20)
+      const captionValidation = validateAllCaptions(
+        validated.shots.map(s => ({ caption_text: s.caption_text })),
+        captionLimits,
+      );
+      if (!captionValidation.valid) {
+        validationFeedback = captionValidation.errors.join('\n');
+        if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
+        throw new Error(`Long-form caption validation failed:\n${validationFeedback}`);
+      }
+
+      const score = await scoreLongFormScript(validated, reserved.research_context, niche, profile.minQualityScore);
+      const passesFloor = score.overall >= profile.minQualityScore &&
+        LONG_QUALITY_DIMENSIONS.every(dim => score[dim] >= 5);
+
+      if (score.approved && !passesFloor) {
+        console.warn(
+          `[LongForm] Quality gate: model self-reported approved=true but ` +
+          `overall=${score.overall} failed code-side floor (min=${profile.minQualityScore}). Treating as not approved.`
+        );
+      }
+
+      if ((score.approved && passesFloor) || attempt === QUALITY_GATE_MAX_RETRIES) {
+        const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
+        const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
+        return {
+          script: {
+            title: validated.title,
+            description: validated.description,
+            visual_world: validated.visual_world,
+            format_template: 'DEEP_DIVE',
+            voiceName: validated.voiceName,
+            fact_check_and_sources: validated.fact_check_and_sources
+              .map(f => `${f.claim} → ${f.source}`).join('\n'),
+            tags: validated.tags,
+            shots: validated.shots.map(shot => ({
+              id: shot.id,
+              visual_prompt: `${aesthetic.imagePrefix}Scene description: ${shot.visual_prompt}`,
+              caption_text: shot.caption_text,
+              spoken_text: shot.spoken_text,
+              is_conclusion: shot.is_conclusion,
+            })),
+            thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt}`,
+            hook_intro,
+            contentType: 'long',
+          },
+          topic: reserved.topic,
+          formatTemplate: 'DEEP_DIVE',
+        };
+      }
+
+      lastScore = score;
+      validationFeedback = `Quality Gate Failed. Issues: ${score.issues.join(' | ')}`;
+    }
+
+    if (lastScore && !lastScore.approved) {
+      throw new Error(`Long-form generation failed after all retries. Final critique: ${lastScore.issues.join(' | ')}`);
+    }
+    throw new Error('Long-form generation failed after all retries (no score generated)');
   } catch (err) {
     await releaseTopic(reserved.id);
     throw err;

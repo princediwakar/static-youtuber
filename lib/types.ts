@@ -11,17 +11,21 @@ export interface Shot {
   audioUrl?: string;
 }
 
+export type ContentType = 'shorts' | 'long';
+
 export type SlideshowScript = {
   title: string;
   description: string;
   visual_world: 'tech-minimalist' | 'finance-editorial' | 'stoic-zen' | 'survival-technical';
-  format_template: 'RAPID_FIRE' | 'SLOW_BURN' | 'THE_LIST';
+  format_template: 'RAPID_FIRE' | 'SLOW_BURN' | 'THE_LIST' | 'DEEP_DIVE';
   fact_check_and_sources: string;
   tags: string[];
   shots: Shot[];
   thumbnailPrompt: string;
   hook_intro: string;
   voiceName: string;
+  /** Set to 'long' by generateLongFormScript; undefined / 'shorts' for standard pipeline. */
+  contentType?: ContentType;
 };
 
 export interface SlideshowJob {
@@ -30,13 +34,17 @@ export interface SlideshowJob {
   topic: string;
   niche: string;
   format_template: string;
+  content_type: ContentType;
   status:
     | 'pending'
+    | 'script_ready'
     | 'generating'
     | 'images_done'
     | 'tts_done'
+    | 'assets_ready'
     | 'assembled'
     | 'uploaded'
+    | 'published'
     | 'failed';
   inngest_run_id?: string;
   script?: SlideshowScript;

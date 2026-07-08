@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "trigger": "npx tsx scripts/trigger.ts",
-    "trigger:prod": "npx tsx scripts/trigger-prod.ts"
+    "trigger:prod": "npx tsx scripts/trigger-prod.ts",
+    "trigger:long": "npx tsx scripts/trigger.ts --contentType long",
+    "trigger:long:prod": "npx tsx scripts/trigger-prod.ts --contentType long"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.1",
