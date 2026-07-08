@@ -7,11 +7,7 @@ MINUTES = 60
 vllm_image = (
     modal.Image.debian_slim(python_version="3.10")
     .pip_install(
-        "vllm==0.6.3.post1",
-        "fastapi[standard]",
-        "pydantic",
-        "starlette",
-        "transformers",
+        "vllm", # Latest version to avoid Qwen2Tokenizer attribute errors
     )
 )
 
@@ -20,9 +16,8 @@ MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
 @app.function(
     image=vllm_image,
     gpu="A10G",
-    container_idle_timeout=5 * MINUTES,
+    scaledown_window=5 * MINUTES, # Fixed deprecation warning from container_idle_timeout
     timeout=10 * MINUTES,
-    allow_concurrent_inputs=100,
 )
 @modal.asgi_app()
 def fastapi_app():
