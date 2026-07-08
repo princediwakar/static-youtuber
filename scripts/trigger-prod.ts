@@ -33,6 +33,8 @@ async function triggerPipeline() {
     data: { accountId },
   });
 
+  const triggerTime = new Date(Date.now() - 30000); // 30s buffer for clock drift
+
   console.log('✅ Trigger sent!');
   console.log('Event IDs:', result.ids);
   console.log('\nPolling production database for job completion (checks every 15s, max 45 min)...\n');
@@ -46,10 +48,10 @@ async function triggerPipeline() {
 
     const res = await query<{ id: string; status: string; video_url: string | null }>(
       `SELECT id, status, video_url FROM slideshow_jobs
-       WHERE account_id = $1 AND content_type = $2
+       WHERE account_id = $1 AND content_type = $2 AND created_at >= $3
        ORDER BY created_at DESC
        LIMIT 1`,
-      [accountId, contentType]
+      [accountId, contentType, triggerTime]
     );
 
     if (res.rows.length === 0) {
