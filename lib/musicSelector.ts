@@ -132,8 +132,6 @@ export async function selectMusicTrack(
   scriptTitle: string,
   niche: string,
   formatTemplate: FormatTemplate,
-  _visualWorld: string,
-  narrationText: string,
   durationSeconds: number,
 ): Promise<{ buffer: Buffer; filename: string; title: string }> {
   

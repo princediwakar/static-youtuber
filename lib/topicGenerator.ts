@@ -307,7 +307,7 @@ Slice this narrative into the exact JSON schema.`;
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
     ],
-    { temperature: 0.2, maxTokens: 4096, responseJson: true }
+    { temperature: 0.2, maxTokens: 4096, responseJson: true, timeout: 600_000 }
   );
 
   return extractJson(raw);
@@ -683,7 +683,7 @@ Slice this narrative into 30-60 shots using the JSON schema above.`;
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ],
-    { temperature: 0.2, maxTokens: 8192, responseJson: true }
+    { temperature: 0.2, maxTokens: 8192, responseJson: true, timeout: 900_000 }
   );
 
   return extractJson(raw);
