@@ -486,8 +486,17 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         final_out = f"{work_dir}/final_{job_id}.mp4"
         
         # Audio Ducking (Sidechain compression)
-        # Open up the base volume and relax the threshold to around -22dB
-        filter_complex = "[1:a]volume=0.6[bg_vol]; [bg_vol][0:a]sidechaincompress=threshold=-22dB:ratio=4:attack=5:release=50[bg_ducked]; [0:a][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2:weights=2 1[aout]"
+        # 1. Boost the TTS voice slightly (volume=1.5)
+        # 2. Drop the base background music (volume=0.3)
+        # 3. Duck the music when the voice speaks (sidechaincompress)
+        # 4. Mix them (amix divides volume by 2 to prevent clipping, so we apply a 2x boost to the final mix)
+        filter_complex = (
+            "[0:a]volume=1.5[voice_boost]; "
+            "[1:a]volume=0.3[bg_vol]; "
+            "[bg_vol][voice_boost]sidechaincompress=threshold=-22dB:ratio=4:attack=5:release=50[bg_ducked]; "
+            "[voice_boost][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2:weights=2 1[mix]; "
+            "[mix]volume=2.0[aout]"
+        )
 
         subprocess.run([
             "ffmpeg", "-y", "-i", master_audio, "-stream_loop", "-1", "-i", bg_music_path, "-i", captioned_out,
