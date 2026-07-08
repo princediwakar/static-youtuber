@@ -246,7 +246,6 @@ VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 - jon-british-male: Professional, clear, experienced British male. Polished, versatile narration.
 - kylie-hinze-american-female: Friendly, upbeat, energetic girl-next-door American female. Cheerful, youthful, positive.
 - kelli-winkler-american-female: Professional American female with radio/broadcasting background. Warm, clear, conversational.
-- phil-freeman-american-male: Deep, rich, authoritative, dramatic, versatile American male. Strong bass tones, great for corporate, gritty, storytelling.
 - dee-smith-american-male: Dynamic, energetic, professional African American male. Versatile, conversational, commercial-friendly.
 
 VISUAL AESTHETIC (FLUX.1):
