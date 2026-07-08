@@ -491,10 +491,11 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         # 3. Duck the music when the voice speaks (sidechaincompress)
         # 4. Mix them (amix divides volume by 2 to prevent clipping, so we apply a 2x boost to the final mix)
         filter_complex = (
-            "[0:a]volume=1.5[voice_boost]; "
-            "[1:a]volume=0.3[bg_vol]; "
-            "[bg_vol][voice_boost]sidechaincompress=threshold=-22dB:ratio=4:attack=5:release=50[bg_ducked]; "
-            "[voice_boost][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2:weights=2 1[mix]; "
+            "[0:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=1.5,asplit=2[voice_sc][voice_mix]; "
+            "[voice_mix]volume=2.0[voice_mix_boost]; "
+            "[1:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.3[bg_vol]; "
+            "[bg_vol][voice_sc]sidechaincompress=threshold=-22dB:ratio=4:attack=5:release=50[bg_ducked]; "
+            "[voice_mix_boost][bg_ducked]amix=inputs=2:duration=first:dropout_transition=2[mix]; "
             "[mix]volume=2.0[aout]"
         )
 
