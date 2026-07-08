@@ -6,9 +6,9 @@ app = modal.App("llm-server")
 MINUTES = 60
 
 vllm_image = (
-    modal.Image.debian_slim(python_version="3.10")
+    modal.Image.from_registry("nvidia/cuda:12.1.1-devel-ubuntu22.04", add_python="3.10")
     .pip_install(
-        "vllm", # Latest version to avoid Qwen2Tokenizer attribute errors
+        "vllm",
     )
 )
 
