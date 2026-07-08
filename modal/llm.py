@@ -1,3 +1,4 @@
+import os
 import modal
 
 app = modal.App("llm-server")
@@ -12,12 +13,14 @@ vllm_image = (
 )
 
 MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
+hf_volume = modal.Volume.from_name("huggingface-cache", create_if_missing=True)
 
 @app.function(
     image=vllm_image,
     gpu="A10G",
     scaledown_window=5 * MINUTES, # Fixed deprecation warning from container_idle_timeout
     timeout=10 * MINUTES,
+    volumes={"/root/.cache/huggingface": hf_volume},
 )
 @modal.asgi_app()
 def fastapi_app():
