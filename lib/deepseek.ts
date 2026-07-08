@@ -30,38 +30,64 @@ export async function chatCompletion(
   // DeepSeek JSON mode occasionally returns empty content (documented caveat).
   // Retry once with a slightly different temperature to shake the latent space.
   for (let attempt = 0; attempt < 2; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
+    let currentMessages = [...messages];
+    let fullContent = '';
+    let isComplete = false;
 
-    try {
-      const res = await fetch(DEEPSEEK_BASE, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(attempt === 0 ? body : { ...body, temperature: (temperature + 0.15) % 1 }),
-        signal: controller.signal,
-      });
+    for (let continuation = 0; continuation < 4; continuation++) { // Allow up to 4x8K = 32K tokens
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
 
-      if (!res.ok) {
-        const errorBody = await res.text().catch(() => 'unknown');
-        throw new Error(`DeepSeek API error ${res.status}: ${errorBody.slice(0, 500)}`);
+      try {
+        const res = await fetch(DEEPSEEK_BASE, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...body,
+            messages: currentMessages,
+            temperature: attempt === 0 ? temperature : (temperature + 0.15) % 1,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          const errorBody = await res.text().catch(() => 'unknown');
+          throw new Error(`DeepSeek API error ${res.status}: ${errorBody.slice(0, 500)}`);
+        }
+
+        const json = await res.json();
+        const content = json.choices?.[0]?.message?.content || '';
+        const finishReason = json.choices?.[0]?.finish_reason;
+
+        fullContent += content;
+
+        if (finishReason === 'length' || finishReason === 'max_tokens') {
+          console.log(`[DeepSeek] Hit max_tokens, continuing generation (chunk ${continuation + 1})...`);
+          // To continue, we append the partial response as an assistant message.
+          // DeepSeek supports this seamlessly.
+          currentMessages.push({ role: 'assistant', content, prefix: true } as any);
+        } else {
+          isComplete = true;
+          break;
+        }
+      } finally {
+        clearTimeout(timer);
       }
+    }
 
-      const json = await res.json();
-      const content = json.choices?.[0]?.message?.content;
-      if (content) return content;
+    if (isComplete && fullContent) {
+      return fullContent;
+    }
 
-      if (attempt === 0) {
-        console.warn('[DeepSeek] Empty content on attempt 1, retrying with jittered temperature...');
-      }
-    } finally {
-      clearTimeout(timer);
+    if (attempt === 0) {
+      console.warn('[DeepSeek] Empty content or failed continuation on attempt 1, retrying with jittered temperature...');
     }
   }
 
-  throw new Error('DeepSeek returned empty content on both attempts');
+  throw new Error('DeepSeek returned empty content or failed to complete after all attempts');
 }
 
 export function extractJson(raw: string): unknown {
