@@ -372,27 +372,27 @@ Output JSON:
 
 // ─── MAIN GENERATION PIPELINE ────────────────────────────────────────────────
 export async function generateScript(
+  step: any,
   niche: string,
   accountId: string,
 ): Promise<{ script: SlideshowScript; topic: string; formatTemplate: string }> {
   const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
   const aesthetic = AESTHETICS[profile.aestheticId] ?? Object.values(AESTHETICS)[0];
-  // Async bandit: exploits highest-retention format 85% of the time
-  const formatTemplate = await pickFormatTemplate(niche, profile.aestheticId);
 
-  const reserved = await reserveTopic(niche, accountId);
+  const { formatTemplate, reserved } = await step.run('init-topic', async () => {
+    const ft = await pickFormatTemplate(niche, profile.aestheticId);
+    const res = await reserveTopic(niche, accountId);
+    return { formatTemplate: ft, reserved: res };
+  });
   
   try {
-    console.log(`[TopicGenerator] Running Pass 1 (Narrative) for topic: ${reserved.topic}`);
-    const narrative = await generateNarrative(reserved.topic, reserved.research_context, profile.toneInstruction);
+    const narrative = await step.run('generate-narrative', () => generateNarrative(reserved.topic, reserved.research_context, profile.toneInstruction));
 
     let lastScore: QualityScore | null = null;
     let validationFeedback = '';
 
     for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
-      console.log(`[TopicGenerator] Running Pass 2 (Chunking), attempt ${attempt + 1}`);
-
-      const parsed = await chunkScriptToJSON(
+      const parsed = await step.run(`chunk-script-${attempt}`, () => chunkScriptToJSON(
         narrative,
         reserved.topic,
         reserved.research_context,
@@ -400,7 +400,7 @@ export async function generateScript(
         aesthetic.instruction,
         formatTemplate,
         validationFeedback || undefined,
-      );
+      ));
 
       validationFeedback = '';
 
@@ -432,7 +432,7 @@ export async function generateScript(
         throw new Error(`Caption validation failed:\n${validationFeedback}`);
       }
 
-      const score = await scoreScript(validated, reserved.research_context, niche, profile.minQualityScore);
+      const score = await step.run(`score-script-${attempt}`, () => scoreScript(validated, reserved.research_context, niche, profile.minQualityScore));
 
       // BUGFIX: profile.minQualityScore used to be passed into scoreScript()
       // and never used — the prompt never told the model what the bar was,
@@ -485,7 +485,7 @@ export async function generateScript(
     }
     throw new Error('Script generation failed after all retries (No score generated)');
   } catch (err) {
-    await releaseTopic(reserved.id);
+    await step.run('release-topic', () => releaseTopic(reserved.id));
     throw err;
   }
 }
@@ -747,33 +747,31 @@ Output JSON only:
 
 // ─── LONG-FORM MAIN PIPELINE ──────────────────────────────────────────────────
 export async function generateLongFormScript(
+  step: any,
   niche: string,
   accountId: string,
 ): Promise<{ script: import('./types').SlideshowScript; topic: string; formatTemplate: string }> {
   const profile = LONG_NICHE_PROFILES[niche] ?? NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
   const aesthetic = AESTHETICS[profile.aestheticId] ?? Object.values(AESTHETICS)[0];
 
-  const reserved = await reserveTopic(niche, accountId);
+  const reserved = await step.run('init-topic', () => reserveTopic(niche, accountId));
 
   try {
-    console.log(`[LongForm] Running Pass 1 (Narrative) for topic: ${reserved.topic}`);
-    const narrative = await generateLongFormNarrative(reserved.topic, reserved.research_context, profile.toneInstruction);
+    const narrative = await step.run('generate-narrative', () => generateLongFormNarrative(reserved.topic, reserved.research_context, profile.toneInstruction));
 
     let lastScore: LongQualityScore | null = null;
     let validationFeedback = '';
     const captionLimits = getLongFormCaptionStyle(profile.aestheticId);
 
     for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
-      console.log(`[LongForm] Running Pass 2 (Chunking), attempt ${attempt + 1}`);
-
-      const parsed = await chunkLongFormScriptToJSON(
+      const parsed = await step.run(`chunk-script-${attempt}`, () => chunkLongFormScriptToJSON(
         narrative,
         reserved.topic,
         reserved.research_context,
         niche,
         aesthetic.instruction,
         validationFeedback || undefined,
-      );
+      ));
 
       validationFeedback = '';
 
@@ -802,7 +800,7 @@ export async function generateLongFormScript(
         throw new Error(`Long-form caption validation failed:\n${validationFeedback}`);
       }
 
-      const score = await scoreLongFormScript(validated, reserved.research_context, niche, profile.minQualityScore);
+      const score = await step.run(`score-script-${attempt}`, () => scoreLongFormScript(validated, reserved.research_context, niche, profile.minQualityScore));
       const passesFloor = score.overall >= profile.minQualityScore &&
         LONG_QUALITY_DIMENSIONS.every(dim => score[dim] >= 5);
 
@@ -849,9 +847,9 @@ export async function generateLongFormScript(
     if (lastScore) {
       throw new Error(`Long-form generation failed after all retries. Final critique: ${lastScore.issues.join(' | ')}`);
     }
-    throw new Error('Long-form generation failed after all retries (no score generated)');
+    throw new Error('Long-form script generation failed after all retries (No score generated)');
   } catch (err) {
-    await releaseTopic(reserved.id);
+    await step.run('release-topic', () => releaseTopic(reserved.id));
     throw err;
   }
 }

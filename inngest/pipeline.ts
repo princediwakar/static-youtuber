@@ -67,45 +67,42 @@ async function executeAssetPipeline(
   ] = await Promise.all([
     
     // Task A: Generate Narration
-    step.run('generate-narration', async () => {
-      const job = await db.getJob(jobId);
+    (async () => {
+      const job = await step.run('check-narration-resume', () => db.getJob(jobId));
       if (job?.shot_audio_urls) return { shotAudioUrls: job.shot_audio_urls };
 
-      const creds = await getAccountCredentials(accountId);
       const CONCURRENCY_LIMIT = 5;
-      const results: { audioBuffer: Buffer; durationMs: number }[] = [];
+      const urls: string[] = [];
 
       for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
-        const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
-        const batch = script.shots.slice(batchStart, batchEnd);
+        const batchUrls = await step.run(`generate-audio-batch-${batchStart}`, async () => {
+          const creds = await getAccountCredentials(accountId);
+          const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
+          const batch = script.shots.slice(batchStart, batchEnd);
 
-        const batchResults = await Promise.all(
-          batch.map((shot: Shot, offset: number) => {
-            const globalIndex = batchStart + offset;
-            const sanitized = shot.spoken_text
-              .replace(/[‘’`]/g, "'")
-              .replace(/[“”]/g, '"')
-              .replace(/[\u2014—]/g, '... ')
-              .replace(/[^\x00-\x7F]/g, '');
-            return generateShotSpeech(sanitized, script.voiceName, globalIndex);
-          })
-        );
-        batchResults.forEach(r => results.push(r));
+          return Promise.all(
+            batch.map(async (shot: Shot, offset: number) => {
+              const globalIndex = batchStart + offset;
+              const sanitized = shot.spoken_text
+                .replace(/[‘’`]/g, "'")
+                .replace(/[“”]/g, '"')
+                .replace(/[\u2014—]/g, '... ')
+                .replace(/[^\x00-\x7F]/g, '');
+              const res = await generateShotSpeech(sanitized, script.voiceName, globalIndex);
+              return uploadSlideAudio(res.audioBuffer, jobId, globalIndex, creds);
+            })
+          );
+        });
+        urls.push(...batchUrls);
       }
 
-      const urls: string[] = [];
-      for (let i = 0; i < results.length; i++) {
-        const url = await uploadSlideAudio(results[i].audioBuffer, jobId, i, creds);
-        urls.push(url);
-      }
-
-      await db.updateJob(jobId, { shot_audio_urls: urls });
+      await step.run('save-narration', () => db.updateJob(jobId, { shot_audio_urls: urls }));
       return { shotAudioUrls: urls };
-    }),
+    })(),
 
     // Task B: Generate Images
-    step.run('generate-all-images', async () => {
-      const job = await db.getJob(jobId);
+    (async () => {
+      const job = await step.run('check-images-resume', () => db.getJob(jobId));
       const existingUrls = job?.shot_image_urls || [];
       const urls: string[] = [...existingUrls];
 
@@ -113,27 +110,30 @@ async function executeAssetPipeline(
         return urls.slice(0, script.shots.length);
       }
 
-      const creds = await getAccountCredentials(accountId);
       const CONCURRENCY_LIMIT = 5;
 
       for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
-        const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
-        const batch = script.shots.slice(batchStart, batchEnd);
+        const batchUrls = await step.run(`generate-images-batch-${batchStart}`, async () => {
+          const creds = await getAccountCredentials(accountId);
+          const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
+          const batch = script.shots.slice(batchStart, batchEnd);
 
-        const batchResults = await Promise.all(
-          batch.map(async (shot: Shot, offset: number) => {
-            const globalIndex = batchStart + offset;
-            if (urls[globalIndex]) return urls[globalIndex];
-            const rawImageBuffer = await generateImage(shot.visual_prompt, slideWidth, slideHeight);
-            return uploadSlideImage(rawImageBuffer, jobId, globalIndex, creds);
-          })
-        );
-        batchResults.forEach((url, offset) => { urls[batchStart + offset] = url; });
-        await db.updateJob(jobId, { shot_image_urls: urls });
+          return Promise.all(
+            batch.map(async (shot: Shot, offset: number) => {
+              const globalIndex = batchStart + offset;
+              if (urls[globalIndex]) return urls[globalIndex];
+              const rawImageBuffer = await generateImage(shot.visual_prompt, slideWidth, slideHeight);
+              return uploadSlideImage(rawImageBuffer, jobId, globalIndex, creds);
+            })
+          );
+        });
+        
+        batchUrls.forEach((url, offset) => { urls[batchStart + offset] = url; });
+        await step.run(`save-images-batch-${batchStart}`, () => db.updateJob(jobId, { shot_image_urls: urls }));
       }
 
       return urls;
-    }),
+    })(),
 
     // Task C: Select Background Music
     step.run('select-music', async () => {
@@ -336,21 +336,28 @@ export const generateShort = inngest.createFunction(
     const skipPublish: boolean = event.data.skipPublish === true;
 
     // ── Step 1: Script + GPU warmup (parallel) ────────────────────────────────────
-    const [scriptResult] = await Promise.all([
-      step.run('generate-script', async () => {
-        const jobToResume = explicitJobId ? await db.getJob(explicitJobId) : await db.getIncompleteJob(accountId);
-        if (jobToResume) {
-          if (!jobToResume.script) throw new Error(`Job ${jobToResume.id} has no script`);
-          return { script: jobToResume.script, jobId: jobToResume.id, format_template: jobToResume.format_template, niche: jobToResume.niche, variant: jobToResume.variant ?? 'A', topic: jobToResume.topic };
-        }
+    const generateScriptTask = async () => {
+      const jobToResume = await step.run('check-resume', () => 
+        explicitJobId ? db.getJob(explicitJobId) : db.getIncompleteJob(accountId)
+      );
+      if (jobToResume) {
+        if (!jobToResume.script) throw new Error(`Job ${jobToResume.id} has no script`);
+        return { script: jobToResume.script, jobId: jobToResume.id, format_template: jobToResume.format_template, niche: jobToResume.niche, variant: jobToResume.variant ?? 'A', topic: jobToResume.topic };
+      }
 
-        const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
-        const variant = Math.random() < 0.5 ? 'A' : 'B';
-        const { script, topic, formatTemplate: chosenFormat } = await generateScript(niche, accountId);
-        const jobId = await db.createJob({ account_id: accountId, topic, niche, format_template: chosenFormat, script, status: 'script_ready', variant });
-        (event as any).data.jobId = jobId;
-        return { script, jobId, format_template: chosenFormat, niche, variant, topic };
-      }),
+      const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
+      const variant = Math.random() < 0.5 ? 'A' : 'B';
+      const { script, topic, formatTemplate: chosenFormat } = await generateScript(step, niche, accountId);
+      
+      const jobId = await step.run('create-job', () => 
+        db.createJob({ account_id: accountId, topic, niche, format_template: chosenFormat, script, status: 'script_ready', variant })
+      );
+      (event as any).data.jobId = jobId;
+      return { script, jobId, format_template: chosenFormat, niche, variant, topic };
+    };
+
+    const [scriptResult] = await Promise.all([
+      generateScriptTask(),
       step.run('warmup-bgm-gpu', async () => {
         if (!ACE_STEP_WARMUP_URL) return { status: 'skipped' };
         try {
@@ -393,20 +400,27 @@ export const generateLongForm = inngest.createFunction(
     const skipPublish: boolean = event.data.skipPublish === true;
 
     // ── Step 1: Script + GPU warmup (parallel) ────────────────────────────────────
-    const [scriptResult] = await Promise.all([
-      step.run('generate-long-script', async () => {
-        const jobToResume = explicitJobId ? await db.getJob(explicitJobId) : await db.getIncompleteJobByType(accountId, 'long');
-        if (jobToResume) {
-          if (!jobToResume.script) throw new Error(`Job ${jobToResume.id} has no script`);
-          return { script: jobToResume.script, jobId: jobToResume.id, format_template: jobToResume.format_template, niche: jobToResume.niche, topic: jobToResume.topic };
-        }
+    const generateLongFormScriptTask = async () => {
+      const jobToResume = await step.run('check-resume', () => 
+        explicitJobId ? db.getJob(explicitJobId) : db.getIncompleteJobByType(accountId, 'long')
+      );
+      if (jobToResume) {
+        if (!jobToResume.script) throw new Error(`Job ${jobToResume.id} has no script`);
+        return { script: jobToResume.script, jobId: jobToResume.id, format_template: jobToResume.format_template, niche: jobToResume.niche, topic: jobToResume.topic };
+      }
 
-        const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
-        const { script, topic, formatTemplate } = await generateLongFormScript(niche, accountId);
-        const jobId = await db.createJob({ account_id: accountId, topic, niche, format_template: formatTemplate, script, status: 'script_ready', content_type: 'long' });
-        (event as any).data.jobId = jobId;
-        return { script, jobId, format_template: formatTemplate, niche, topic };
-      }),
+      const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
+      const { script, topic, formatTemplate } = await generateLongFormScript(step, niche, accountId);
+      
+      const jobId = await step.run('create-job', () => 
+        db.createJob({ account_id: accountId, topic, niche, format_template: formatTemplate, script, status: 'script_ready', content_type: 'long' })
+      );
+      (event as any).data.jobId = jobId;
+      return { script, jobId, format_template: formatTemplate, niche, topic };
+    };
+
+    const [scriptResult] = await Promise.all([
+      generateLongFormScriptTask(),
       step.run('warmup-bgm-gpu', async () => {
         if (!ACE_STEP_WARMUP_URL) return { status: 'skipped' };
         try {
