@@ -10,10 +10,20 @@ async function triggerPipeline() {
   const { inngest } = await import('../inngest/client');
 
   const args = process.argv.slice(2);
-  const contentTypeIdx = args.indexOf('--contentType');
-  const contentType = contentTypeIdx !== -1 ? args[contentTypeIdx + 1] : 'shorts';
-  const accountIdArg = args.find(a => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--contentType');
-  const accountId = process.env.ACCOUNT_ID || accountIdArg || 'tech_shots';
+  let contentType = 'shorts';
+  let accountIdArg = '';
+  
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--contentType' && i + 1 < args.length) {
+      contentType = args[++i];
+    } else if (args[i] === '--accountId' && i + 1 < args.length) {
+      accountIdArg = args[++i];
+    } else if (!args[i].startsWith('--')) {
+      accountIdArg = args[i];
+    }
+  }
+
+  const accountId = accountIdArg || process.env.ACCOUNT_ID || 'tech_shots';
   const eventName = contentType === 'long' ? 'slideshow/trigger-long' : 'slideshow/trigger';
 
   console.log(`🚀 Triggering ${contentType} pipeline for account: ${accountId}\n`);
@@ -37,10 +47,10 @@ async function triggerPipeline() {
 
     const res = await query<{ id: string; status: string; video_url: string | null }>(
       `SELECT id, status, video_url FROM slideshow_jobs
-       WHERE account_id = $1 AND content_type = $2 AND created_at >= $3
+       WHERE account_id = $1 AND content_type = $2
        ORDER BY created_at DESC
        LIMIT 1`,
-      [accountId, contentType, triggerTime]
+      [accountId, contentType]
     );
 
     if (res.rows.length === 0) {
