@@ -135,6 +135,17 @@ export async function generateImage(
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
+
+        if (res.status === 400 && errorText.includes('NSFW')) {
+          console.warn(`[CloudflareAI] NSFW filter triggered. Retrying with a safe fallback prompt.`);
+          // Overwrite the prompt for the next attempt.
+          prompt = "A beautiful, safe, abstract cinematic background, colorful, 4k, high quality";
+          if (attempt < retries) {
+            // We can retry immediately without waiting
+            continue;
+          }
+        }
+
         throw new Error(msg);
       }
 
