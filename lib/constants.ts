@@ -122,8 +122,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
   'tech-minimalist': {
     fontFamily: 'Space Grotesk',
     fontFile: 'SpaceGrotesk-Bold.ttf',
-    textColor: '#F4F4F5',
-    strokeColor: '#18181B',
+    textColor: '#1A1A1A',
+    strokeColor: '#EAEAEA',
     accentColor: '#0055A4',
     maxCharsPerLine: 34,
     maxChars: 85,
@@ -343,8 +343,8 @@ export const AESTHETICS: Record<string, Aesthetic> = {
   'tech-minimalist': {
     id: 'tech-minimalist',
     instruction: 'Describe a high-end, mid-century industrial hardware concept: think Dieter Rams Braun designs and clean architectural blueprints — not glossy 3D renders or glass panels.',
-    imagePrefix: 'A flat, high-contrast photograph of matte industrial hardware. Swiss design, rigid geometry, clean architectural space. Desaturated. Absolutely no cinematic lighting, no bloom, no glowing edges, no glossy reflections, no neon, no 3D render. Stark shadows, flat lighting, muted colors. No text, letters, or numbers anywhere. ',
-    thumbnailPrefix: 'A stark photograph of matte industrial hardware. Swiss design, rigid geometry, clean architectural space. Desaturated. Strong asymmetrical composition with a large clean void on one side for text overlay. No glassmorphism, no glossy 3D, no gradients. No text, letters, or numbers anywhere. ',
+    imagePrefix: 'A flat, high-contrast photograph of matte industrial hardware. Swiss design, rigid geometry, bauhaus, anodized metal, clean architectural space. Desaturated. Absolutely no cinematic lighting, no bloom, no glowing edges, no glossy reflections, no neon, no holographic, no cyberpunk, no 3D render. Stark shadows, flat light, matte finish, muted colors. No text, letters, or numbers anywhere. ',
+    thumbnailPrefix: 'A stark photograph of matte industrial hardware. Swiss design, rigid geometry, bauhaus, anodized metal, clean architectural space. Desaturated. Strong asymmetrical composition with a large clean void on one side for text overlay. No glassmorphism, no glossy 3D, no gradients, no holographic, no cyberpunk. Matte finish, flat light. No text, letters, or numbers anywhere. ',
   },
   'finance-editorial': {
     id: 'finance-editorial',

@@ -71,8 +71,8 @@ async function executeAssetPipeline(
       let audioUrl = '';
       let durationMs = 0;
       const jobA = await step.run('check-narration-resume', () => db.getJob(jobId));
-      if (jobA?.audio_url) {
-        audioUrl = jobA.audio_url;
+      if (jobA?.narration_audio_url) {
+        audioUrl = jobA.narration_audio_url;
       } else {
         const fullNarrative = script.shots.map((s: Shot) => s.spoken_text).join(' ');
         const creds = await getAccountCredentials(accountId);
@@ -88,7 +88,7 @@ async function executeAssetPipeline(
         });
         audioUrl = res.url;
         durationMs = res.durationMs;
-        await step.run('save-narration', () => db.updateJob(jobId, { audio_url: audioUrl }));
+        await step.run('save-narration', () => db.updateJob(jobId, { narration_audio_url: audioUrl }));
       }
       return { shotAudioUrls: [], audioUrl, narrationDurationMs: durationMs };
     })(),
