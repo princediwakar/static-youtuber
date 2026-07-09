@@ -24,4 +24,4 @@ export const { GET, POST, PUT } = serve({
 });
 
 // assemble-video step can take up to 5 minutes
-export const maxDuration = 60;
+export const maxDuration = 300;

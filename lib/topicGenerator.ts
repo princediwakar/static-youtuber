@@ -1,5 +1,6 @@
 // lib/topicGenerator.ts
 import { z } from 'zod';
+import { NonRetriableError } from 'inngest';
 import { chatCompletion, extractJson } from './llm';
 import { query } from './database';
 import { SlideshowScript } from './types';
@@ -83,6 +84,18 @@ const QUALITY_SCORE_DIMENSIONS = [
   'specificity', 'hook_strength', 'information_density', 'tone_calibration',
   'pacing', 'visual_entropy', 'visual_coherence', 'caption_flow', 'hook_payoff_match',
 ] as const;
+
+function ensureTerminalPunctuation(script: any): any {
+  const shots = script?.shots;
+  const last = Array.isArray(shots) ? shots[shots.length - 1] : null;
+  if (last && typeof last.spoken_text === 'string') {
+    const trimmed = last.spoken_text.trim();
+    if (trimmed && !/[.!?]$/.test(trimmed)) {
+      last.spoken_text = `${trimmed}.`;
+    }
+  }
+  return script;
+}
 
 export async function reserveTopic(niche: string, accountId: string): Promise<{ id: number; topic: string; research_context: string }> {
   let result = await query<{ id: number; topic: string; research_context: string }>(`
@@ -206,6 +219,7 @@ async function chunkScriptToJSON(
   aestheticInstruction: string, 
   formatTemplate: FormatTemplate,
   validationFeedback?: string,
+  attempt: number = 0,
 ): Promise<unknown> {
   const shotCounts = TEMPLATE_SHOT_COUNTS[formatTemplate];
   
@@ -288,8 +302,10 @@ JSON SCHEMA TO FOLLOW:
 LOOP DESIGN FOR REPLAY:
 The final shot's closing phrase should echo the opening line's concept or question,
 so that a replay feels deliberate rather than abrupt. If shot 1's hook is a question,
-the last caption should resonate with it — not end on a definitive period that closes
-the loop completely.
+let the last caption resonate with it thematically — favor a question mark or an
+open, evocative statement over a flat "case closed" line. Every shot, including this
+one, still MUST end with terminal punctuation (. ! ?). The "open" feeling comes from
+word choice, never from dropping the punctuation mark.
 
 Only the LAST shot must have is_conclusion: true.`;
 
@@ -310,10 +326,10 @@ Slice this narrative into the exact JSON schema.`;
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
     ],
-    { temperature: 0.2, maxTokens: 4096, responseJson: true, timeout: 600_000 }
+    { temperature: Math.min(0.8, 0.2 + attempt * 0.15), maxTokens: 4096, responseJson: true, timeout: 600_000 }
   );
 
-  return extractJson(raw);
+  return ensureTerminalPunctuation(extractJson(raw));
 }
 
 
@@ -393,7 +409,7 @@ export async function generateScript(
     let validationFeedback = '';
 
     for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
-      const parsed = await step.run(`chunk-script-${attempt}`, () => chunkScriptToJSON(
+      const parsed = await step.run(`script-attempt-${attempt}`, () => chunkScriptToJSON(
         narrative,
         reserved.topic,
         reserved.research_context,
@@ -401,6 +417,7 @@ export async function generateScript(
         aesthetic.instruction,
         formatTemplate,
         validationFeedback || undefined,
+        attempt,
       ));
 
       validationFeedback = '';
@@ -414,7 +431,7 @@ export async function generateScript(
             `${i.path.length > 0 ? i.path.join('.') + ': ' : ''}${i.message}`
           ).join('\n');
           if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-          throw new Error(`Script validation failed:\n${validationFeedback}`);
+          throw new NonRetriableError(`Script validation failed:\n${validationFeedback}`);
         }
         throw zodErr;
       }
@@ -430,7 +447,7 @@ export async function generateScript(
       if (!captionValidation.valid) {
         validationFeedback = captionValidation.errors.join('\n');
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-        throw new Error(`Caption validation failed:\n${validationFeedback}`);
+        throw new NonRetriableError(`Caption validation failed:\n${validationFeedback}`);
       }
 
       const score = await step.run(`score-script-${attempt}`, () => scoreScript(validated, reserved.research_context, niche, profile.minQualityScore));
@@ -482,9 +499,9 @@ export async function generateScript(
     }
     
     if (lastScore) {
-      throw new Error(`Script generation failed after all retries. Final LLM critique: ${lastScore.issues.join(' | ')}`);
+      throw new NonRetriableError(`Script generation failed after all retries. Final LLM critique: ${lastScore.issues.join(' | ')}`);
     }
-    throw new Error('Script generation failed after all retries (No score generated)');
+    throw new NonRetriableError('Script generation failed after all retries (No score generated)');
   } catch (err) {
     await step.run('release-topic', () => releaseTopic(reserved.id));
     throw err;
@@ -608,6 +625,7 @@ async function chunkLongFormScriptToJSON(
   niche: string,
   aestheticInstruction: string,
   validationFeedback?: string,
+  attempt: number = 0,
 ): Promise<unknown> {
   const systemPrompt = `You are a precision video editor for a landscape (16:9) documentary channel.
 Slice this narrative into exactly 30-60 consecutive shots, formatted as strict JSON.
@@ -695,10 +713,10 @@ Slice this narrative into 30-60 shots using the JSON schema above.`;
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ],
-    { temperature: 0.2, maxTokens: 6000, responseJson: true, timeout: 900_000 }
+    { temperature: Math.min(0.8, 0.2 + attempt * 0.15), maxTokens: 6000, responseJson: true, timeout: 900_000 }
   );
 
-  return extractJson(raw);
+  return ensureTerminalPunctuation(extractJson(raw));
 }
 
 // ─── LONG-FORM QUALITY GATE ───────────────────────────────────────────────────
@@ -770,13 +788,14 @@ export async function generateLongFormScript(
     const captionLimits = getLongFormCaptionStyle(profile.aestheticId);
 
     for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
-      const parsed = await step.run(`chunk-script-${attempt}`, () => chunkLongFormScriptToJSON(
+      const parsed = await step.run(`script-attempt-${attempt}`, () => chunkLongFormScriptToJSON(
         narrative,
         reserved.topic,
         reserved.research_context,
         niche,
         aesthetic.instruction,
         validationFeedback || undefined,
+        attempt,
       ));
 
       validationFeedback = '';
@@ -790,7 +809,7 @@ export async function generateLongFormScript(
             `${i.path.length > 0 ? i.path.join('.') + ': ' : ''}${i.message}`
           ).join('\n');
           if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-          throw new Error(`Long-form script validation failed:\n${validationFeedback}`);
+          throw new NonRetriableError(`Long-form script validation failed:\n${validationFeedback}`);
         }
         throw zodErr;
       }
@@ -803,7 +822,7 @@ export async function generateLongFormScript(
       if (!captionValidation.valid) {
         validationFeedback = captionValidation.errors.join('\n');
         if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-        throw new Error(`Long-form caption validation failed:\n${validationFeedback}`);
+        throw new NonRetriableError(`Long-form caption validation failed:\n${validationFeedback}`);
       }
 
       const score = await step.run(`score-script-${attempt}`, () => scoreLongFormScript(validated, reserved.research_context, niche, profile.minQualityScore));
@@ -851,9 +870,9 @@ export async function generateLongFormScript(
     }
 
     if (lastScore) {
-      throw new Error(`Long-form generation failed after all retries. Final critique: ${lastScore.issues.join(' | ')}`);
+      throw new NonRetriableError(`Long-form generation failed after all retries. Final critique: ${lastScore.issues.join(' | ')}`);
     }
-    throw new Error('Long-form script generation failed after all retries (No score generated)');
+    throw new NonRetriableError('Long-form script generation failed after all retries (No score generated)');
   } catch (err) {
     await step.run('release-topic', () => releaseTopic(reserved.id));
     throw err;
