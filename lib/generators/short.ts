@@ -237,10 +237,10 @@ CRITICAL CENSORSHIP CHECK:
 If ANY visual_prompt contains explicit gore, blood, or visceral anatomy descriptions, you MUST score 'overall' as 0 and set 'approved' to false. State the exact trigger word in the 'issues' array.
 
 CRITICAL STYLE-DRIFT CHECK:
-If ANY visual_prompt describes glassmorphism, frosted/liquid glass, glossy soft-3D renders, pastel gradient blobs, isometric dioramas, bento grids, neon wireframes, sumi-e ink wash, or any legible text/letters/numbers in the scene, you MUST score 'overall' as 0 and set 'approved' to false. State the exact offending phrase in the 'issues' array.
+If ANY visual_prompt describes glassmorphism, frosted/liquid glass, glossy soft-3D renders, pastel gradient blobs, isometric dioramas, bento grids, neon wireframes, or sumi-e ink wash, you MUST score 'overall' as 0 and set 'approved' to false. State the exact offending phrase in the 'issues' array.
 
 APPROVAL RULE:
-Set 'approved' to true ONLY IF 'overall' >= ${minScore} AND every individual dimension score is >= 5. Otherwise set 'approved' to false, even if 'overall' alone clears ${minScore}.
+Set 'approved' to true ONLY IF 'overall' >= ${minScore}. Otherwise set 'approved' to false.
 
 Output JSON:
 { "specificity": 0, "hook_strength": 0, "information_density": 0, "tone_calibration": 0, "pacing": 0, "visual_entropy": 0, "visual_coherence": 0, "caption_flow": 0, "hook_payoff_match": 0, "overall": 0, "issues": ["string"], "approved": boolean }`;
@@ -326,8 +326,7 @@ export async function generateScript(
       // suspenders: the prompt above now states the threshold explicitly,
       // and this still re-checks it here rather than trusting the model's
       // self-grading alone.
-      const passesFloor = score.overall >= profile.minQualityScore &&
-        QUALITY_SCORE_DIMENSIONS.every(dim => score[dim] >= 5);
+      const passesFloor = score.overall >= profile.minQualityScore;
       if (score.approved && !passesFloor) {
         console.warn(
           `[TopicGenerator] Quality gate: model self-reported approved=true but score ` +

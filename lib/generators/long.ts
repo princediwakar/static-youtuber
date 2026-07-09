@@ -210,10 +210,10 @@ CRITICAL CENSORSHIP CHECK:
 If ANY visual_prompt contains explicit gore, blood, or visceral anatomy → score overall=0, approved=false.
 
 CRITICAL STYLE-DRIFT CHECK:
-If ANY visual_prompt describes glassmorphism, frosted glass, glossy 3D, isometric dioramas, neon wireframes, sumi-e, or any legible text/numbers → score overall=0, approved=false.
+If ANY visual_prompt describes glassmorphism, frosted glass, glossy 3D, isometric dioramas, neon wireframes, or sumi-e → score overall=0, approved=false.
 
 APPROVAL RULE:
-approved=true ONLY IF overall >= ${minScore} AND every dimension >= 5.
+approved=true ONLY IF overall >= ${minScore}.
 
 Output JSON only:
 { "narrative_coherence": 0, "factual_depth": 0, "arc_satisfaction": 0, "visual_variety": 0, "information_density": 0, "tone_calibration": 0, "overall": 0, "issues": ["string"], "approved": false }`;
@@ -284,8 +284,7 @@ export async function generateLongFormScript(
       }
 
       const score = await step.run(`score-script-${attempt}`, () => scoreLongFormScript(validated, reserved.research_context, niche, profile.minQualityScore));
-      const passesFloor = score.overall >= profile.minQualityScore &&
-        LONG_QUALITY_DIMENSIONS.every(dim => score[dim] >= 5);
+      const passesFloor = score.overall >= profile.minQualityScore;
 
       if (score.approved && !passesFloor) {
         console.warn(

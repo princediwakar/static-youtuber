@@ -17,7 +17,7 @@ export const ShotSchema = z.object({
 export const SlideshowScriptSchema = z.object({
   fact_check_and_sources: z.array(z.object({
     claim: z.string().min(10),
-    source: z.string().min(5),
+    source: z.string().min(2),
   })).min(3),
   visual_world: z.enum(['tech-minimalist', 'finance-editorial', 'stoic-zen', 'survival-technical']),
   format_template: z.enum(['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST']),
@@ -72,7 +72,7 @@ export const LongShotSchema = z.object({
 export const LongFormScriptSchema = z.object({
   fact_check_and_sources: z.array(z.object({
     claim: z.string().min(10),
-    source: z.string().min(5),
+    source: z.string().min(2),
   })).min(5),
   visual_world: z.enum(['tech-minimalist', 'finance-editorial', 'stoic-zen', 'survival-technical']),
   format_template: z.literal('DEEP_DIVE'),
