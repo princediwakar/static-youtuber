@@ -57,7 +57,7 @@ async function executeAssetPipeline(
   const slideWidth = isLongForm ? LONG_CF_AI_SLIDE_WIDTH : CF_AI_SLIDE_WIDTH;
   const slideHeight = isLongForm ? LONG_CF_AI_SLIDE_HEIGHT : CF_AI_SLIDE_HEIGHT;
   const musicDurationLimit = isLongForm ? 300 : 60;
-  const renderTimeout = isLongForm ? '30m' : '10m';
+  const renderTimeout = '30m';
 
   // ── Step 2a: Generate Narration (Sequential to get exact duration) ────────
   let shotAudioUrls: string[] = [];
