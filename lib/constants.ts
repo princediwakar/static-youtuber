@@ -343,8 +343,8 @@ export const AESTHETICS: Record<string, Aesthetic> = {
   'tech-minimalist': {
     id: 'tech-minimalist',
     instruction: 'Describe a high-end, mid-century industrial hardware concept: think Dieter Rams Braun designs and clean architectural blueprints — not glossy 3D renders or glass panels.',
-    imagePrefix: 'A flat, high-contrast photograph of matte industrial hardware. Swiss design, rigid geometry, bauhaus, anodized metal, clean architectural space. Desaturated. Absolutely no cinematic lighting, no bloom, no glowing edges, no glossy reflections, no neon, no holographic, no cyberpunk, no 3D render. Stark shadows, flat light, matte finish, muted colors. No text, letters, or numbers anywhere. ',
-    thumbnailPrefix: 'A stark photograph of matte industrial hardware. Swiss design, rigid geometry, bauhaus, anodized metal, clean architectural space. Desaturated. Strong asymmetrical composition with a large clean void on one side for text overlay. No glassmorphism, no glossy 3D, no gradients, no holographic, no cyberpunk. Matte finish, flat light. No text, letters, or numbers anywhere. ',
+    imagePrefix: 'A flat, high-contrast photograph of matte industrial hardware. Dieter Rams style, 1960s Braun aesthetic, Swiss design, rigid geometry, bauhaus, anodized metal, clean architectural space. Desaturated off-white and warm greys. Absolutely no cinematic lighting, no bloom, no glowing edges, no glossy reflections, no neon, no holographic, no cyberpunk, no 3D render. Stark shadows, flat light, matte finish, muted colors. No text, letters, or numbers anywhere. ',
+    thumbnailPrefix: 'A stark photograph of matte industrial hardware. Dieter Rams style, 1960s Braun aesthetic, Swiss design, rigid geometry, bauhaus, anodized metal, clean architectural space. Desaturated off-white and warm greys. Strong asymmetrical composition with a large clean void on one side for text overlay. No glassmorphism, no glossy 3D, no gradients, no holographic, no cyberpunk. Matte finish, flat light. No text, letters, or numbers anywhere. ',
   },
   'finance-editorial': {
     id: 'finance-editorial',
