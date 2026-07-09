@@ -1,7 +1,7 @@
 // inngest/pipeline.ts
 import { inngest } from './client';
 import { NonRetriableError } from 'inngest';
-import { generateScript, generateLongFormScript } from '@/lib/topicGenerator';
+import { generateScript, generateLongFormScript } from '@/lib/generators';
 import type { Shot } from '@/lib/types';
 import type { FormatTemplate } from '@/lib/constants';
 import { generateImage } from '@/lib/cloudflareAi';
