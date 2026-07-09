@@ -23,47 +23,47 @@ import { reserveTopic, releaseTopic, pickFormatTemplate } from './topic';
 
 // ─── PASS 1: NARRATIVE GENERATION ─────────────────────────────────────────────
 async function generateNarrative(topic: string, researchContext: string, toneInstruction: string, shotCounts: {min: number, max: number}): Promise<string> {
-  const systemPrompt = `You are a master storyteller and investigative journalist.
-Your job is to write a highly compelling, fact-dense narrative script for a YouTube Short.
+  const systemPrompt = `You are a master screenwriter writing a viral, high-retention YouTube Short.
+Your job is to write a highly compelling, fact-dense narrative script based on the provided research.
 
 LENGTH MANDATE (CRITICAL):
-- TARGET 120-140 WORDS.
-- You MUST write at least ${shotCounts.min} distinct sentences or beats. This script will be sliced into EXACTLY ${shotCounts.min}-${shotCounts.max} video shots.
-- If you write fewer than ${shotCounts.min} sentences, the editor will fail. Do not pad with repetition; write enough original substance to naturally fill ${shotCounts.min} shots.
-- At ~2.5 words/second, 120 words ≈ 48s.
+- TARGET 120-140 WORDS. (approx. 45-55 seconds of spoken audio).
+- You MUST write at least ${shotCounts.min} distinct sentences. The video editor will split your text by punctuation into EXACTLY ${shotCounts.min}-${shotCounts.max} video shots.
+
+STORYTELLING & PACING:
+- Write in a natural, gripping conversational rhythm. This is for spoken word, not a dense essay.
+- Sentences must sound like a passionate storyteller recounting a high-stakes tale. Use natural punctuation (commas, periods) to guide the narrator's pacing and pauses.
+- Mix short, punchy sentences with flowing, well-connected thoughts to create momentum.
+- Do NOT write dense, comma-heavy sentences like "In 1998, Larry Page and Sergey Brin, Stanford PhD students, built a search engine."
+- Instead, write with momentum: "In 1998, two Stanford PhDs named Larry and Sergey had an idea. They built a search engine called BackRub."
+- Use transition words seamlessly to connect ideas and maintain cause-and-effect flow.
+
+THE HOOK ARCHITECTURE:
+1. The Hook: The first sentence must create a massive curiosity gap (e.g., "They had $750,000 on the table.").
+2. The Context: Ground it in reality fast (e.g., "It was 1998. Google was just a college project.").
+3. The Pivot: Introduce the twist or high stakes.
+
+BREVITY & STYLE (ORWELLIAN CONSTRAINTS):
+1. Cut the Fat: If it is possible to cut a word out, always cut it out. Eliminate fluff, weak verbs, and unnecessary adjectives. Make every word tell.
+2. Active Voice Only: Never use the passive where you can use the active (e.g., Use "Larry Page built Google" instead of "Google was built by Larry Page").
+3. No Clichés: Never use a metaphor, simile, or phrase you are used to seeing in print (e.g., NO "the rest is history," "skyrocketed to success," or "a force to be reckoned with").
+4. Simple Language: Never use a long word where a short one will do. Never use jargon if you can use an everyday English equivalent.
 
 CONTENT POLICY (STRICT):
-- Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma. 
-- You must build tension psychologically. Focus on the situation, the ticking clock, and the stakes, NOT the physical blood.
+- Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma.
+- Build tension psychologically. Focus on the stakes and the situation, not blood.
 
 TONE MANDATE:
 ${toneInstruction}
 
-STORYTELLING RULES:
-1. NO REPETITION: Never repeat a sentence, phrase, or core idea to fill space. Every single sentence must advance the narrative.
-2. Ground everything in reality. Use the exact dates, names, and numbers provided.
-3. HOOK THEM WITH AN OPEN LOOP: The first sentence must create a massive curiosity gap. Never summarize the entire story upfront. Present a high-stakes question, an unbelievable paradox, or a shocking claim (e.g., "The man who built a $2B empire never owned a single computer" or "In 2008, one line of code almost destroyed the global economy"). The viewer must feel compelled to stay to find the answer.
-4. Build tension. Use transition words. Let the story flow with cause and effect. Withhold the final resolution until the very last possible moment.
-5. End with an empowering, triumphant conclusion. The final sentence must recontextualize the whole story and leave the viewer feeling capable and inspired to act.
-6. NO CTAs. No "subscribe", "like", or "thanks for watching".
-   Exception: ending on a genuinely debatable claim (supported by research) is
-   encouraged — it invites organic discussion in comments without an explicit CTA.
-   Prefer this over an airtight, universally-agreed conclusion when the topic allows.
-
-PACING & SYNTAX (CRITICAL):
-- Write in a naturally flowing, conversational rhythm. Do NOT write in robotic bullet points or fragmented phrases.
-- Rhythm is critical: it must sound like a gripping, high-stakes spoken conversation. Mix short punchy sentences with flowing, well-connected thoughts to create momentum and natural human cadence.
-- Use transition words seamlessly. The narrative must flow organically from start to finish.
-- Read it aloud in your head — it must sound like a passionate storyteller recounting a gripping tale, not a disconnected list of facts.
+BAN ON "ESSAY" LANGUAGE (CRITICAL):
+- NEVER write summary conclusions like "This story teaches us about human potential" or "It shows the power of persistence."
+- NEVER write CTAs ("subscribe", "like").
+- End on a mic-drop moment, a shocking realization, or a profound open question. Show, don't tell. Let the facts speak for themselves.
 
 FORMATTING:
-- Use digits, symbols, and abbreviations for numbers (e.g., "$1.4B" instead of "one point four billion dollars", "26", "100%") to keep the text visually concise.
-
-CAPTION READABILITY:
-- Write for the ear AND the eye. Subject → verb → object. Clean and direct.
-
-OUTPUT:
-Output pure prose. NO JSON. NO formatting. Just the story.`;
+- Use digits and symbols for numbers (e.g., "$1.4B", "26%") to keep the text visually concise for the captions.
+- Output pure prose. NO JSON. NO formatting. Just the story.`;
 
   const userPrompt = `TOPIC: ${topic}\n\nRESEARCH CONTEXT (TREAT AS ABSOLUTE FACT):\n${researchContext}`;
 
@@ -101,13 +101,13 @@ VISUAL WORLD: ${niche === 'Financial Forensics' ? 'finance-editorial' : niche ==
 DUAL-TEXT MANDATE (CRITICAL):
 Each shot has TWO text fields for different modalities:
 
-1. "caption_text" — The visually punchy, abbreviated text burned onto the screen via FFMPEG.
-   - VERBATIM SLICING ONLY: Do NOT rewrite, paraphrase, summarize, or alter the formatting of the narrative.
+1. "caption_text" — The EXACT verbatim text from the narrative, burned onto the screen.
+   - VERBATIM SLICING ONLY: You MUST preserve the exact prose, grammar, and punctuation of the narrative. Do NOT rewrite, paraphrase, summarize, or convert to title-case fragments.
+   - PUNCTUATION IS CRITICAL: Keep all commas, periods, and question marks exactly as they appear in the narrative. They dictate the pacing for the text-to-speech engine.
    - WORD LIMIT: No shot may contain more than 12 words.
-   - If a sentence is long, SPLIT it across multiple consecutive shots. Do NOT summarize it to fit.
+   - If a sentence is long, SPLIT it across multiple consecutive shots. Maintain the exact flow and punctuation of the sentence across the shots.
    - Keep symbols and abbreviations as-is from the narrative (e.g., "$1.4B", "26%", "CEO").
-   - NO REPETITION: Do NOT repeat the exact same caption or spoken text across multiple shots to pad the length. Every shot must advance the text.
-   - This is what the viewer reads on screen — short, scannable, punchy.
+   - NO REPETITION: Do NOT repeat the exact same caption or spoken text across multiple shots.
 
 2. "spoken_text" — Nearly identical to caption_text. The ONLY change allowed is converting digit-form numbers to their spoken word equivalents.
    RULE: spoken_text = caption_text, with ONLY these substitutions:
@@ -161,8 +161,8 @@ JSON SCHEMA TO FOLLOW:
     {
       "id": 1,
       "visual_prompt": "cinematic paragraph describing the scene... NO GORE. NO TEXT.",
-      "caption_text": "The visually punchy, abbreviated text for the screen (e.g., '$6.5B').",
-      "spoken_text": "IDENTICAL to caption_text except digits become words (e.g., 'six point five billion dollars'). Acronyms like POW, CEO stay as-is. FINAL SHOT MUST END WITH TERMINAL PUNCTUATION (. ! ?)",
+      "caption_text": "The exact verbatim slice of the narrative. Must include natural punctuation (periods, commas) to ensure proper TTS pacing.",
+      "spoken_text": "IDENTICAL to caption_text except digits become words. Preserve all punctuation so the TTS engine pauses correctly. FINAL SHOT MUST END WITH TERMINAL PUNCTUATION (. ! ?)",
       "is_conclusion": false
     }
   ],

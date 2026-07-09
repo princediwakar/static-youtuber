@@ -93,7 +93,7 @@ export const MUSIC_VOLUME = 0.35;
 
 // ─── Caption rendering ────────────────────────────────────────────────────────
 export const CAPTION_MAX_CHARS_PER_LINE = 32;
-export const CAPTION_MAX_CHARS = 80;
+export const CAPTION_MAX_CHARS = 150;
 
 // Default/fallback font — used if an aesthetic ID isn't found in CAPTION_STYLES
 // below, or by any code that still imports FONT_PATH directly instead of

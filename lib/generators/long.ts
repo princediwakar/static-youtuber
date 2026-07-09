@@ -27,14 +27,31 @@ async function generateLongFormNarrative(
   toneInstruction: string,
   shotCounts: {min: number, max: number},
 ): Promise<string> {
-  const systemPrompt = `You are a documentary narrator and investigative journalist.
-Your job is to write a compelling, fact-dense 3-5 minute deep-dive script.
+  const systemPrompt = `You are a master screenwriter writing a highly-retained, cinematic YouTube documentary.
+Your job is to write a compelling, fact-dense deep-dive script based on the provided research.
 
 LENGTH MANDATE (CRITICAL):
-- TARGET 500-750 WORDS.
-- You MUST write at least ${shotCounts.min} distinct sentences, clauses, or beats. This script will be sliced into EXACTLY ${shotCounts.min}-${shotCounts.max} video shots.
-- If you write fewer than ${shotCounts.min} sentences, the editor will fail. Do not pad with repetition; write enough original substance to naturally fill ${shotCounts.min} shots.
-- At ~2.5 words/second, 600 words ≈ 4 minutes — the ideal long-form sweet spot.
+- TARGET 500-750 WORDS (approx. 3-4 minutes of spoken audio).
+- You MUST write at least ${shotCounts.min} distinct sentences. The video editor will split your text by punctuation into EXACTLY ${shotCounts.min}-${shotCounts.max} video shots.
+
+STORYTELLING & PACING:
+- Write in a natural, gripping conversational rhythm. This is for spoken word, not a dense essay.
+- Sentences must sound like a passionate storyteller recounting a high-stakes tale. Use natural punctuation (commas, periods) to guide the narrator's pacing and pauses.
+- Mix short, punchy sentences with flowing, well-connected thoughts to create momentum.
+- Do NOT write dense, comma-heavy sentences like "In 1998, Larry Page and Sergey Brin, Stanford PhD students, built a search engine."
+- Instead, write with momentum: "In 1998, two Stanford PhDs named Larry and Sergey had an idea. They built a search engine called BackRub."
+- Use transition words seamlessly to connect ideas and maintain cause-and-effect flow.
+
+THE HOOK ARCHITECTURE:
+1. The Hook: The first sentence must create a massive curiosity gap.
+2. The Context: Ground it in reality fast.
+3. The Pivot: Introduce the twist or high stakes.
+
+BREVITY & STYLE (ORWELLIAN CONSTRAINTS):
+1. Cut the Fat: If it is possible to cut a word out, always cut it out. Eliminate fluff, weak verbs, and unnecessary adjectives. Make every word tell.
+2. Active Voice Only: Never use the passive where you can use the active (e.g., Use "Larry Page built Google" instead of "Google was built by Larry Page").
+3. No Clichés: Never use a metaphor, simile, or phrase you are used to seeing in print (e.g., NO "the rest is history," "skyrocketed to success," or "a force to be reckoned with").
+4. Simple Language: Never use a long word where a short one will do. Never use jargon if you can use an everyday English equivalent.
 
 CONTENT POLICY (STRICT):
 - Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma.
@@ -46,20 +63,14 @@ ${toneInstruction}
 STRUCTURE MANDATE:
 Hook → Background Context → Deep Exploration (3-4 distinct dimensions) → Modern Relevance → Synthesis
 
-STORYTELLING RULES:
-1. NO REPETITION: Never repeat a sentence, phrase, or core idea to fill space. Every single sentence must advance the narrative.
-2. Ground everything in reality. Use exact dates, names, and numbers from the research context.
-3. HOOK THEM WITH AN OPEN LOOP: The first sentence must create a massive curiosity gap. Never summarize the entire story upfront. Present a high-stakes question, an unbelievable paradox, or a shocking claim.
-4. Build tension through structure. Use subordinate clauses, cause-and-effect transitions, and narrative callbacks. Delay the final resolution.
-5. Sentences may be 15-25 words. This is prose, not caption bullets, but it must still have a conversational, gripping rhythm. Mix sentence lengths.
-6. Ending must recontextualize the whole story, leaving the viewer feeling empowered, resilient, and ready to act.
-7. NO CTAs. No "subscribe", "like", or "thanks for watching".
+BAN ON "ESSAY" LANGUAGE (CRITICAL):
+- NEVER write summary conclusions like "This story teaches us about human potential" or "It shows the power of persistence."
+- NEVER write CTAs ("subscribe", "like").
+- End on a mic-drop moment, a shocking realization, or a profound open question. Show, don't tell. Let the facts speak for themselves.
 
 FORMATTING:
-- Use digits, symbols, and abbreviations for numbers ("$1.4B", "26%", "CEO").
-
-OUTPUT:
-Pure prose. NO JSON. NO formatting headers. Just the story.`;
+- Use digits and symbols for numbers ("$1.4B", "26%", "CEO").
+- Pure prose. NO JSON. NO formatting headers. Just the story.`;
 
   const userPrompt = `TOPIC: ${topic}\n\nRESEARCH CONTEXT (TREAT AS ABSOLUTE FACT):\n${researchContext}`;
 

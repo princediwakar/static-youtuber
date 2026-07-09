@@ -77,23 +77,23 @@ export function validateShotCaption(
   }
 
   if (cleaned.length > maxChars) {
-    errors.push(`Shot ${shot.index}: ${cleaned.length} chars — exceeds ${maxChars} char limit.`);
+    warnings.push(`Shot ${shot.index}: ${cleaned.length} chars — exceeds ${maxChars} char limit.`);
   }
 
 
-  const maxWords = widthLimits.maxWords ?? 18;
+  const maxWords = widthLimits.maxWords ?? 25;
   const warnWords = maxWords > 18 ? maxWords - 3 : 12;  // warn at 17 for long-form, 12 for shorts
   if (words.length > maxWords) {
-    errors.push(`Shot ${shot.index}: ${words.length} words — too long. Max is ${maxWords}.`);
+    warnings.push(`Shot ${shot.index}: ${words.length} words — exceeds ${maxWords} target.`);
   } else if (words.length > warnWords) {
     warnings.push(`Shot ${shot.index}: ${words.length} words — target ≤${warnWords}.`);
   }
 
   const lines = simulateWordWrap(cleaned, maxCharsPerLine);
-  if (lines.length > 3) {
-    errors.push(`Shot ${shot.index}: wraps to ${lines.length} caption lines — max is 3.`);
-  } else if (lines.length === 3) {
-    warnings.push(`Shot ${shot.index}: wraps to 3 caption lines — consider shortening.`);
+  if (lines.length > 4) {
+    errors.push(`Shot ${shot.index}: wraps to ${lines.length} caption lines — max is 4.`);
+  } else if (lines.length >= 3) {
+    warnings.push(`Shot ${shot.index}: wraps to ${lines.length} caption lines — consider shortening.`);
   }
 
   if (/[<>{}[\]|\\]/.test(shot.caption_text)) {
