@@ -80,8 +80,8 @@ async function executeAssetPipeline(
             const sanitized = shot.spoken_text
               .replace(/[‘’`]/g, "'")
               .replace(/[“”]/g, '"')
-              .replace(/[\\u2014—]/g, '... ')
-              .replace(/[^\\x00-\\x7F]/g, '');
+              .replace(/[\u2014—]/g, '... ')
+              .replace(/[^\x00-\x7F]/g, '');
             const res = await generateShotSpeech(sanitized, script.voiceName, globalIndex);
             const url = await uploadSlideAudio(res.audioBuffer, jobId, globalIndex, creds);
             return { url, durationMs: res.durationMs };

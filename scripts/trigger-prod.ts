@@ -56,12 +56,12 @@ async function triggerPipeline() {
   for (let i = 0; i < 180; i++) {
     await new Promise(r => setTimeout(r, 15_000));
 
-    const res = await query<{ id: string; status: string; video_url: string | null }>(
-      `SELECT id, status, video_url FROM slideshow_jobs
-       WHERE account_id = $1 AND content_type = $2
+    const res = await query<{ id: string; status: string; video_url: string | null; error_message: string | null }>(
+      `SELECT id, status, video_url, error_message FROM slideshow_jobs
+       WHERE account_id = $1 AND content_type = $2 AND created_at > $3
        ORDER BY created_at DESC
        LIMIT 1`,
-      [accountId, contentType]
+      [accountId, contentType, triggerTime]
     );
 
     if (res.rows.length === 0) {

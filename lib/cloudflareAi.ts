@@ -71,9 +71,11 @@ export async function generateImage(
   const resolvedSteps = steps ?? defaultStepsFor(model);
   const flux2 = isFlux2(model);
 
+  const enforcedPrompt = prompt + " — absolutely no text, no subtitles, no captions, no words, no watermarks, no signs anywhere in the image.";
+
   ensureCacheDir();
 
-  const hash = contentHash(model, prompt, width, height, resolvedSteps, CF_AI_IMAGE_GUIDANCE_FLUX2);
+  const hash = contentHash(model, enforcedPrompt, width, height, resolvedSteps, CF_AI_IMAGE_GUIDANCE_FLUX2);
   const cachedPath = cachePath(hash);
   if (existsSync(cachedPath)) {
     return readFileSync(cachedPath);
@@ -97,7 +99,7 @@ export async function generateImage(
           headers: { Authorization: `Bearer ${token}` },
           body: (() => {
             const form = new FormData();
-            form.append('prompt', prompt);
+            form.append('prompt', enforcedPrompt);
             form.append('width', String(width));
             form.append('height', String(height));
             form.append('steps', String(resolvedSteps));
@@ -116,7 +118,7 @@ export async function generateImage(
           // which isn't a documented parameter for this model. `num_steps`
           // is still included here as a harmless hedge in case some deployed
           // model revision expects it, but `steps` is the one that's real.
-          body: JSON.stringify({ prompt, width, height, steps: resolvedSteps, num_steps: resolvedSteps }),
+          body: JSON.stringify({ prompt: enforcedPrompt, width, height, steps: resolvedSteps, num_steps: resolvedSteps }),
         };
 
     try {

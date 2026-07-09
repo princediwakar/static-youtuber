@@ -21,7 +21,7 @@ import type { FormatTemplate } from './constants';
 const ShotSchema = z.object({
   id: z.number(),
   visual_prompt: z.string()
-    .min(30, 'Image prompt must be at least 30 characters')
+    .min(15, 'Scene description too short — expand with visual details (lighting, mood, camera angle)')
     .max(600, 'Image prompt must be ≤600 chars'),
   caption_text: z.string()
     .refine(t => t.trim().split(/\s+/).length >= 1, 'Min 1 word')
@@ -190,7 +190,7 @@ Output pure prose. NO JSON. NO formatting. Just the story.`;
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }
     ],
-    { temperature: 0.7, maxTokens: 1024, responseJson: false }
+    { temperature: 0.7, maxTokens: 1024, responseJson: false, timeout: 600_000 }
   );
 
   if (!raw) throw new Error('Pass 1: DeepSeek returned empty narrative');
@@ -301,7 +301,7 @@ ${narrative}
 Slice this narrative into the exact JSON schema.`;
 
   if (validationFeedback) {
-    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS:\n${validationFeedback}\n\nCRITICAL FIX INSTRUCTIONS:\n1. To fix character/word limit errors, DO NOT paraphrase, summarize, or delete words. Instead, SPLIT the long text across multiple consecutive shots. Maintain 100% verbatim text from the narrative.\n2. Fix ALL array length constraints (tags, fact checks).\n3. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
+    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS:\n${validationFeedback}\n\nCRITICAL FIX INSTRUCTIONS:\n1. To fix character/word limit errors, DO NOT paraphrase, summarize, or delete words. Instead, SPLIT the long text across multiple consecutive shots. Maintain 100% verbatim text from the narrative.\n2. If "visual_prompt" is too short, EXPAND each scene with more cinematic detail — lighting, mood, camera angle, environment, texture, and atmosphere. Each visual_prompt should read like a vivid scene direction.\n3. Fix ALL array length constraints (tags, fact checks).\n4. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
   }
 
   const raw = await chatCompletion(
@@ -495,7 +495,7 @@ export async function generateScript(
 const LongShotSchema = z.object({
   id: z.number(),
   visual_prompt: z.string()
-    .min(30, 'Image prompt must be at least 30 characters')
+    .min(15, 'Scene description too short — expand with visual details (lighting, mood, camera angle)')
     .max(800, 'Image prompt must be ≤800 chars'),
   caption_text: z.string()
     .refine(t => t.trim().split(/\s+/).length >= 1, 'Min 1 word')
@@ -588,7 +588,7 @@ Pure prose. NO JSON. NO formatting headers. Just the story.`;
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ],
-    { temperature: 0.8, maxTokens: 2048, responseJson: false }
+    { temperature: 0.8, maxTokens: 2048, responseJson: false, timeout: 600_000 }
   );
 
   if (!raw) throw new Error('Long-form Pass 1: DeepSeek returned empty narrative');
@@ -681,7 +681,7 @@ ${narrative}
 Slice this narrative into 30-60 shots using the JSON schema above.`;
 
   if (validationFeedback) {
-    userPrompt += `\n\nPREVIOUS ATTEMPT ERRORS:\n${validationFeedback}\n\nFIX INSTRUCTIONS:\n1. To fix word-limit errors, SPLIT the long text across multiple consecutive shots. Do NOT paraphrase or delete words.\n2. Fix ALL array length constraints (tags, fact checks).\n3. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
+    userPrompt += `\n\nPREVIOUS ATTEMPT ERRORS:\n${validationFeedback}\n\nFIX INSTRUCTIONS:\n1. To fix word-limit errors, SPLIT the long text across multiple consecutive shots. Do NOT paraphrase or delete words.\n2. If "visual_prompt" is too short, EXPAND each scene with more cinematic detail — lighting, mood, camera angle, environment, texture, and atmosphere.\n3. Fix ALL array length constraints (tags, fact checks).\n4. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
   }
 
   const raw = await chatCompletion(

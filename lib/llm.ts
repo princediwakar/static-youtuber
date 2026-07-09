@@ -7,7 +7,7 @@ export async function chatCompletion(
 ): Promise<string> {
   const llmUrl = `${MODAL_LLM_URL}/v1/chat/completions`;
 
-  const { temperature = 0.7, maxTokens = 4096, responseJson = false, timeout = 120_000 } = options;
+  const { temperature = 0.7, maxTokens = 4096, responseJson = false, timeout = 600_000 } = options;
 
   const body: Record<string, unknown> = {
     messages,
