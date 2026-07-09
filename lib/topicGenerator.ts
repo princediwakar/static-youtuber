@@ -139,15 +139,15 @@ export async function pickFormatTemplate(niche: string, aestheticId: string): Pr
 }
 
 // ─── PASS 1: NARRATIVE GENERATION ─────────────────────────────────────────────
-async function generateNarrative(topic: string, researchContext: string, toneInstruction: string): Promise<string> {
+async function generateNarrative(topic: string, researchContext: string, toneInstruction: string, shotCounts: {min: number, max: number}): Promise<string> {
   const systemPrompt = `You are a master storyteller and investigative journalist.
 Your job is to write a highly compelling, fact-dense narrative script for a YouTube Short.
 
 LENGTH MANDATE (CRITICAL):
-- TARGET 90-110 WORDS, ABSOLUTE MAX 120.
-- At ~2.5 words/second (F5-TTS pace), 110 words ≈ 44s — ideal for the current
-  30-45 second Shorts sweet spot. Videos approaching 60s need 2× the retention
-  to clear the same ranking gate.
+- TARGET 120-140 WORDS.
+- You MUST write at least ${shotCounts.min} distinct sentences or beats. This script will be sliced into EXACTLY ${shotCounts.min}-${shotCounts.max} video shots.
+- If you write fewer than ${shotCounts.min} sentences, the editor will fail. Do not pad with repetition; write enough original substance to naturally fill ${shotCounts.min} shots.
+- At ~2.5 words/second, 120 words ≈ 48s.
 
 CONTENT POLICY (STRICT):
 - Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma. 
@@ -157,14 +157,12 @@ TONE MANDATE:
 ${toneInstruction}
 
 STORYTELLING RULES:
-1. Ground everything in reality. Use the exact dates, names, and numbers provided.
-2. Hook them instantly. The first sentence must present a verbal, question-shaped or
-   claim-shaped hook (e.g., "Here's why the 1987 crash almost repeated in 2008") —
-   not just a visual/cognitive description. The hook should feel like it answers a
-   question a viewer arrived with (YouTube Shorts search intent mode).
-3. Build tension. Use transition words. Let the story flow with cause and effect.
-4. End with a devastating conclusion. The final sentence must recontextualize the whole story.
-5. NO CTAs. No "subscribe", "like", or "thanks for watching".
+1. NO REPETITION: Never repeat a sentence, phrase, or core idea to fill space. Every single sentence must advance the narrative.
+2. Ground everything in reality. Use the exact dates, names, and numbers provided.
+3. HOOK THEM WITH AN OPEN LOOP: The first sentence must create a massive curiosity gap. Never summarize the entire story upfront. Present a high-stakes question, an unbelievable paradox, or a shocking claim (e.g., "The man who built a $2B empire never owned a single computer" or "In 2008, one line of code almost destroyed the global economy"). The viewer must feel compelled to stay to find the answer.
+4. Build tension. Use transition words. Let the story flow with cause and effect. Withhold the final resolution until the very last possible moment.
+5. End with an empowering, triumphant conclusion. The final sentence must recontextualize the whole story and leave the viewer feeling capable and inspired to act.
+6. NO CTAs. No "subscribe", "like", or "thanks for watching".
    Exception: ending on a genuinely debatable claim (supported by research) is
    encouraged — it invites organic discussion in comments without an explicit CTA.
    Prefer this over an airtight, universally-agreed conclusion when the topic allows.
@@ -172,7 +170,9 @@ STORYTELLING RULES:
 PACING & SYNTAX (CRITICAL):
 - Write strictly in short, punchy sentences.
 - NO sentence may exceed 15 words.
+- Rhythm is critical: mix very short sentences (3-5 words) with medium sentences (10-15 words) to create momentum.
 - Avoid compound sentences with multiple clauses. Use periods heavily.
+- Read it aloud in your head — it must sound like a gripping, high-stakes conversation, not a robotic list of facts.
 
 FORMATTING:
 - Use digits, symbols, and abbreviations for numbers (e.g., "$1.4B" instead of "one point four billion dollars", "26", "100%") to keep the text visually concise.
@@ -223,6 +223,7 @@ Each shot has TWO text fields for different modalities:
    - WORD LIMIT: No shot may contain more than 12 words.
    - If a sentence is long, SPLIT it across multiple consecutive shots. Do NOT summarize it to fit.
    - Keep symbols and abbreviations as-is from the narrative (e.g., "$1.4B", "26%", "CEO").
+   - NO REPETITION: Do NOT repeat the exact same caption or spoken text across multiple shots to pad the length. Every shot must advance the text.
    - This is what the viewer reads on screen — short, scannable, punchy.
 
 2. "spoken_text" — Nearly identical to caption_text. The ONLY change allowed is converting digit-form numbers to their spoken word equivalents.
@@ -251,7 +252,7 @@ VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 VISUAL AESTHETIC (FLUX.1):
 You must write a scene description that fits this visual world: ${aestheticInstruction}
 - Write a highly descriptive paragraph using natural language describing the specific scene.
-- KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Change angles, lighting, or focus.
+- KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Do not just change the camera angle — change the focus, the lighting, the micro-actions (e.g., "dust motes dancing in a shaft of light", "a hand violently slamming a folder down", "sweat dripping onto a keyboard"). Make it cinematic and intensely visceral.
 - NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS.
 - HARD BAN ON THESE OVERUSED AI LOOKS — never describe: glassmorphism, frosted/liquid glass panels, glossy soft-3D renders, pastel gradient blobs, isometric miniature dioramas, generic bento-grid layouts, neon wireframes, or sumi-e ink wash. If your instinct reaches for one of these, describe the material and light instead (paper grain, ink, stone, patina, halftone dot, contour line).
 - CRITICAL: The environment must have NO written words, NO signs, NO legible letters or numbers, and NO text of any kind — this includes fake labels on maps, redaction stamps, inscriptions, or document text. Represent documents/maps/carvings with blank marks, plain bars, or abstract lines only, never characters that could be misread as words.
@@ -301,7 +302,7 @@ ${narrative}
 Slice this narrative into the exact JSON schema.`;
 
   if (validationFeedback) {
-    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS:\n${validationFeedback}\n\nCRITICAL FIX INSTRUCTIONS:\n1. To fix character/word limit errors, DO NOT paraphrase, summarize, or delete words. Instead, SPLIT the long text across multiple consecutive shots. Maintain 100% verbatim text from the narrative.\n2. If "visual_prompt" is too short, EXPAND each scene with more cinematic detail — lighting, mood, camera angle, environment, texture, and atmosphere. Each visual_prompt should read like a vivid scene direction.\n3. Fix ALL array length constraints (tags, fact checks).\n4. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
+    userPrompt += `\n\nPREVIOUS ATTEMPT VALIDATION ERRORS:\n${validationFeedback}\n\nCRITICAL FIX INSTRUCTIONS:\n1. To fix character/word limit errors, DO NOT paraphrase, summarize, or delete words. Instead, SPLIT the long text across multiple consecutive shots. Maintain 100% verbatim text from the narrative.\n2. To fix EXACT DUPLICATE errors, you must stop repeating the same text. Advance the narrative to the next sentence.\n3. If "visual_prompt" is too short, EXPAND each scene with more cinematic detail — lighting, mood, camera angle, environment, texture, and atmosphere. Each visual_prompt should read like a vivid scene direction.\n4. Fix ALL array length constraints (tags, fact checks).\n5. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
   }
 
   const raw = await chatCompletion(
@@ -386,7 +387,7 @@ export async function generateScript(
   });
   
   try {
-    const narrative = await step.run('generate-narrative', () => generateNarrative(reserved.topic, reserved.research_context, profile.toneInstruction));
+    const narrative = await step.run('generate-narrative', () => generateNarrative(reserved.topic, reserved.research_context, profile.toneInstruction, TEMPLATE_SHOT_COUNTS[formatTemplate as FormatTemplate]));
 
     let lastScore: QualityScore | null = null;
     let validationFeedback = '';
@@ -423,7 +424,7 @@ export async function generateScript(
       // default, since a condensed stencil face and a wide display serif
       // don't fit the same character count per line at the same size.
       const captionValidation = validateAllCaptions(
-        validated.shots.map(s => ({ caption_text: s.caption_text })),
+        validated.shots.map(s => ({ caption_text: s.caption_text, spoken_text: s.spoken_text })),
         getCaptionStyle(aesthetic.id),
       );
       if (!captionValidation.valid) {
@@ -549,13 +550,16 @@ async function generateLongFormNarrative(
   topic: string,
   researchContext: string,
   toneInstruction: string,
+  shotCounts: {min: number, max: number},
 ): Promise<string> {
   const systemPrompt = `You are a documentary narrator and investigative journalist.
 Your job is to write a compelling, fact-dense 3-5 minute deep-dive script.
 
 LENGTH MANDATE (CRITICAL):
-- TARGET 450-750 WORDS.
-- At ~2.5 words/second (F5-TTS pace), 600 words ≈ 4 minutes — the ideal long-form sweet spot.
+- TARGET 500-750 WORDS.
+- You MUST write at least ${shotCounts.min} distinct sentences, clauses, or beats. This script will be sliced into EXACTLY ${shotCounts.min}-${shotCounts.max} video shots.
+- If you write fewer than ${shotCounts.min} sentences, the editor will fail. Do not pad with repetition; write enough original substance to naturally fill ${shotCounts.min} shots.
+- At ~2.5 words/second, 600 words ≈ 4 minutes — the ideal long-form sweet spot.
 
 CONTENT POLICY (STRICT):
 - Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma.
@@ -568,12 +572,13 @@ STRUCTURE MANDATE:
 Hook → Background Context → Deep Exploration (3-4 distinct dimensions) → Modern Relevance → Synthesis
 
 STORYTELLING RULES:
-1. Ground everything in reality. Use exact dates, names, and numbers from the research context.
-2. Hook instantly — first sentence is a claim or question the viewer arrived with.
-3. Use subordinate clauses, cause-and-effect transitions, and narrative callbacks.
-4. Sentences may be 15-25 words. This is prose, not caption bullets.
-5. Ending must recontextualize the whole story.
-6. NO CTAs. No "subscribe", "like", or "thanks for watching".
+1. NO REPETITION: Never repeat a sentence, phrase, or core idea to fill space. Every single sentence must advance the narrative.
+2. Ground everything in reality. Use exact dates, names, and numbers from the research context.
+3. HOOK THEM WITH AN OPEN LOOP: The first sentence must create a massive curiosity gap. Never summarize the entire story upfront. Present a high-stakes question, an unbelievable paradox, or a shocking claim.
+4. Build tension through structure. Use subordinate clauses, cause-and-effect transitions, and narrative callbacks. Delay the final resolution.
+5. Sentences may be 15-25 words. This is prose, not caption bullets, but it must still have a conversational, gripping rhythm. Mix sentence lengths.
+6. Ending must recontextualize the whole story, leaving the viewer feeling empowered, resilient, and ready to act.
+7. NO CTAs. No "subscribe", "like", or "thanks for watching".
 
 FORMATTING:
 - Use digits, symbols, and abbreviations for numbers ("$1.4B", "26%", "CEO").
@@ -618,6 +623,7 @@ Each shot has TWO text fields:
    - WORD LIMIT: No shot may contain more than 15 words.
    - If a sentence is long, SPLIT across multiple consecutive shots.
    - Keep symbols and abbreviations ("$1.4B", "26%", "CEO").
+   - NO REPETITION: Do NOT repeat the exact same caption or spoken text across multiple shots to pad the length. Every shot must advance the text.
 
 2. "spoken_text" — Identical to caption_text EXCEPT digits become spoken words.
    - "7 years" → "seven years"; "$1.4B" → "one point four billion dollars"; "26%" → "twenty-six percent"
@@ -634,7 +640,7 @@ VOICE SELECTION (same catalog as shorts — pick best for long-form niche):
 VISUAL AESTHETIC (FLUX.1 — landscape 1344×768):
 ${aestheticInstruction}
 - Write a descriptive paragraph per shot using natural language.
-- KINETIC ENERGY MANDATE: Change the visual prompt for EVERY SINGLE SHOT. Different angles, lighting, focus.
+- KINETIC ENERGY MANDATE: Change the visual prompt for EVERY SINGLE SHOT. Do not just change the camera angle — change the focus, the lighting, the micro-actions (e.g., "ink bleeding into paper", "a nervous hand adjusting a tie", "a flickering fluorescent light"). Make it cinematic and intimately detailed.
 - NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS.
 - HARD BAN: No glassmorphism, frosted glass, glossy 3D, pastel blobs, isometric dioramas, neon wireframes, sumi-e.
   Describe material and light instead (paper grain, ink, stone, patina, halftone, contour line).
@@ -681,7 +687,7 @@ ${narrative}
 Slice this narrative into 30-60 shots using the JSON schema above.`;
 
   if (validationFeedback) {
-    userPrompt += `\n\nPREVIOUS ATTEMPT ERRORS:\n${validationFeedback}\n\nFIX INSTRUCTIONS:\n1. To fix word-limit errors, SPLIT the long text across multiple consecutive shots. Do NOT paraphrase or delete words.\n2. If "visual_prompt" is too short, EXPAND each scene with more cinematic detail — lighting, mood, camera angle, environment, texture, and atmosphere.\n3. Fix ALL array length constraints (tags, fact checks).\n4. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
+    userPrompt += `\n\nPREVIOUS ATTEMPT ERRORS:\n${validationFeedback}\n\nFIX INSTRUCTIONS:\n1. To fix word-limit errors, SPLIT the long text across multiple consecutive shots. Do NOT paraphrase or delete words.\n2. To fix EXACT DUPLICATE errors, you must stop repeating the same text. Advance the narrative to the next sentence.\n3. If "visual_prompt" is too short, EXPAND each scene with more cinematic detail — lighting, mood, camera angle, environment, texture, and atmosphere.\n4. Fix ALL array length constraints (tags, fact checks).\n5. Ensure the final shot's spoken_text ends with a period, exclamation mark, or question mark.`;
   }
 
   const raw = await chatCompletion(
@@ -757,7 +763,7 @@ export async function generateLongFormScript(
   const reserved = await step.run('init-topic', () => reserveTopic(niche, accountId));
 
   try {
-    const narrative = await step.run('generate-narrative', () => generateLongFormNarrative(reserved.topic, reserved.research_context, profile.toneInstruction));
+    const narrative = await step.run('generate-narrative', () => generateLongFormNarrative(reserved.topic, reserved.research_context, profile.toneInstruction, {min: 30, max: 60}));
 
     let lastScore: LongQualityScore | null = null;
     let validationFeedback = '';
@@ -791,7 +797,7 @@ export async function generateLongFormScript(
 
       // Caption validation using landscape char limits (maxWords=20)
       const captionValidation = validateAllCaptions(
-        validated.shots.map(s => ({ caption_text: s.caption_text })),
+        validated.shots.map(s => ({ caption_text: s.caption_text, spoken_text: s.spoken_text })),
         captionLimits,
       );
       if (!captionValidation.valid) {

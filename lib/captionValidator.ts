@@ -108,13 +108,35 @@ export function validateShotCaption(
 }
 
 export function validateAllCaptions(
-  shots: Array<{ caption_text: string }>,
+  shots: Array<{ caption_text: string, spoken_text?: string }>,
   widthLimits: CaptionWidthLimits = DEFAULT_WIDTH_LIMITS,
 ): CaptionValidationResult {
   const allWarnings: string[] = [];
   const allErrors: string[] = [];
+  const seenCaptions = new Set<string>();
+  const seenSpoken = new Set<string>();
 
   shots.forEach((shot, i) => {
+    // 1. Anti-repetition check for captions
+    const normCaption = stripDirectorTags(shot.caption_text).toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normCaption.length > 10) {
+      if (seenCaptions.has(normCaption)) {
+        allErrors.push(`Shot ${i + 1}: EXACT DUPLICATE CAPTION. You repeated a previous shot's text. You must advance the narrative, never repeat phrases to pad the shot count.`);
+      }
+      seenCaptions.add(normCaption);
+    }
+    
+    // 2. Anti-repetition check for spoken text
+    if (shot.spoken_text) {
+      const normSpoken = stripDirectorTags(shot.spoken_text).toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (normSpoken.length > 10) {
+        if (seenSpoken.has(normSpoken)) {
+          allErrors.push(`Shot ${i + 1}: EXACT DUPLICATE SPOKEN TEXT. You repeated a previous shot's spoken text. Every shot must contain unique text.`);
+        }
+        seenSpoken.add(normSpoken);
+      }
+    }
+
     const result = validateShotCaption({ caption_text: shot.caption_text, index: i + 1 }, widthLimits);
     allWarnings.push(...result.warnings);
     allErrors.push(...result.errors);

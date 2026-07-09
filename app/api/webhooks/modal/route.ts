@@ -1,11 +1,15 @@
 // Path: app/api/webhooks/modal/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { inngest } from '@/inngest/client';
+import { db } from '@/lib/database';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { jobId, mp4Url, error } = body;
+    
+    const accountId = request.nextUrl.searchParams.get('accountId');
+    const skipPublish = request.nextUrl.searchParams.get('skipPublish') === 'true';
 
     if (!jobId || typeof jobId !== 'string') {
       console.error('[Modal Webhook] Missing jobId:', body);
@@ -14,10 +18,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error(`[Modal Webhook] Render FAILED for job ${jobId}: ${error}`);
-      await inngest.send({
-        name: 'modal/render.complete',
-        data: { jobId, error },
-      });
+      await db.updateJob(jobId, { status: 'failed', error_message: `Modal render failed: ${error}` });
       return NextResponse.json({ ok: true });
     }
 
@@ -28,10 +29,18 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Modal Webhook] Render complete for job ${jobId}: ${mp4Url}`);
 
-    await inngest.send({
-      name: 'modal/render.complete',
-      data: { jobId, mp4Url },
-    });
+    // Update DB with the final video URL so it is always saved, even if publishing is skipped
+    await db.updateJob(jobId, { video_url: mp4Url, status: 'assembled' });
+
+    if (!skipPublish && accountId) {
+      await inngest.send({
+        name: 'slideshow/publish',
+        data: { jobId, accountId },
+      });
+      console.log(`[Modal Webhook] Triggered publish for job ${jobId}`);
+    } else {
+      console.log(`[Modal Webhook] Skipped publish for job ${jobId} (skipPublish=${skipPublish})`);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

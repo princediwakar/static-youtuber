@@ -200,88 +200,103 @@ async function executeAssetPipeline(
     const timeout = setTimeout(() => controller.abort(), 30_000);
 
     try {
-      const response = await fetch(MODAL_RENDER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobId,
-          accountId,
-          content_type: isLongForm ? 'long' : 'shorts',
-          visual_world: script.visual_world,
-          caption_style: getCaptionStyle(script.visual_world),
-          shots: script.shots.map((shot: Shot, i: number) => ({
-            image_url: imageUrls[i],
-            caption_text: shot.caption_text,
-            spoken_text: shot.spoken_text,
-            audio_url: shotAudioUrls[i],
-          })),
-          shot_audio_urls: shotAudioUrls,
-          music_url: musicUrl,
-          callback_url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/webhooks/modal`,
-        }),
-        signal: controller.signal,
-      });
+        const callbackUrl = new URL('/api/webhooks/modal', process.env.NEXTAUTH_URL || 'http://localhost:3000');
+        callbackUrl.searchParams.set('accountId', accountId);
+        callbackUrl.searchParams.set('skipPublish', String(skipPublish));
 
-      clearTimeout(timeout);
+        const response = await fetch(MODAL_RENDER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId,
+            accountId,
+            content_type: isLongForm ? 'long' : 'shorts',
+            visual_world: script.visual_world,
+            caption_style: getCaptionStyle(script.visual_world),
+            shots: script.shots.map((shot: Shot, i: number) => ({
+              image_url: imageUrls[i],
+              caption_text: shot.caption_text,
+              spoken_text: shot.spoken_text,
+              audio_url: shotAudioUrls[i],
+            })),
+            shot_audio_urls: shotAudioUrls,
+            music_url: musicUrl,
+            callback_url: callbackUrl.toString(),
+          }),
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => '');
-        const msg = `Modal returned HTTP ${response.status}: ${errorBody.slice(0, 200)}`;
-        if (response.status >= 400 && response.status < 500) throw new NonRetriableError(msg);
-        throw new Error(msg);
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+          const errorBody = await response.text().catch(() => '');
+          const msg = `Modal returned HTTP ${response.status}: ${errorBody.slice(0, 200)}`;
+          if (response.status >= 400 && response.status < 500) throw new NonRetriableError(msg);
+          throw new Error(msg);
+        }
+
+        const body = await response.json();
+        if (body.error) throw new NonRetriableError(`Modal render failed: ${body.error}`);
+
+        if (body.videoUrl || body.mp4Url) {
+          const url = body.videoUrl || body.mp4Url;
+          console.log(`[Pipeline] Modal returned video immediately: ${url}`);
+          await db.updateJob(jobId, { video_url: url, status: 'assembled' });
+          return url;
+        }
+
+        console.log(`[Pipeline] Modal queued render, awaiting webhook`);
+      } catch (e: any) {
+        clearTimeout(timeout);
+        throw e;
       }
+    });
 
-      const body = await response.json();
-      if (body.error) throw new NonRetriableError(`Modal render failed: ${body.error}`);
+}
 
-      if (body.videoUrl || body.mp4Url) {
-        const url = body.videoUrl || body.mp4Url;
-        console.log(`[Pipeline] Modal returned video: ${url}`);
-        await db.updateJob(jobId, { video_url: url, status: 'assembled' });
-        return url;
+export const publishVideo = inngest.createFunction(
+  {
+    id: 'publish-video',
+    retries: 3,
+    timeouts: { finish: '30m' },
+    triggers: [{ event: 'slideshow/publish' }],
+    onFailure: async ({ error, event }) => {
+      console.error(`[CRITICAL] Publish failed: ${error.message}`);
+      const explicitJobId = (event as any)?.data?.jobId;
+      if (explicitJobId) {
+        try {
+          await db.updateJob(explicitJobId, { status: 'failed', error_message: `Publish failed: ${error.message}` });
+        } catch (dbErr: any) {
+          console.error(`[CRITICAL] Failed to update job failure status: ${dbErr.message}`);
+        }
       }
-
-      console.log(`[Pipeline] Modal queued render, awaiting webhook`);
-    } catch (e: any) {
-      clearTimeout(timeout);
-      throw e;
     }
-  });
+  },
+  async ({ step, event }) => {
+    const accountId: string = event.data.accountId;
+    const jobId: string = event.data.jobId;
 
-  let resolvedVideoUrl = videoUrl;
-
-  if (useModal && !videoUrl) {
-    const modalResult = await step.waitForEvent('wait-for-modal', {
-      event: 'modal/render.complete',
-      timeout: renderTimeout,
-      if: `async.data.jobId == '${jobId}'`,
-    }).catch(() => null);
-
-    if (modalResult?.data?.error) {
-      throw new NonRetriableError(`Modal render failed asynchronously: ${modalResult.data.error}`);
+    if (process.env.INNGEST_DEV === '1') {
+      console.log('[Pipeline] Skipping publish — INNGEST_DEV is set');
+      return;
     }
-    if (!modalResult?.data?.mp4Url) {
-      throw new Error(`Modal render did not complete within ${renderTimeout} — webhook never arrived`);
-    }
-    resolvedVideoUrl = modalResult.data.mp4Url;
-  }
 
-  // ── Step 4: Publish ───────────────────────────────────────────────────────
-  if (!skipPublish) {
+    const job = await db.getJob(jobId);
+    if (!job) throw new NonRetriableError(`Job not found: ${jobId}`);
+    if (job.status === 'published') {
+      console.log(`[Pipeline] Job ${jobId} is already published, skipping.`);
+      return;
+    }
+    if (job.status !== 'assembled' || !job.video_url) {
+      throw new Error(`Job ${jobId} is not assembled yet or missing video_url. Current status: ${job.status}`);
+    }
+
     await step.run('publish', async () => {
-      if (process.env.INNGEST_DEV === '1') {
-        console.log('[Pipeline] Skipping publish — INNGEST_DEV is set');
-        return;
-      }
-
-      const job = await db.getJob(jobId);
-      if (job?.status === 'published') return;
-
       const creds = await getAccountCredentials(accountId);
       
       let thumbRes;
       for (let t = 0; t < 3; t++) {
-        thumbRes = await fetch(thumbnailUrl || job.thumbnail_url);
+        thumbRes = await fetch(job.thumbnail_url);
         if (thumbRes.ok) break;
         await new Promise(res => setTimeout(res, 1000));
       }
@@ -289,33 +304,36 @@ async function executeAssetPipeline(
 
       const thumbBuffer = Buffer.from(await thumbRes.arrayBuffer());
       const labelAsSynthetic = Math.random() < 0.5;
-      const result = await uploadToYouTube(resolvedVideoUrl, thumbBuffer, script, creds, labelAsSynthetic);
+      
+      const script = typeof job.script === 'string' ? JSON.parse(job.script) : job.script;
+      
+      const result = await uploadToYouTube(job.video_url, thumbBuffer, script, creds, labelAsSynthetic);
 
       await query(
         `INSERT INTO slideshow_uploads (job_id, youtube_video_id, title, description, tags, variant)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [jobId, result.youtubeVideoId, result.title, result.description, JSON.stringify(script.tags), variant]
+        [jobId, result.youtubeVideoId, result.title, result.description, JSON.stringify(script.tags), job.variant]
       );
 
       const topicRes = await query<{ id: number }>(
         'SELECT id FROM slideshow_topics WHERE topic = $1 AND account_id = $2',
-        [topic, accountId]
+        [job.topic, accountId]
       );
       if (topicRes.rows.length > 0) {
-        const profile = NICHE_PROFILES[niche] ?? DEFAULT_NICHE_PROFILE;
+        const profile = NICHE_PROFILES[job.niche] ?? DEFAULT_NICHE_PROFILE;
         await recordPublishedVideo({
           topicId: topicRes.rows[0].id,
           youtubeId: result.youtubeVideoId,
           aestheticId: profile.aestheticId,
-          format: format_template,
+          format: job.format_template,
           qualityScore: 7,
         });
       }
 
-      await db.updateJob(jobId, { status: 'published', video_url: resolvedVideoUrl, youtube_video_id: result.youtubeVideoId });
+      await db.updateJob(jobId, { status: 'published', youtube_video_id: result.youtubeVideoId });
     });
   }
-}
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PIPELINES & SCHEDULERS
@@ -325,7 +343,7 @@ export const generateShort = inngest.createFunction(
   {
     id: 'generate-short',
     retries: 3,
-    timeouts: { finish: '2h' },
+    timeouts: { finish: '20m' },
     triggers: [{ event: 'slideshow/trigger' }],
     onFailure: async ({ error, event }) => {
       console.error(`[CRITICAL] Pipeline failed: ${error.message}`);
@@ -365,18 +383,7 @@ export const generateShort = inngest.createFunction(
       return { script, jobId, format_template: chosenFormat, niche, variant, topic };
     };
 
-    const [scriptResult] = await Promise.all([
-      generateScriptTask(),
-      step.run('warmup-bgm-gpu', async () => {
-        if (!ACE_STEP_WARMUP_URL) return { status: 'skipped' };
-        try {
-          await fetch(ACE_STEP_WARMUP_URL, { method: 'GET' });
-          return { status: 'warmed' };
-        } catch {
-          return { status: 'failed' };
-        }
-      })
-    ]);
+    const scriptResult = await generateScriptTask();
 
     await executeAssetPipeline(
       step, accountId, scriptResult.jobId, scriptResult.script, scriptResult.format_template, 
@@ -389,7 +396,7 @@ export const generateLongForm = inngest.createFunction(
   {
     id: 'generate-long-form',
     retries: 3,
-    timeouts: { finish: '2h' },
+    timeouts: { finish: '20m' },
     triggers: [{ event: 'slideshow/trigger-long' }],
     onFailure: async ({ error, event }) => {
       console.error(`[CRITICAL] Long-form pipeline failed: ${error.message}`);
@@ -428,18 +435,7 @@ export const generateLongForm = inngest.createFunction(
       return { script, jobId, format_template: formatTemplate, niche, topic };
     };
 
-    const [scriptResult] = await Promise.all([
-      generateLongFormScriptTask(),
-      step.run('warmup-bgm-gpu', async () => {
-        if (!ACE_STEP_WARMUP_URL) return { status: 'skipped' };
-        try {
-          await fetch(ACE_STEP_WARMUP_URL, { method: 'GET' });
-          return { status: 'warmed' };
-        } catch {
-          return { status: 'failed' };
-        }
-      })
-    ]);
+    const scriptResult = await generateLongFormScriptTask();
 
     await executeAssetPipeline(
       step, accountId, scriptResult.jobId, scriptResult.script, scriptResult.format_template, 

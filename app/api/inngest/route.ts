@@ -7,7 +7,8 @@ import {
   channelScheduler, 
   syncAnalyticsCron, 
   generateLongForm, 
-  longFormScheduler 
+  longFormScheduler,
+  publishVideo
 } from '@/inngest/pipeline';
 
 export const { GET, POST, PUT } = serve({
@@ -17,7 +18,8 @@ export const { GET, POST, PUT } = serve({
     channelScheduler, 
     syncAnalyticsCron, 
     generateLongForm, 
-    longFormScheduler
+    longFormScheduler,
+    publishVideo
   ],
 });
 

@@ -218,9 +218,10 @@ export const LONG_NICHE_PROFILES: Record<string, NicheProfile> = {
 
 Write in full paragraphs with flowing sentences (15–25 words). Use subordinate clauses, cause-and-effect transitions, and narrative callbacks. Structure: Hook → Background Context → Pivotal Conflict → Resolution → Modern Significance.
 
-Include exact dates, dollar amounts, and names from the research context. Build tension through accumulating detail. The ending must recontextualize the entire story.
+Include exact dates, dollar amounts, and names from the research context. Build tension through accumulating detail. Make the psychological burden of leadership palpable, but emphasize the sheer willpower required to push through. The ending must recontextualize the entire story into an empowering lesson.
 
-NEVER use "disrupt", "innovate", "unicorn", or "game-changer". NEVER sound like a press release.`,
+NEVER use "disrupt", "innovate", "unicorn", or "game-changer". NEVER sound like a press release.
+Do not trail off or repeat yourself at the end. End decisively.`,
   },
   'Financial Forensics': {
     aestheticId: 'finance-editorial',
@@ -229,27 +230,30 @@ NEVER use "disrupt", "innovate", "unicorn", or "game-changer". NEVER sound like 
 
 Write in flowing paragraphs, 15–25 words per sentence. Use transitions that build a chronological evidence trail. Structure: The Revelation → The Setup → The Paper Trail → The Collapse → The Reckoning.
 
-Every number is a body blow — the exact trade, the forged signature, the meeting where someone should have asked the question but didn't.
+Every number is a body blow — the exact trade, the forged signature, the meeting where someone should have asked the question but didn't. Zero in on the cognitive dissonance and psychological unraveling of the perpetrators, using their failure as an empowering lesson on integrity and the true cost of deceit.
 
-NEVER use "mind-blowing", "insane", or "unbelievable". Let the facts speak.`,
+NEVER use "mind-blowing", "insane", or "unbelievable". Let the facts speak.
+Do not trail off or repeat yourself at the end. End decisively.`,
   },
   'Stoic Philosophy': {
     aestheticId: 'stoic-zen',
     minQualityScore: 7,
     toneInstruction: `You are Marcus Aurelius writing to himself after a decade of war — earned wisdom, not motivational platitude. Your audience has given you 4 minutes; give them something they'll carry.
 
-Write in measured paragraphs, 15–25 words per sentence. Use contrast (the weak response vs the disciplined response), historical anchoring, and direct address to the modern struggle. Structure: The Principle → Its Ancient Origin → Its Modern Manifestation → The Practice → The Verdict.
+Write in measured paragraphs, 15–25 words per sentence. Speak to the modern man feeling crushed by expectations. Use contrast (the weak response vs the disciplined response), historical anchoring, and direct address to the modern struggle. The advice should feel like a cold splash of water: harsh, bracing, but ultimately liberating and deeply empowering. Structure: The Principle → Its Ancient Origin → Its Modern Manifestation → The Practice → The Verdict.
 
-NEVER sound like an Instagram quote. NEVER use "vibes", "manifest", "energy", or "the universe".`,
+NEVER sound like an Instagram quote. NEVER use "vibes", "manifest", "energy", or "the universe".
+Do not trail off or repeat yourself at the end. End decisively.`,
   },
   'Urban Survival': {
     aestheticId: 'survival-technical',
     minQualityScore: 7,
     toneInstruction: `You are the calm, credible mentor who has been through the worst and is sharing hard-won knowledge for 4 minutes.
 
-Write in clear, authoritative paragraphs, 15–25 words per sentence. Every claim must be actionable. Use the ticking-clock structure for urgency. Structure: The Scenario → Why Most People Get It Wrong → The Correct Protocol → The Underlying Principle → How to Train for It.
+Write in clear, authoritative paragraphs, 15–25 words per sentence. Every claim must be actionable. Frame every lesson around the fatal mistake most people make when panic sets in. Use the ticking-clock structure for urgency. Your advice is the difference between living and dying. Empower the viewer: they don't need to be afraid if they are prepared. Structure: The Scenario → Why Most People Get It Wrong → The Correct Protocol → The Underlying Principle → How to Train for It.
 
-NEVER sound alarmist, conspiratorial, or like a motivational Instagram post.`,
+NEVER sound alarmist, conspiratorial, or like a motivational Instagram post.
+Do not trail off or repeat yourself at the end. End decisively.`,
   },
 };
 
@@ -262,10 +266,11 @@ Paint the founder as a character you can feel: an immigrant sleeping on an air m
 
 Name exact dates, exact dollar amounts, exact names. The pitch meeting where the investor said no. The email that changed everything. The day they almost ran out of money.
 
-Build tension like a thriller. End with the outcome — but don't just state the valuation. Answer: what did this teach us about how the world actually works?
+Build tension like a thriller. Make the stakes visceral: emphasize the terrifying risk of failure, but focus on the sheer willpower it took to overcome it. End with the outcome — but don't just state the valuation. Answer: what empowering truth did this teach us about human potential?
 
 NEVER use "disrupt", "innovate", "unicorn", or "game-changer".
-NEVER sound like a press release. The facts should hit like a gut punch.`,
+NEVER sound like a press release. The facts should hit like a gut punch.
+Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 7,
   },
   'Financial Forensics': {
@@ -274,22 +279,24 @@ NEVER sound like a press release. The facts should hit like a gut punch.`,
 
 The numbers alone should shock. $4.7 million lost to a comma. $64 billion that never existed. A bank bankrupted by a single rogue trader. Build tension through the scale and the specificity: the exact trade, the forged signature, the meeting where someone should have asked the question but didn't.
 
-Humanize the perpetrators without excusing them. What made them believe they'd get away with it? At what point did they know it was over?
+Humanize the perpetrators without excusing them. Zero in on their psychological unraveling. Describe the sweat, the panic, and the exact moment the house of cards began to fall. What made them believe they'd get away with it? The story should empower the viewer by demystifying the complex mechanisms of greed and revealing the fragile human ego underneath it all.
 
 NEVER use "mind-blowing", "insane", or "unbelievable".
-Let the facts speak — the dollar amounts, the dates, the paper trail. Every number is a body blow.`,
+Let the facts speak — the dollar amounts, the dates, the paper trail. Every number is a body blow.
+Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 6,
   },
   'Stoic Philosophy': {
     aestheticId: 'stoic-zen',
     toneInstruction: `Your tone is deep, unflinching, and earned — like a warrior who has endured the worst life threw at him and emerged with clarity, not bitterness. Speak like Marcus Aurelius writing to himself in his tent after a battle, or Viktor Frankl finding meaning in a concentration camp. Every word carries weight. Every sentence lands like a verdict.
 
-Apply ancient Stoic principles directly to modern struggles: losing your job, a breakup, social media envy, betrayal by a friend, the fear of not being good enough. The Stoics faced all of this — the details changed, the human condition did not.
+Speak to the modern man feeling crushed by expectations, anxiety, and digital noise. Apply ancient Stoic principles directly to modern struggles: losing your job, a breakup, social media envy, betrayal by a friend, the fear of not being good enough. The Stoics faced all of this — the details changed, the human condition did not. The advice should feel like a cold splash of water: harsh, bracing, but ultimately liberating and profoundly empowering.
 
 Contrast the weak man's response (whining, blaming, avoiding) with the disciplined man's response (accepting what he cannot control, focusing on what he can, finding dignity in the struggle). Be cold, be hard, be precise. No fluff. No comfort. Just the truth.
 
 NEVER sound like an Instagram quote. NEVER use "vibes", "manifest", "energy", or "the universe".
-This is not inspiration. This is a sword being sharpened.`,
+This is not inspiration. This is a sword being sharpened.
+Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 6,
   },
   'Urban Survival': {
@@ -301,16 +308,17 @@ crises), financial and career survival (navigating insurance, startup failure,
 negotiation), and mental resilience (growth mindset, meditation, focus).
 
 Every tip must be practical and actionable by an average person with no special
-gear or training. No doomsday scenarios, no prepper fantasies, no conspiracies.
+gear or training. Frame every lesson around the fatal mistake most people make when panic sets in. No doomsday scenarios, no prepper fantasies, no conspiracies.
 
 Build tension through real stakes — the 3-minute window to escape a house fire,
 the 15-second countdown in a sinking car, the 5-minute race to inject epinephrine,
-the financial cliff a startup founder faces when runway hits zero.
+the financial cliff a startup founder faces when runway hits zero. Your advice is the difference between living and dying. Empower the viewer to realize they are capable of surviving the worst if they remain calm and prepared.
 
 NEVER sound alarmist, conspiratorial, or like a motivational Instagram post.
 Be the calm, credible voice of someone who has seen the worst and knows
 exactly what to do — whether that's performing CPR, negotiating a raise, or
-sitting in silence for 10 minutes to reset your nervous system.`,
+sitting in silence for 10 minutes to reset your nervous system.
+Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 6,
   },
 };
