@@ -1,8 +1,8 @@
 # System Architecture
 
-Fully automated pipeline that generates, assembles, and publishes AI-powered YouTube Shorts across 4 niche channels. One video per channel per day, staggered across UTC hours. Zero human intervention from topic to publish.
+Fully automated pipeline that generates, assembles, and publishes AI-powered YouTube Shorts (and long-form videos) across 4 niche channels. One Short per channel per day, staggered across UTC hours, plus one long-form deep-dive per channel every 48h. Zero human intervention from topic to publish.
 
-**Stack:** Next.js 16 (App Router), TypeScript 5, PostgreSQL (Neon), Inngest (orchestration), Tailwind CSS 4, Python/Modal (F5-TTS voice cloning on A10G, ACE-Step BGM generation on A10G, CPU FFmpeg render worker)
+**Stack:** Next.js 16 (App Router), TypeScript 5, PostgreSQL (Neon), Inngest (orchestration), Tailwind CSS 4, Python/Modal (Qwen2.5-7B-Instruct via vLLM on A10G, F5-TTS voice cloning on A10G, ACE-Step BGM generation on A10G, CPU FFmpeg render worker)
 
 ---
 
@@ -10,45 +10,47 @@ Fully automated pipeline that generates, assembles, and publishes AI-powered You
 
 ```
 ├── app/
-│   ├── layout.tsx                  # Root layout, Inter font, dark theme
+│   ├── layout.tsx                  # Root layout, dark theme
 │   ├── page.tsx                    # Server-rendered dashboard (ISR 30s)
 │   ├── globals.css                 # Design tokens, component styles
 │   └── api/
-│       ├── cron/route.ts           # Pipeline trigger endpoint (CRON_SECRET)
-│       ├── inngest/route.ts        # Inngest serve (GET/POST/PUT, 300s max)
+│       ├── cron/route.ts           # Pipeline trigger endpoint (CRON_SECRET, supports contentType)
+│       ├── inngest/route.ts        # Inngest serve (GET/POST/PUT, 60s max)
 │       ├── jobs/[jobId]/retry/route.ts  # Job retry endpoint
 │       └── webhooks/modal/route.ts # Modal render completion callback
 ├── lib/
 │   ├── constants.ts                # All runtime constants (centralized)
-│   ├── types.ts                    # Shot, SlideshowScript, SlideshowJob
+│   ├── types.ts                    # Shot, SlideshowScript, SlideshowJob, ContentType
+│   ├── llm.ts                      # Modal vLLM client (replaces deprecated lib/deepseek.ts)
 │   ├── database.ts                 # Postgres pool + query helpers (Neon cold-start retry)
-│   ├── deepseek.ts                 # DeepSeek API client
 │   ├── cloudflareAi.ts             # Cloudflare FLUX.1 image gen (multi-account round-robin)
 │   ├── audioEngine.ts              # F5-TTS voice cloning client (Modal)
-│   ├── topicGenerator.ts           # Two-pass script generation engine
-│   ├── captionValidator.ts         # Caption constraint enforcement
-│   ├── ttsGenerator.ts             # TTS prompt builder (unused in pipeline)
+│   ├── topicGenerator.ts           # Two-pass script generation engine (shorts + long-form)
+│   ├── captionValidator.ts         # Caption constraint enforcement (per-aesthetic metrics)
 │   ├── musicSelector.ts            # ACE-Step BGM generation (Modal)
-│   ├── thumbnailGenerator.ts       # Thumbnail generation + SVG overlay
+│   ├── thumbnailGenerator.ts       # Thumbnail generation + SVG overlay (sharp)
 │   ├── youtubeUpload.ts            # YouTube OAuth2 upload
 │   ├── accountService.ts           # AES-256-GCM credential decryption
-│   ├── analyticsSync.ts            # YouTube Analytics sync + reporting
+│   ├── analyticsSync.ts            # YouTube Analytics sync + epsilon-greedy bandit data
 │   └── cloudinary.ts               # Asset upload/download/cleanup
 ├── inngest/
 │   ├── client.ts                   # Inngest singleton
-│   └── pipeline.ts                 # generateShort, channelScheduler, syncAnalyticsCron
+│   └── pipeline.ts                 # generateShort, generateLongForm, channelScheduler, longFormScheduler, syncAnalyticsCron
 ├── database/
 │   └── schema.sql                  # DDL (3 tables + trigger)
-├── migrations/                     # Incremental schema changes (8 migrations)
+├── migrations/                     # Incremental schema changes (10 migrations)
 ├── modal/
-│   ├── bgm.py                      # ACE-Step BGM generation (A10G GPU)
+│   ├── llm.py                      # Qwen2.5-7B-Instruct vLLM inference (A10G GPU)
+│   ├── bgm.py                      # ACE-Step 1.5 BGM generation (A10G GPU)
 │   ├── tts.py                      # F5-TTS voice cloning (A10G GPU, max 5 concurrent)
 │   └── render.py                   # FFmpeg render worker + Whisper word alignment (CPU)
 ├── assets/
 │   ├── fonts/Montserrat-Bold.ttf   # Fallback caption font
 │   └── music/                      # 3 CC-BY background tracks (unused — ACE-Step active)
 ├── docs/
-│   └── adding-an-account.md        # Guide for onboarding new channels
+│   ├── adding-an-account.md        # Guide for onboarding new channels
+│   ├── 2026-shorts-algorithm-plan.md
+│   └── 2026-07-08-*                # Planning docs (long-form, staggered scheduling, account renames)
 ├── scripts/                        # Dev tooling, tests, seed data
 └── scratch/                        # Experimental code
 ```
@@ -60,7 +62,7 @@ Fully automated pipeline that generates, assembles, and publishes AI-powered You
 | Service | Purpose | Auth |
 |---|---|---|
 | **Neon** | Serverless Postgres (jobs, topics, uploads) | `DATABASE_URL` + SSL |
-| **DeepSeek** | Script writing, topic gen, quality scoring | `DEEPSEEK_API_KEY` |
+| **Modal vLLM** | Self-hosted LLM (Qwen2.5-7B-Instruct on A10G) — script writing, topic gen, quality scoring | `MODAL_LLM_URL` (no auth header needed) |
 | **Cloudflare Workers AI** | FLUX.1 [schnell] image generation (slides + thumbnails); up to 6 account pairs for round-robin | API token(s) + account ID(s) |
 | **F5-TTS** (Modal) | Voice-cloned narration per shot (open-source, A10G GPU) | `F5_TTS_API_KEY` |
 | **ACE-Step** (Modal) | Instrumental BGM generation (open-source, A10G GPU) | `ACE_STEP_API_KEY` |
@@ -68,7 +70,7 @@ Fully automated pipeline that generates, assembles, and publishes AI-powered You
 | **YouTube Data API v3** | Video upload + basic stats | OAuth2 per channel |
 | **YouTube Analytics API v2** | Shorts metrics (views, swipe rate, traffic sources) | OAuth2 |
 | **Inngest** | Pipeline orchestration, retries, cron, event-driven steps | Event key + signing key |
-| **Modal** | GPU services (F5-TTS, ACE-Step) + CPU FFmpeg render; all self-hosted Python | HTTP callback + secrets |
+| **Modal** | GPU services (vLLM, F5-TTS, ACE-Step) + CPU FFmpeg render; all self-hosted Python | HTTP callback + secrets |
 | **Vercel** | Next.js hosting | Vercel OIDC |
 
 ---
@@ -85,12 +87,14 @@ Tracks every pipeline run from script generation through publish. Primary job re
 | `account_id` | TEXT | Channel (tech_shots, financial_forensics, etc.) |
 | `topic` | TEXT | Reserved topic string |
 | `niche` | TEXT | Niche category |
-| `format_template` | VARCHAR(20) | RAPID_FIRE, SLOW_BURN, or THE_LIST |
+| `format_template` | VARCHAR(20) | RAPID_FIRE, SLOW_BURN, THE_LIST, or DEEP_DIVE |
+| `content_type` | TEXT | `shorts` (default) or `long` |
 | `status` | TEXT | Pipeline stage (pending → script_ready → assets_ready → assembled → published → failed) |
 | `inngest_run_id` | TEXT | Inngest run identifier for resume |
 | `script` | JSONB | Full SlideshowScript object |
 | `shot_image_urls` | JSONB | Cloudinary URLs per shot (crash recovery) |
 | `shot_audio_urls` | JSONB | Cloudinary TTS URLs per shot (crash recovery) |
+| `narration_audio_url` | TEXT | Legacy monolithic audio URL (unused) |
 | `video_url` | TEXT | Final assembled MP4 |
 | `thumbnail_url` | TEXT | YouTube thumbnail |
 | `youtube_video_id` | TEXT | Published YouTube video ID |
@@ -102,7 +106,7 @@ Tracks every pipeline run from script generation through publish. Primary job re
 | `created_at` | TIMESTAMPTZ | Job creation time |
 | `updated_at` | TIMESTAMPTZ | Last update timestamp (auto via trigger) |
 
-Indexes: `status`, `account_id`, `created_at DESC`.
+Indexes: `status`, `account_id`, `created_at DESC`, `(account_id, content_type, created_at DESC)`.
 
 ### `slideshow_topics`
 
@@ -153,7 +157,7 @@ Stores encrypted OAuth2 and Cloudinary credentials per channel. Not defined in t
 
 ## Pipeline (Inngest)
 
-Three Inngest functions in `inngest/pipeline.ts`:
+Five Inngest functions in `inngest/pipeline.ts`:
 
 ### `generateShort` — event: `slideshow/trigger`
 
@@ -161,38 +165,41 @@ Three Inngest functions in `inngest/pipeline.ts`:
 
 **Step 1 — Script Generation + GPU Warmup (parallelized)**
 - Checks for incomplete existing job (crash recovery / resume).
-- Otherwise calls `generateScript()` which: reserves topic atomically (`FOR UPDATE SKIP LOCKED`), picks format template probabilistically, runs the two-pass script engine (narrative → chunking), validates against Zod schema, heals oversized/undersized shots, runs caption validation, scores via quality gate (retries up to 4× if below threshold).
+- Otherwise calls `generateScript()` which: reserves topic atomically (`FOR UPDATE SKIP LOCKED`), picks format template via epsilon-greedy bandit (exploit best-performing 85%, explore 15%), runs the two-pass script engine (narrative → chunking), validates against Zod schema, heals oversized/undersized shots, runs caption validation, scores via quality gate (retries up to 4× if below threshold).
 - Simultaneously warms ACE-Step GPU by hitting the Modal warmup endpoint (pre-loads model weights, reduces cold start from ~40s to near-zero).
 - Creates `slideshow_jobs` row with status `script_ready`.
 
-**Step 2a — Generate Narration (per-shot F5-TTS)**
-- Iterates each shot in batches of 5 (concurrency limit).
-- Calls F5-TTS Modal endpoint per shot (voice-cloned WAV output, ~40s cold start on first call).
-- Sanitizes text (curly quotes → straight, em-dashes → ellipsis, strips non-ASCII).
-- Uploads each WAV to Cloudinary as `raw` resource.
-- Persists `shot_audio_urls` to DB immediately for crash recovery.
-
-**Step 2b — Parallel Remaining Assets (images, BGM, thumbnail)**
-- Runs three tasks concurrently via `Promise.all`:
+**Step 2 — Assets Generation (all parallel)**
+- Runs four tasks concurrently via `Promise.all`:
+  - **Narration**: Iterates shots in batches of 5 (concurrency limit), calls F5-TTS Modal endpoint per shot (voice-cloned WAV output), sanitizes text, uploads each WAV to Cloudinary, persists `shot_audio_urls` incrementally.
   - **Images**: Generates all slide images via Cloudflare FLUX (batches of 5), uploads to Cloudinary, persists `shot_image_urls` incrementally after each batch.
-  - **Music**: Calls ACE-Step Modal endpoint with niche+format-specific prompt and duration (clamped 30-90s), uploads MP3 to Cloudinary.
-  - **Thumbnail**: Generates via Cloudflare FLUX (1280×720), overlays title via SVG text overlay, uploads to Cloudinary.
-- Marks status `assets_ready` once all three complete.
+  - **Music**: Calls ACE-Step Modal endpoint with niche+format-specific prompt and duration (clamped 30-90s for shorts, 300s for long-form), uploads MP3 to Cloudinary.
+  - **Thumbnail**: Generates via Cloudflare FLUX, overlays title via SVG text overlay (sharp), uploads to Cloudinary.
+- Marks status `assets_ready` once all four complete.
 
 **Step 3 — Video Rendering (Modal CPU)**
-- Sends all assets (images, per-shot audio, BGM, caption styles, callback URL) to render endpoint.
-- Waits 30s for inline response; if Modal returns a video URL immediately, proceeds. If Modal returns a status (queued), awaits `modal/render.complete` webhook for up to 10min.
+- Sends all assets (images, per-shot audio, BGM, caption styles, callback URL, content_type) to render endpoint.
+- Waits 30s for inline response; if Modal returns a video URL immediately, proceeds. If Modal returns a status (queued), awaits `modal/render.complete` webhook for up to 10min (30min for long-form).
 - On success, marks status `assembled`.
-- No local FFmpeg fallback — if Modal is unreachable or webhook times out, the pipeline throws and Inngest retries.
+- No local FFmpeg fallback.
 
 **Step 4 — Publish** (optional, controlled by `skipPublish`)
 - Downloads thumbnail, uploads video + thumbnail to YouTube via OAuth2.
 - Records upload in `slideshow_uploads`, analytics metadata on `slideshow_topics`.
 - Sets job status to `published`.
 
+### `generateLongForm` — event: `slideshow/trigger-long`
+
+Same structure as generateShort with key differences:
+- Uses DEEP_DIVE format (30-60 shots)
+- Landscape dimensions (1920×1080 video, 1344×768 images)
+- Long-form narrative (450-750 words), long-form captions (max 20 words/shot)
+- 48h throttle per channel (checked by scheduler)
+- Takes content_type='long' throughout
+
 ### `channelScheduler` — cron
 
-Triggers at UTC 15, 17, 19, 21 (one niche per hour). Queries active accounts, filters to niche matching current hour, checks 24h throttle, sends `slideshow/trigger` for each due channel.
+Triggers at UTC 15, 17, 19, 21 (one niche per hour). Queries active accounts, filters to niche matching current hour, checks 24h throttle, sends `slideshow/trigger` for each due channel (at most one per run, shuffled).
 
 | UTC | Niche |
 |---|---|
@@ -200,6 +207,10 @@ Triggers at UTC 15, 17, 19, 21 (one niche per hour). Queries active accounts, fi
 | 17:00 | Stoic Philosophy |
 | 19:00 | Urban Survival |
 | 21:00 | SaaS & AI Tools |
+
+### `longFormScheduler` — cron
+
+Triggers daily at 11:00 UTC. Iterates all active accounts, checks 48h throttle per channel, sends `slideshow/trigger-long` for each due channel.
 
 ### `syncAnalyticsCron` — cron
 
@@ -211,36 +222,48 @@ Daily at 5:00 UTC. Pulls YouTube Analytics (views, impressions, avg view duratio
 
 `lib/topicGenerator.ts` — two-pass architecture plus quality gate:
 
-### Pass 1: Narrative Generation (`generateNarrative`, DeepSeek, temperature 0.7)
+### Pass 1: Narrative Generation (`generateNarrative`, Modal vLLM, temperature 0.7)
 
-Generates a 150–170 word prose narrative from the topic and `research_context`. The system prompt covers:
+Generates a 90–110 word prose narrative from the topic and `research_context`. The system prompt covers:
+- **Length mandate**: Target 90-110 words, absolute max 120. At ~2.5 words/sec, 110 words ≈ 44s.
 - **Tone mandate**: Niche-specific voice instructions from `NICHE_PROFILES`.
+- **Content policy**: No graphic violence, gore, or visceral bodily trauma. Build tension psychologically.
 - **Ground-truth requirement**: Uses exact dates, names, and numbers from research context. No hallucination.
-- **Storytelling rules**: Hook with cognitive dissonance, build tension with cause/effect, end with a devastating conclusion.
-- **No CTAs**: "subscribe", "like", "comment", "follow", "link in bio", "thanks for watching" all banned.
+- **Storytelling rules**: Hook instantly with cognitive dissonance, build tension with cause/effect, end with a devastating conclusion. Max 15 words per sentence.
+- **No CTAs**: "subscribe", "like", "follow" all banned. Ending on a genuinely debatable claim encouraged.
 - **Output format**: Pure prose, no JSON, no formatting.
 
-### Pass 2: Editor/Chunking (`chunkScriptToJSON`, DeepSeek, temperature 0.2)
+### Pass 2: Editor/Chunking (`chunkScriptToJSON`, Modal vLLM, temperature 0.2)
 
 Slices the Pass 1 narrative into formatted JSON following the Zod schema. The system prompt covers:
-- **Shot counts**: Template-specific (`RAPID_FIRE`: 15–18, `SLOW_BURN`: 12, `THE_LIST`: 15).
-- **Spoken text (`spoken_text`)**: Commas for 200ms pauses, em-dashes for dramatic beats. Final shot must end with sentence-ending punctuation.
-- **Caption derivation**: `caption_text` auto-derived from `spoken_text` by stripping commas/em-dashes (Zod transform).
-- **Visual prompts**: Natural language paragraphs for FLUX.1's T5-XXL encoder (not comma tags). Explicit instruction to describe environments with no text/words/signs.
+- **Shot counts**: Template-specific (RAPID_FIRE: 12–15, SLOW_BURN: 12, THE_LIST: 12–14).
+- **Dual-text mandate**: `caption_text` (verbatim slice, ≤12 words) + `spoken_text` (identical except digit→word substitution).
+- **Visual prompts**: Natural language paragraphs for FLUX.1's T5-XXL encoder. Explicit instruction to describe environments with no text/words/signs. Kinetic energy mandate — every shot must change angle/lighting/focus.
+- **Censorship**: Forbidden words include blood, wound, severed, corpse, murder, etc.
+- **Loop design**: Final shot echoes opening concept so replay feels deliberate.
+- **Voice selection**: 6 voice profiles (mallory-handford-american-female, melissa-harlow-american-female, jon-british-male, kylie-hinze-american-female, kelli-winkler-american-female, dee-smith-american-male).
 - **JSON output**: Full `SlideshowScriptSchema` with fact_check_and_sources, visual_world, format_template, title, description, tags, shots, thumbnailPrompt, voiceName.
-- **Quality feedback**: Title, description, and thumbnailPrompt are sent alongside shots for scoring, enabling the quality gate to evaluate hook/payoff match.
+
+### Long-form Pipeline (`generateLongFormScript`)
+
+Separate but parallel pipeline:
+- Pass 1 (`generateLongFormNarrative`): 450-750 words, long-form tone instructions (`LONG_NICHE_PROFILES`), sentences 15-25 words.
+- Pass 2 (`chunkLongFormScriptToJSON`): 30-60 shots, DEEP_DIVE format, landscape 16:9 composition, max 15 words per caption.
+- Voice catalog adds phil-freeman-american-male for deep authoritative narration.
+- Long fact checks (min 5), SEO description (50-1000 chars).
+- Quality gate dimensions: narrative_coherence, factual_depth, arc_satisfaction, visual_variety, information_density, tone_calibration.
 
 ### Self-Healing Shot Mutator (`healShots`)
 
 Two-dimensional partitioner that runs after Pass 2:
-- Slices shots on word count (3–12) AND character count simultaneously (per-niche max chars, derived from caption style).
+- Slices shots on word count (3–12) AND character count simultaneously (per-niche max chars).
 - Heals orphan chunks (<3 words) by merging backward and re-splitting evenly.
 - Merges forward undersized shots if within character limit.
 - Re-indexes IDs and ensures exactly one conclusion at the final position.
 
-### Quality Gate (`scoreScript`, DeepSeek, temperature 0.1)
+### Quality Gate (`scoreScript`, Modal vLLM, temperature 0.1)
 
-Evaluates across 9 dimensions (0–10). The scoring payload now includes `title`, `description`, and `thumbnailPrompt` alongside shots so the gate can evaluate whether the hook pays off (not just each shot in isolation):
+Evaluates across 9 dimensions (0–10). The scoring payload includes `title`, `description`, and `thumbnailPrompt` alongside shots so the gate can evaluate whether the hook pays off:
 
 | Dimension | Measures |
 |---|---|
@@ -255,13 +278,16 @@ Evaluates across 9 dimensions (0–10). The scoring payload now includes `title`
 | hook_payoff_match | Title/thumbnail promise is delivered by the actual shots; no bait-and-switch |
 
 **Approval**: Two independent checks, both must pass:
-
 1. **Model self-report**: The prompt instructs the model to set `approved = true` only if overall ≥ niche-specific `minQualityScore` AND every dimension ≥ 5.
-2. **Code-side floor**: The pipeline re-verifies that `overall ≥ minQualityScore` and all 9 dimensions are ≥ 5. If the model reports `approved = true` but the code-side floor fails, it's treated as not approved (with a warning logged).
+2. **Code-side floor**: The pipeline re-verifies that `overall ≥ minQualityScore` and all 9 dimensions are ≥ 5.
 
 Max 4 retries with feedback from previous score. On terminal failure, the last attempt is accepted regardless.
 
-### Topic Generation (DeepSeek, temperature 0.9)
+### Format Template Selection (Epsilon-Greedy Bandit)
+
+`pickFormatTemplate()` exploits the best-performing (aesthetic, format) pair 85% of the time; explores randomly 15%. Uses `getRetentionByConfig()` from analyticsSync which queries average view duration % grouped by (aesthetic_id, format) for the niche, min 3 data points. Falls back to `FORMAT_TEMPLATE_WEIGHTS` when insufficient data.
+
+### Topic Generation (Modal vLLM, temperature 0.9)
 
 `generateTopics()` creates 20 fresh topics when pool is exhausted. Excludes last 50 used topics. Niche-specific quality criteria. Each topic includes a `research_context` column with ground-truth data for Pass 1.
 
@@ -275,26 +301,35 @@ Seed data: 80 hand-crafted topics (20 per niche) in `scripts/seed-topics.ts`.
 
 ---
 
+## LLM (Modal vLLM)
+
+`lib/llm.ts` calls a self-hosted vLLM inference server (`modal/llm.py`) running Qwen2.5-7B-Instruct on an A10G GPU.
+
+- **Endpoint**: `POST {MODAL_LLM_URL}/v1/chat/completions` — OpenAI-compatible API.
+- **Transport**: Standard HTTP POST with JSON body (no external API key header).
+- **Retries**: 2 attempts with jittered temperature.
+- **Chunking**: Auto-continues when response hits `max_tokens` (up to 4 continuations × 8K tokens = 32K total).
+- **JSON mode**: Uses `response_format: { type: 'json_object' }` for chunking + quality gate.
+- **Timeout**: 120s default, up to 900s for long-form chunking.
+- **Model**: Qwen2.5-7B-Instruct, 8K context, loaded via vLLM with CUDA graphs (`enforce_eager=False`).
+
+The previous DeepSeek API client (`lib/deepseek.ts`) has been removed.
+
+---
+
 ## Image Generation
 
 ### Slides (Cloudflare Workers AI — FLUX.1 [schnell])
 
-- Resolution: 768×1344, 8 steps (configurable via env vars).
-- **Multi-account round-robin**: Collects up to 6 account pairs from `CLOUDFLARE_AI_API_TOKEN[_1/_2/_3/_4/_5]` and `CLOUDFLARE_ACCOUNT_ID[_1/_2/_3/_4/_5]`. Picks one at random per generation call. Fails hard if no pair is configured.
-- Disk cache at `/tmp/cache/flux/{sha256}.jpg` keyed on model+prompt+dims+steps+guidance.
-- 3 retries with exponential backoff on 429/502/503/504, plus network errors (ETIMEDOUT, ECONNRESET, etc.).
-- Each prompt prepended with aesthetic-specific `imagePrefix` (natural language paragraphs, not comma tags — FLUX uses a T5-XXL text encoder that understands syntax and spatial relationships).
-- Supports upgrade path to FLUX.2 [dev] (`@cf/black-forest-labs/flux-2-dev`) via env var — uses multipart/form-data, different step/guidance defaults, 40-60× cost increase.
+- **Resolution**: Shorts: 768×1344 (portrait). Long-form: 1344×768 (landscape). 8 steps (configurable).
+- **Multi-account round-robin**: Collects up to 6 account pairs from env vars, picks one at random per generation call. Cycles accounts on retryable failures.
+- **Disk cache**: `/tmp/cache/flux/{sha256}.jpg` keyed on model+prompt+dims+steps+guidance.
+- **Retries**: 6 with exponential backoff on 429/502/503/504, NSFW filter triggering, and network errors.
+- **FLUX.2 support**: Upgrade path via `CF_AI_IMAGE_MODEL=@cf/black-forest-labs/flux-2-dev` — uses multipart/form-data, different step/guidance defaults (20 steps, guidance 4), 40-60× cost increase.
 
 ### Caption Rendering (Modal Render — ASS Subtitles)
 
-Captions are rendered on Modal, not locally. The pipeline sends `caption_text` per shot to Modal along with image URLs, per-shot audio URLs, `visual_world`, and `caption_style`. Modal's CPU render worker:
-1. Downloads all assets (images, per-shot TTS audio, BGM) via 10-worker ThreadPoolExecutor.
-2. Concatenates per-shot audio files into one master narration track (no Whisper needed for timing since per-shot split provides exact shot boundaries).
-3. Generates an Advanced SubStation Alpha (`.ass`) subtitle file with karaoke-style kinetic typography.
-4. Burns the ASS subtitles directly into the video frame via FFmpeg's `ass` filter.
-
-Typography is per-niche, driven by `CAPTION_STYLES` in constants.ts:
+Captions are rendered on Modal via Python, driven by `CAPTION_STYLES` in constants.ts:
 
 | Aesthetic | Font Family | Colors | Max chars/line |
 |---|---|---|---|
@@ -303,17 +338,19 @@ Typography is per-niche, driven by `CAPTION_STYLES` in constants.ts:
 | stoic-zen | Cinzel Black | Warm ivory / charcoal / copper | 29 / 72 |
 | survival-technical | Big Shoulders Stencil Display | Khaki / near-black / rust | 48 / 120 |
 
+Per-shot audio split provides exact shot boundary timing (no Whisper needed). FFmpeg with Ken Burns zoom (alternating zoom-in/zoom-out, 1.0–1.12x), ASS subtitles burned via `ass` filter, libx264 CRF 23, AAC 128k.
+
 ### Thumbnails (`lib/thumbnailGenerator.ts`)
 
-- Cloudflare FLUX at 1280×720 (8 steps).
-- SVG text overlay: white Arial Black with black stroke, gradient dark background at bottom 68%.
-- Max 3 title lines.
+- Cloudflare FLUX at 1280×720 (shorts) or 1920×1080 (long-form).
+- SVG text overlay via sharp: white Montserrat with black stroke, 3 lines max.
+- Per-aesthetic thumbnail prefixes ensure visual consistency.
 
 ---
 
 ## TTS (Text-to-Speech) — F5-TTS on Modal
 
-**Primary (and only active) TTS engine.** `lib/audioEngine.ts` calls the F5-TTS Modal endpoint (`modal/tts.py`) — an open-source voice cloning model running on an A10G GPU.
+**Primary (and only active) TTS engine.** `lib/audioEngine.ts` calls the F5-TTS Modal endpoint (`modal/tts.py`).
 
 - **Endpoint**: `POST {F5_TTS_URL}` with `{ text, voice }` → WAV binary.
 - **Auth**: Bearer token via `F5_TTS_API_KEY`.
@@ -323,11 +360,7 @@ Typography is per-niche, driven by `CAPTION_STYLES` in constants.ts:
 - **Retries**: 3 attempts with 5s linear backoff.
 - **Voice**: Set per script via `script.voiceName` in the generated script.
 
-Edge TTS and Fish Audio were previously integrated as alternatives but their client files have been removed; F5-TTS is the sole TTS path.
-
-### Audio Director Tags
-
-Optional per-shot annotations: `[serious]`, `[curious]`, `[urgent]`, `[measured]`, `[grave]`. Prepended to TTS input text when present. Stripped before caption rendering (captions use `caption_text` field which excludes tags).
+Edge TTS and Fish Audio integrations have been removed; F5-TTS is the sole TTS path.
 
 ---
 
@@ -337,8 +370,8 @@ Instrumental BGM is generated per video by ACE-Step 1.5 (open-source DiT model) 
 
 - **Endpoint**: `POST {ACE_STEP_BGM_URL}` with `{ prompt, duration, format }` → MP3 binary.
 - **Auth**: Bearer token via `ACE_STEP_API_KEY`.
-- **Prompt selection**: Niche + format-template-specific prompts (e.g., "dark ambient, pulsing synth bass, investigative, tense, 85bpm") with fallback to generic prompts.
-- **Duration**: Clamped to 30–90 seconds based on narration length.
+- **Prompt selection**: Niche + format-template-specific prompts (RAPID_FIRE, SLOW_BURN, THE_LIST, DEEP_DIVE) with fallback to generic prompts.
+- **Duration**: Clamped 30–90s for shorts, 30–300s for long-form.
 - **Warmup**: GPU pre-warmed by calling `GET {ACE_STEP_WARMUP_URL}` at pipeline start (parallel with script generation).
 - **Max containers**: 1 (prevents GPU OOM).
 
@@ -354,27 +387,25 @@ Video assembly happens exclusively on Modal. All local FFmpeg code has been remo
 
 Python FastAPI service on Modal (CPU only, `cpu=8.0`), the sole rendering path:
 
-- **Environment**: Debian slim 3.11 + FFmpeg + fontconfig + Whisper (`openai-whisper`, `whisper-timestamped`) + per-niche display fonts (Space Grotesk, Fraunces, Cinzel, Big Shoulders Stencil Display, each cut from variable source via fonttools).
+- **Environment**: Debian slim 3.11 + FFmpeg + fontconfig + Whisper (`openai-whisper`, `whisper-timestamped`) + per-niche display fonts.
 - **Asset download**: 10-worker ThreadPoolExecutor downloads all images, per-shot audio, and BGM.
 - **Subtitle generation**: Generates `.ass` subtitle file with karaoke-style kinetic typography (active word: accent color at 120% scale; inactive: text color). Per-shot audio split provides exact shot boundary timing.
-- **Shot rendering**: FFmpeg with Ken Burns zoom (alternating zoom-in/zoom-out, range 1.0–1.12x, seeded once on frame 0 via `eq(on,0)` — previously used `eq(mod(on,2),0)` which reseeded every even frame and produced zero visible movement), still image looped to fill shot duration, per-shot TTS audio, ASS subtitles burned via `ass` filter. libx264, CRF 23, preset medium, AAC 128k, 44100Hz stereo.
+- **Shot rendering**: FFmpeg with Ken Burns zoom (1.0–1.12x, seeded once on frame 0), still image looped to fill shot duration, per-shot TTS audio, ASS subtitles burned via `ass` filter. libx264, CRF 23, preset medium, AAC 128k, 44100Hz stereo.
 - **Concat**: FFmpeg concat demuxer for hard cuts, zero crossfade.
-- **Audio mixing**: Sidechain compression — music (0.35 volume) ducks under voice at threshold −28dBFS, ratio 4:1, attack 5ms, release 50ms. Voice + ducked music mixed via amix.
+- **Audio mixing**: Sidechain compression — music (0.35 volume) ducks under voice at threshold −28dBFS, ratio 4:1, attack 5ms, release 50ms.
 - **Upload**: Cloudinary via per-account secrets.
-- **Callback**: POSTs to `callbackUrl` with `{ jobId, videoUrl }`.
+- **Callback**: POSTs to `callbackUrl` with `{ jobId, mp4Url }` (not `videoUrl`).
 - **Timeout**: 600s.
-- **Legacy path**: If only monolithic audio is provided (no per-shot URLs), falls back to Whisper word-level alignment with `whisper-timestamped` (small model) for shot boundary detection.
-
-No local FFmpeg fallback exists. If Modal is unreachable or the webhook does not arrive within 10 minutes, the pipeline throws and Inngest retries.
+- **Legacy path**: If only monolithic audio is provided, falls back to Whisper word-level alignment.
 
 ---
 
 ## YouTube Upload (`lib/youtubeUpload.ts`)
 
 - OAuth2 client built per channel from decrypted credentials.
-- `videos.insert` with snippet (title, description, tags, categoryId 27 Education) and status (public, not made for kids, contains synthetic media).
+- `videos.insert` with snippet (title, description, tags, categoryId 27 Education) and status (unlisted, not made for kids, contains synthetic media — 50% chance).
 - Custom thumbnail set via `thumbnails.set` (best-effort, requires 1000 subs).
-- Description includes AI disclosure notice.
+- Description includes AI disclosure notice (50% chance), key moments from shots, hashtags.
 - Returns `{ youtubeVideoId, title, description }`.
 
 ---
@@ -392,9 +423,13 @@ No local FFmpeg fallback exists. If Modal is unreachable or the webhook does not
 
 Aggregates per niche: counts, averages (views, viewed%, duration%, search%), best aesthetic, best format, top 5 / worst 5 topics.
 
+### Epsilon-Greedy Bandit Data (`getRetentionByConfig`)
+
+Returns average view-duration % grouped by (aesthetic_id, format) for a niche, ordered best-first. Only considers rows with >10 views. Used by `pickFormatTemplate()` to exploit the best-performing format 85% of the time.
+
 ### Data-Driven Optimization
 
-Every publish records `aesthetic_id`, `format`, and `quality_score` on the topic. Daily analytics sync populates performance metrics. Over time, `getNichePerformance()` reveals which visual worlds and format templates drive the highest swipe-through and view duration per niche.
+Every publish records `aesthetic_id`, `format`, and `quality_score` on the topic. Daily analytics sync populates performance metrics. Over time, the bandit learns which format-aesthetic combinations drive the highest retention per niche.
 
 ---
 
@@ -420,7 +455,7 @@ Each job randomly assigned variant `'A'` or `'B'` (50/50). Stored in both `slide
 Pipeline is fully resumable at every step:
 
 - **Script**: Checks for existing incomplete job before generating new one.
-- **Assets**: After each shot, URLs persisted to `shot_image_urls`/`shot_audio_urls` immediately. On resume, completed shots are skipped.
+- **Assets**: After each shot, URLs persisted to `shot_image_urls`/`shot_audio_urls` immediately. After each batch, DB is updated. On resume, completed shots are skipped.
 - **Music**: Checks `music_url` before re-selecting.
 - **Thumbnail**: Checks `thumbnail_url` before re-generating.
 - **Video**: Checks `video_url` before re-rendering.
@@ -436,9 +471,8 @@ Server Component, ISR revalidation every 30 seconds.
 
 - Stats row: Total Jobs, Uploaded, In Progress, Success Rate %.
 - Jobs table: Topic, Status (color-coded pill with animated dot), Account, Created (relative time), YouTube link.
-- Status badges: green (uploaded), blue (assembled/assets ready), amber (generating), muted (pending), red (failed).
+- Status badges: green (published), blue (assembled/assets ready), amber (generating), muted (pending), red (failed).
 - Error messages displayed inline for failed jobs.
-- Animated pulsing dot for in-progress channels.
 - Empty state when no jobs exist.
 
 ---
@@ -450,8 +484,7 @@ Server Component, ISR revalidation every 30 seconds.
 | `DATABASE_URL` | database.ts | Pooled Postgres connection (Neon) |
 | `NEXTAUTH_SECRET` | accountService.ts | AES-256-GCM key for credentials |
 | `NEXTAUTH_URL` | youtubeUpload.ts, analyticsSync.ts | OAuth callback URL |
-| `DEEPSEEK_API_KEY` | deepseek.ts | DeepSeek API |
-| `DEEPSEEK_TEXT_MODEL` | constants.ts | DeepSeek model name (default deepseek-v4-pro) |
+| `MODAL_LLM_URL` | llm.ts | Modal vLLM endpoint (replaces DeepSeek) |
 | `CF_AI_IMAGE_MODEL` | cloudflareAi.ts | Cloudflare FLUX model (default @cf/black-forest-labs/flux-1-schnell) |
 | `CF_AI_IMAGE_STEPS` | cloudflareAi.ts | FLUX inference steps (default 8) |
 | `CF_AI_IMAGE_STEPS_FLUX2` | cloudflareAi.ts | FLUX.2 steps when using flux-2-dev (default 20) |
@@ -471,3 +504,5 @@ Server Component, ISR revalidation every 30 seconds.
 | `MODAL_RENDER_URL` | pipeline.ts | Modal FFmpeg render endpoint |
 | `YOUTUBE_API_KEY` | analyticsSync.ts | YouTube Data API v3 fallback |
 | `ACCOUNT_ID` | constants.ts | Default channel ID |
+
+Removed: `DEEPSEEK_API_KEY`, `DEEPSEEK_TEXT_MODEL` (replaced by `MODAL_LLM_URL`).

@@ -85,11 +85,12 @@ const GENERIC_PROMPTS: string[] = [
   'cinematic ambient, soft strings, gentle percussion, broad appeal, balanced, 85bpm',
 ];
 
-function pickMusicPrompt(niche: string, formatTemplate: FormatTemplate, title: string): string {
+function pickMusicPrompt(niche: string, formatTemplate: FormatTemplate, title: string, visualWorld: string, narrationText: string): string {
   const nicheMap = NICHE_MUSIC_PROMPTS[niche];
   const prompts = nicheMap?.[formatTemplate] ?? GENERIC_PROMPTS;
   const base = prompts[Math.floor(Math.random() * prompts.length)];
-  return `${base} — underscore: ${title}`;
+  const narrationSnippet = narrationText.split(/\\s+/).slice(0, 20).join(' ');
+  return `${base} — underscore: ${title}, visual style: ${visualWorld}, feeling: ${narrationSnippet}`;
 }
 
 async function generateWithAceStep(prompt: string, duration: number): Promise<Buffer> {
@@ -132,6 +133,8 @@ export async function selectMusicTrack(
   scriptTitle: string,
   niche: string,
   formatTemplate: FormatTemplate,
+  visualWorld: string,
+  narrationText: string,
   durationSeconds: number,
 ): Promise<{ buffer: Buffer; filename: string; title: string }> {
   
@@ -139,7 +142,7 @@ export async function selectMusicTrack(
     throw new Error('CRITICAL: ACE_STEP_BGM_URL is not configured. Pipeline halting.');
   }
 
-  const prompt = pickMusicPrompt(niche, formatTemplate, scriptTitle);
+  const prompt = pickMusicPrompt(niche, formatTemplate, scriptTitle, visualWorld, narrationText);
   // For shorts, narrationDurationSec is already ≤60s in practice.
   // For long-form, it can be up to 300s — no artificial cap.
   const duration = Math.max(30, Math.min(durationSeconds, 300));

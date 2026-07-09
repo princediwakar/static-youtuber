@@ -59,47 +59,54 @@ async function executeAssetPipeline(
   const musicDurationLimit = isLongForm ? 300 : 60;
   const renderTimeout = isLongForm ? '30m' : '10m';
 
+  // ── Step 2a: Generate Narration (Sequential to get exact duration) ────────
+  let shotAudioUrls: string[] = [];
+  let narrationDurationMs = 0;
+
+  const jobA = await step.run('check-narration-resume', () => db.getJob(jobId));
+  if (jobA?.shot_audio_urls) {
+    shotAudioUrls = jobA.shot_audio_urls;
+  } else {
+    const CONCURRENCY_LIMIT = 2;
+    for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
+      const batchRes = await step.run(`generate-audio-batch-${batchStart}`, async () => {
+        const creds = await getAccountCredentials(accountId);
+        const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
+        const batch = script.shots.slice(batchStart, batchEnd);
+
+        return Promise.all(
+          batch.map(async (shot: Shot, offset: number) => {
+            const globalIndex = batchStart + offset;
+            const sanitized = shot.spoken_text
+              .replace(/[‘’`]/g, "'")
+              .replace(/[“”]/g, '"')
+              .replace(/[\\u2014—]/g, '... ')
+              .replace(/[^\\x00-\\x7F]/g, '');
+            const res = await generateShotSpeech(sanitized, script.voiceName, globalIndex);
+            const url = await uploadSlideAudio(res.audioBuffer, jobId, globalIndex, creds);
+            return { url, durationMs: res.durationMs };
+          })
+        );
+      });
+      batchRes.forEach((r: { url: string, durationMs: number }) => {
+        shotAudioUrls.push(r.url);
+        narrationDurationMs += r.durationMs;
+      });
+    }
+    await step.run('save-narration', () => db.updateJob(jobId, { shot_audio_urls: shotAudioUrls }));
+  }
+
+  const narrationDurationSec = narrationDurationMs > 0 
+    ? Math.ceil(narrationDurationMs / 1000) 
+    : estimatedDurationSec;
+
+  // ── Step 2b: Parallel Remaining Assets (Images, Music, Thumbnail) ────────
   const [
-    { shotAudioUrls },
     imageUrls,
     musicUrl,
     thumbnailUrl
   ] = await Promise.all([
     
-    // Task A: Generate Narration
-    (async () => {
-      const job = await step.run('check-narration-resume', () => db.getJob(jobId));
-      if (job?.shot_audio_urls) return { shotAudioUrls: job.shot_audio_urls };
-
-      const CONCURRENCY_LIMIT = 5;
-      const urls: string[] = [];
-
-      for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
-        const batchUrls = await step.run(`generate-audio-batch-${batchStart}`, async () => {
-          const creds = await getAccountCredentials(accountId);
-          const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
-          const batch = script.shots.slice(batchStart, batchEnd);
-
-          return Promise.all(
-            batch.map(async (shot: Shot, offset: number) => {
-              const globalIndex = batchStart + offset;
-              const sanitized = shot.spoken_text
-                .replace(/[‘’`]/g, "'")
-                .replace(/[“”]/g, '"')
-                .replace(/[\u2014—]/g, '... ')
-                .replace(/[^\x00-\x7F]/g, '');
-              const res = await generateShotSpeech(sanitized, script.voiceName, globalIndex);
-              return uploadSlideAudio(res.audioBuffer, jobId, globalIndex, creds);
-            })
-          );
-        });
-        urls.push(...batchUrls);
-      }
-
-      await step.run('save-narration', () => db.updateJob(jobId, { shot_audio_urls: urls }));
-      return { shotAudioUrls: urls };
-    })(),
-
     // Task B: Generate Images
     (async () => {
       const job = await step.run('check-images-resume', () => db.getJob(jobId));
@@ -110,7 +117,7 @@ async function executeAssetPipeline(
         return urls.slice(0, script.shots.length);
       }
 
-      const CONCURRENCY_LIMIT = 5;
+      const CONCURRENCY_LIMIT = 2;
 
       for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
         const batchUrls = await step.run(`generate-images-batch-${batchStart}`, async () => {
@@ -140,12 +147,15 @@ async function executeAssetPipeline(
       if (job?.music_url) return job.music_url;
 
       const creds = await getAccountCredentials(accountId);
-      const duration = Math.min(estimatedDurationSec, musicDurationLimit);
+      const duration = Math.min(narrationDurationSec, musicDurationLimit);
+      const narrationText = script.shots.map((s: Shot) => s.spoken_text).join(' ');
       
       const { buffer } = await selectMusicTrack(
         script.title, 
         niche, 
         format_template as FormatTemplate, 
+        script.visual_world,
+        narrationText,
         duration
       );
       
@@ -516,6 +526,7 @@ export const longFormScheduler = inngest.createFunction(
     },
   },
   async ({ step }) => {
+  
     const accounts = await step.run('get-accounts', async () => {
       const result = await query<{ id: string }>("SELECT id FROM accounts WHERE status = 'active'");
       return result.rows.map(r => r.id);
