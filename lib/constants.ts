@@ -213,7 +213,7 @@ export type NicheProfile = {
 export const LONG_NICHE_PROFILES: Record<string, NicheProfile> = {
   'SaaS & AI Tools': {
     aestheticId: 'tech-minimalist',
-    minQualityScore: 7,
+    minQualityScore: 5,
     toneInstruction: `You are a documentary narrator chronicling the raw human drama behind the world's most consequential startup bets. Your audience has chosen to spend 4 minutes with you — reward that with depth.
 
 Write in full paragraphs with flowing sentences (15–25 words). Use subordinate clauses, cause-and-effect transitions, and narrative callbacks. Structure: Hook → Background Context → Pivotal Conflict → Resolution → Modern Significance.
@@ -225,7 +225,7 @@ Do not trail off or repeat yourself at the end. End decisively.`,
   },
   'Financial Forensics': {
     aestheticId: 'finance-editorial',
-    minQualityScore: 7,
+    minQualityScore: 5,
     toneInstruction: `You are the investigative journalist who broke Enron, reconstructing a financial crime scene for an audience willing to follow every thread. Your tone is grave, forensically precise, and methodical.
 
 Write in flowing paragraphs, 15–25 words per sentence. Use transitions that build a chronological evidence trail. Structure: The Revelation → The Setup → The Paper Trail → The Collapse → The Reckoning.
@@ -237,7 +237,7 @@ Do not trail off or repeat yourself at the end. End decisively.`,
   },
   'Stoic Philosophy': {
     aestheticId: 'stoic-zen',
-    minQualityScore: 7,
+    minQualityScore: 5,
     toneInstruction: `You are Marcus Aurelius writing to himself after a decade of war — earned wisdom, not motivational platitude. Your audience has given you 4 minutes; give them something they'll carry.
 
 Write in measured paragraphs, 15–25 words per sentence. Speak to the modern man feeling crushed by expectations. Use contrast (the weak response vs the disciplined response), historical anchoring, and direct address to the modern struggle. The advice should feel like a cold splash of water: harsh, bracing, but ultimately liberating and deeply empowering. Structure: The Principle → Its Ancient Origin → Its Modern Manifestation → The Practice → The Verdict.
@@ -247,7 +247,7 @@ Do not trail off or repeat yourself at the end. End decisively.`,
   },
   'Urban Survival': {
     aestheticId: 'survival-technical',
-    minQualityScore: 7,
+    minQualityScore: 5,
     toneInstruction: `You are the calm, credible mentor who has been through the worst and is sharing hard-won knowledge for 4 minutes.
 
 Write in clear, authoritative paragraphs, 15–25 words per sentence. Every claim must be actionable. Frame every lesson around the fatal mistake most people make when panic sets in. Use the ticking-clock structure for urgency. Your advice is the difference between living and dying. Empower the viewer: they don't need to be afraid if they are prepared. Structure: The Scenario → Why Most People Get It Wrong → The Correct Protocol → The Underlying Principle → How to Train for It.
@@ -271,7 +271,7 @@ Build tension like a thriller. Make the stakes visceral: emphasize the terrifyin
 NEVER use "disrupt", "innovate", "unicorn", or "game-changer".
 NEVER sound like a press release. The facts should hit like a gut punch.
 Do not trail off or repeat yourself at the end. End decisively.`,
-    minQualityScore: 7,
+    minQualityScore: 5,
   },
   'Financial Forensics': {
     aestheticId: 'finance-editorial',
@@ -284,7 +284,7 @@ Humanize the perpetrators without excusing them. Zero in on their psychological 
 NEVER use "mind-blowing", "insane", or "unbelievable".
 Let the facts speak — the dollar amounts, the dates, the paper trail. Every number is a body blow.
 Do not trail off or repeat yourself at the end. End decisively.`,
-    minQualityScore: 6,
+    minQualityScore: 5,
   },
   'Stoic Philosophy': {
     aestheticId: 'stoic-zen',
@@ -297,7 +297,7 @@ Contrast the weak man's response (whining, blaming, avoiding) with the disciplin
 NEVER sound like an Instagram quote. NEVER use "vibes", "manifest", "energy", or "the universe".
 This is not inspiration. This is a sword being sharpened.
 Do not trail off or repeat yourself at the end. End decisively.`,
-    minQualityScore: 6,
+    minQualityScore: 5,
   },
   'Urban Survival': {
     aestheticId: 'survival-technical',
@@ -319,7 +319,7 @@ Be the calm, credible voice of someone who has seen the worst and knows
 exactly what to do — whether that's performing CPR, negotiating a raise, or
 sitting in silence for 10 minutes to reset your nervous system.
 Do not trail off or repeat yourself at the end. End decisively.`,
-    minQualityScore: 6,
+    minQualityScore: 5,
   },
 };
 

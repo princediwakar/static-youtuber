@@ -7,7 +7,7 @@ export const ShotSchema = z.object({
     .max(600, 'Image prompt must be ≤600 chars'),
   caption_text: z.string()
     .refine(t => t.trim().split(/\s+/).length >= 1, 'Min 1 word')
-    .refine(t => t.trim().split(/\s+/).length <= 18, 'Max 18 words')
+    .refine(t => t.trim().split(/\s+/).length <= 25, 'Max 25 words')
     .refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
   spoken_text: z.string()
     .min(1, 'Must contain spoken phonetic text for TTS'),
@@ -63,7 +63,7 @@ export const LongShotSchema = z.object({
     .max(800, 'Image prompt must be ≤800 chars'),
   caption_text: z.string()
     .refine(t => t.trim().split(/\s+/).length >= 1, 'Min 1 word')
-    .refine(t => t.trim().split(/\s+/).length <= 20, 'Max 20 words')
+    .refine(t => t.trim().split(/\s+/).length <= 30, 'Max 30 words')
     .refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
   spoken_text: z.string().min(1),
   is_conclusion: z.boolean().default(false),
