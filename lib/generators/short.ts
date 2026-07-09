@@ -51,11 +51,10 @@ STORYTELLING RULES:
    Prefer this over an airtight, universally-agreed conclusion when the topic allows.
 
 PACING & SYNTAX (CRITICAL):
-- Write strictly in short, punchy sentences.
-- NO sentence may exceed 15 words.
-- Rhythm is critical: mix very short sentences (3-5 words) with medium sentences (10-15 words) to create momentum.
-- Avoid compound sentences with multiple clauses. Use periods heavily.
-- Read it aloud in your head — it must sound like a gripping, high-stakes conversation, not a robotic list of facts.
+- Write in a naturally flowing, conversational rhythm. Do NOT write in robotic bullet points or fragmented phrases.
+- Rhythm is critical: it must sound like a gripping, high-stakes spoken conversation. Mix short punchy sentences with flowing, well-connected thoughts to create momentum and natural human cadence.
+- Use transition words seamlessly. The narrative must flow organically from start to finish.
+- Read it aloud in your head — it must sound like a passionate storyteller recounting a gripping tale, not a disconnected list of facts.
 
 FORMATTING:
 - Use digits, symbols, and abbreviations for numbers (e.g., "$1.4B" instead of "one point four billion dollars", "26", "100%") to keep the text visually concise.

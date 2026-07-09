@@ -60,7 +60,7 @@ export async function uploadSlideImage(
 export async function uploadSlideAudio(
   buffer: Buffer,
   jobId: string,
-  shotIndex: number,
+  shotIndex: number | string,
   creds: AccountCredentials
 ): Promise<string> {
   initCloudinary(creds);

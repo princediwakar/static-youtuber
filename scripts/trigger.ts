@@ -133,6 +133,8 @@ async function triggerPipeline() {
     console.log('🔧 Local dev mode — ensuring servers are running...\n');
 
     process.env.NEXTAUTH_URL = 'http://localhost:3000';
+    process.env.INNGEST_BASE_URL = 'http://127.0.0.1:8288';
+    process.env.INNGEST_EVENT_KEY = 'local';
 
     await ensureServer(
       3000, 'npm', ['run', 'dev'], 'Next.js dev server',

@@ -567,6 +567,7 @@ async def trigger_render(request: Request):
     shot_audio_urls = payload.get("shot_audio_urls")
     # content_type: 'shorts' (portrait 1080×1920) or 'long' (landscape 1920×1080)
     content_type = payload.get("content_type", "shorts")
+    sync = payload.get("sync", False)
 
     if not all([job_id, account_id, shots, music_url, callback_url]):
         raise HTTPException(status_code=400, detail="Missing required fields")
@@ -574,9 +575,13 @@ async def trigger_render(request: Request):
         raise HTTPException(status_code=400, detail="Must provide either shot_audio_urls or audio_url")
 
     try:
-        render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type)
+        if sync:
+            print(f"[trigger_render] Running synchronously for job {job_id}")
+            result = render_video.remote(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type)
+            return {"status": "completed", "jobId": job_id, "videoUrl": result["videoUrl"]}
+        else:
+            render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type)
+            return {"status": "queued", "jobId": job_id}
     except Exception as e:
-        print(f"[trigger_render] render_video.spawn() failed: {e}")
+        print(f"[trigger_render] render_video failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-    return {"status": "queued", "jobId": job_id}

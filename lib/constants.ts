@@ -34,9 +34,9 @@ export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, numb
 };
 
 export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: number }> = {
-  RAPID_FIRE: { min: 12, max: 15 },
-  SLOW_BURN:  { min: 12, max: 12 },
-  THE_LIST:   { min: 12, max: 14 },
+  RAPID_FIRE: { min: 15, max: 25 },
+  SLOW_BURN:  { min: 12, max: 18 },
+  THE_LIST:   { min: 12, max: 20 },
   DEEP_DIVE:  { min: 30, max: 60 }, // long-form only — never selected by shorts bandit
 };
 
