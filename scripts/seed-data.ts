@@ -4,10 +4,10 @@ export type SeedTopic = {
 };
 
 export const SEEDS: [string, string, SeedTopic[]][] = [
-  // ─── SaaS & AI Tools (tech_shots) ───────────────────────────────────────
+  // ─── SaaS & AI Tools (canvas_center) ────────────────────────────────────
   [
     'SaaS & AI Tools',
-    'tech_shots',
+    'canvas_center',
     [
       {
         title: 'How Airbnb sold cereal boxes to survive their first year',
@@ -92,10 +92,10 @@ export const SEEDS: [string, string, SeedTopic[]][] = [
     ]
   ],
 
-  // ─── Financial Forensics (finance_shots) ────────────────────────────────
+  // ─── Financial Forensics (canvas_area) ──────────────────────────────────
   [
     'Financial Forensics',
-    'finance_shots',
+    'canvas_area',
     [
       {
         title: 'The $4.7M typo that erased a lifetime fortune in 14 seconds',
@@ -180,10 +180,10 @@ export const SEEDS: [string, string, SeedTopic[]][] = [
     ]
   ],
 
-  // ─── Stoic Philosophy (stoic_shots) ──────────────────────────────────────
+  // ─── Stoic Philosophy (canvas_station) ───────────────────────────────────
   [
     'Stoic Philosophy',
-    'stoic_shots',
+    'canvas_station',
     [
       {
         title: 'James Stockdale survived 7 years as a POW using a single Stoic principle',
@@ -268,10 +268,10 @@ export const SEEDS: [string, string, SeedTopic[]][] = [
     ]
   ],
 
-  // ─── Urban Survival (survival_shots) ─────────────────────────────────────
+  // ─── Urban Survival (canvas_base) ──────────────────────────────────────
   [
     'Urban Survival',
-    'survival_shots',
+    'canvas_base',
     [
       {
         title: 'Sinking Car Escape: Why you must wait for the water to equalize',

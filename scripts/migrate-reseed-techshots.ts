@@ -15,14 +15,14 @@ async function main() {
   await warmup();
   console.log('Connected.\n');
 
-  // Delete all existing tech_shots topics
-  const del = await query(`DELETE FROM slideshow_topics WHERE account_id = 'tech_shots'`);
-  console.log(`Deleted ${del.rowCount} old tech_shots topics.\n`);
+  // Delete all existing canvas_center topics
+  const del = await query(`DELETE FROM slideshow_topics WHERE account_id = 'canvas_center'`);
+  console.log(`Deleted ${del.rowCount} old canvas_center topics.\n`);
 
   // Re-seed from seed-data.ts
   let inserted = 0;
   for (const [niche, accountId, topics] of SEEDS) {
-    if (accountId !== 'tech_shots') continue;
+    if (accountId !== 'canvas_center') continue;
     console.log(`Seeding ${niche} (${accountId})...`);
     for (const data of topics) {
       await query(
@@ -36,7 +36,7 @@ async function main() {
     }
   }
 
-  console.log(`\nDone. Inserted/Updated ${inserted} topics for tech_shots.`);
+  console.log(`\nDone. Inserted/Updated ${inserted} topics for canvas_center.`);
 }
 
 main().catch((err) => {

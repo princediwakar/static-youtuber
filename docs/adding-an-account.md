@@ -179,12 +179,12 @@ This runs `INSERT ... ON CONFLICT (topic, account_id) DO UPDATE` in `scripts/see
 Add the new account to two arrays (lines 33-38):
 
 ```typescript
-const accountIds = ['tech_shots', 'finance_shots', 'survival_shots', 'stoic_shots', 'history_shots'];
+const accountIds = ['canvas_center', 'canvas_area', 'canvas_base', 'canvas_station', 'history_shots'];
 const suffixMap: Record<string, string> = {
-  tech_shots: 'TECH_SHOTS',
-  finance_shots: 'FINANCE_SHOTS',
-  survival_shots: 'SURVIVAL_SHOTS',
-  stoic_shots: 'STOIC_SHOTS',
+  canvas_center: 'CANVAS_CENTER',
+  canvas_area: 'CANVAS_AREA',
+  canvas_base: 'CANVAS_BASE',
+  canvas_station: 'CANVAS_STATION',
   history_shots: 'HISTORY_SHOTS',
 };
 ```
@@ -198,9 +198,9 @@ npx tsx scripts/decrypt-and-upload-modal.ts
 This decrypts Cloudinary credentials from the DB and updates the Modal `cloudinary` secret with env vars like:
 
 ```
-CLOUDINARY_CLOUD_NAME_HISTORY_SHOTS=...
-CLOUDINARY_API_KEY_HISTORY_SHOTS=...
-CLOUDINARY_API_SECRET_HISTORY_SHOTS=...
+CLOUDINARY_CLOUD_NAME_CANVAS_CENTER=...
+CLOUDINARY_API_KEY_CANVAS_CENTER=...
+CLOUDINARY_API_SECRET_CANVAS_CENTER=...
 ```
 
 Consumed in `modal/render.py:439-442`:

@@ -1,24 +1,24 @@
 // lib/constants.ts
 import path from 'path';
 
-export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'tech_shots';
+export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'canvas_center';
 
 export const NICHES = ['SaaS & AI Tools', 'Financial Forensics', 'Stoic Philosophy', 'Urban Survival'];
 
 // One niche per channel — deterministic, no random selection
 export const ACCOUNT_NICHE: Record<string, string> = {
-  tech_shots: 'SaaS & AI Tools',
-  finance_shots: 'Financial Forensics',
-  stoic_shots: 'Stoic Philosophy',
-  survival_shots: 'Urban Survival',
+  canvas_center: 'SaaS & AI Tools',
+  canvas_area: 'Financial Forensics',
+  canvas_station: 'Stoic Philosophy',
+  canvas_base: 'Urban Survival',
 };
 
 // Immutable YouTube channel IDs — handles can be renamed, these never change
 export const ACCOUNT_YOUTUBE_CHANNEL_ID: Record<string, string> = {
-  tech_shots: 'UCYJQqqRf4tMxc7ra5FF08eQ',
-  finance_shots: 'UCzKvcGH7IyS684PQ4aCw2PQ',
-  survival_shots: 'UC6gH91v6aGmQFdNwMFC5RwQ',
-  stoic_shots: 'UCnBL50AkM_6BmvrNlS1rxVw',
+  canvas_center: 'UCYJQqqRf4tMxc7ra5FF08eQ',
+  canvas_area: 'UCzKvcGH7IyS684PQ4aCw2PQ',
+  canvas_base: 'UC6gH91v6aGmQFdNwMFC5RwQ',
+  canvas_station: 'UCnBL50AkM_6BmvrNlS1rxVw',
 };
 
 

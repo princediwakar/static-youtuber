@@ -84,7 +84,7 @@ Tracks every pipeline run from script generation through publish. Primary job re
 | Column | Type | Purpose |
 |---|---|---|
 | `id` | UUID PK | Job identifier |
-| `account_id` | TEXT | Channel (tech_shots, financial_forensics, etc.) |
+| `account_id` | TEXT | Channel (canvas_center, canvas_area, etc.) |
 | `topic` | TEXT | Reserved topic string |
 | `niche` | TEXT | Niche category |
 | `format_template` | VARCHAR(20) | RAPID_FIRE, SLOW_BURN, THE_LIST, or DEEP_DIVE |

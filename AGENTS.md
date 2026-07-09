@@ -8,9 +8,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Run pipeline (production)
 ```
-npm run trigger:prod                          # default account (tech_shots)
-npm run trigger:prod stoic_shots              # specific account
-npm run trigger:prod -- --accountId stoic_shots
+npm run trigger:prod                          # default account (canvas_center)
+npm run trigger:prod canvas_station           # specific account
+npm run trigger:prod -- --accountId canvas_station
 ```
 
 ## Local dev trigger (skip publish)
@@ -51,7 +51,7 @@ npx tsx -e "
 import dotenv from 'dotenv'; dotenv.config({ path: '.env.local' });
 import pg from 'pg';
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-const res = await pool.query('SELECT video_url, youtube_video_id FROM slideshow_jobs WHERE account_id = \$1 ORDER BY created_at DESC LIMIT 1', ['stoic_shots']);
+const res = await pool.query('SELECT video_url, youtube_video_id FROM slideshow_jobs WHERE account_id = \$1 ORDER BY created_at DESC LIMIT 1', ['canvas_station']);
 const j = res.rows[0];
 console.log('Cloudinary:', j.video_url);
 console.log('YouTube: https://youtube.com/watch?v=' + j.youtube_video_id);

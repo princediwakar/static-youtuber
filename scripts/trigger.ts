@@ -165,7 +165,7 @@ async function triggerPipeline() {
     }
   }
 
-  const accountId = accountIdArg || process.env.ACCOUNT_ID || 'tech_shots';
+  const accountId = accountIdArg || process.env.ACCOUNT_ID || 'canvas_center';
   const eventName = contentType === 'long' ? 'slideshow/trigger-long' : 'slideshow/trigger';
 
   console.log(`🚀 Triggering ${contentType} pipeline for account: ${accountId}\n`);

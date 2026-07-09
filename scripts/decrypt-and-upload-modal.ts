@@ -30,12 +30,12 @@ function decrypt(encryptedText: string): string {
   return decrypted;
 }
 
-const accountIds = ['tech_shots', 'finance_shots', 'survival_shots', 'stoic_shots'];
+const accountIds = ['canvas_center', 'canvas_area', 'canvas_base', 'canvas_station'];
 const suffixMap: Record<string, string> = {
-  tech_shots: 'TECH_SHOTS',
-  finance_shots: 'FINANCE_SHOTS',
-  survival_shots: 'SURVIVAL_SHOTS',
-  stoic_shots: 'STOIC_SHOTS',
+  canvas_center: 'CANVAS_CENTER',
+  canvas_area: 'CANVAS_AREA',
+  canvas_base: 'CANVAS_BASE',
+  canvas_station: 'CANVAS_STATION',
 };
 
 async function main() {
