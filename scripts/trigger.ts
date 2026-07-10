@@ -171,7 +171,20 @@ async function triggerPipeline() {
   console.log(`🚀 Triggering ${contentType} pipeline for account: ${accountId}\n`);
 
   const startTime = Date.now();
-  const triggerTime = new Date(Date.now() - 60000);
+
+  const { query } = await import('../lib/database');
+
+  // Check the last job before we trigger so we know if Inngest will resume it or create a new one.
+  const prevJobRes = await query<{ id: string, status: string }>(
+    `SELECT id, status FROM slideshow_jobs WHERE account_id = $1 AND content_type = $2 ORDER BY created_at DESC LIMIT 1`,
+    [accountId, contentType]
+  );
+  const previousJob = prevJobRes.rows[0];
+  const isResuming = previousJob && !['published', 'failed'].includes(previousJob.status);
+
+  if (isResuming) {
+    console.log(`♻️ Found an incomplete previous job (${previousJob.id}). Inngest will resume it.`);
+  }
 
   const result = await inngest.send({
     name: eventName,
@@ -182,8 +195,6 @@ async function triggerPipeline() {
   console.log('   Event IDs:', result.ids);
   console.log('   Pipeline steps: script → audio + images + music + thumbnail → render → video');
   console.log('   Polling DB every 10s (max 10 min) — will show status transitions as they happen.\n');
-
-  const { query } = await import('../lib/database');
 
   let prevStatus = '';
   const STEP_LINE =
@@ -196,21 +207,22 @@ async function triggerPipeline() {
       id: string; status: string; video_url: string | null; error_message: string | null;
     }>(
       `SELECT id, status, video_url, error_message FROM slideshow_jobs
-       WHERE account_id = $1 AND content_type = $2 AND created_at > $3
+       WHERE account_id = $1 AND content_type = $2
        ORDER BY created_at DESC
        LIMIT 1`,
-      [accountId, contentType, triggerTime]
+      [accountId, contentType]
     );
 
-    if (res.rows.length === 0) {
+    const job = res.rows[0];
+
+    // If we are expecting a completely new job, wait until the ID differs from the previous job.
+    if (!job || (!isResuming && previousJob && job.id === previousJob.id)) {
       if (prevStatus !== '__nojob') {
         console.log(`  [${i + 1}] ⏳ No job found yet — pipeline may still be initializing...`);
         prevStatus = '__nojob';
       }
       continue;
     }
-
-    const job = res.rows[0];
 
     // Status changed — log it prominently
     if (job.status !== prevStatus && prevStatus !== '') {
