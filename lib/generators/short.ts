@@ -133,13 +133,19 @@ VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 - kelli-winkler-american-female: Professional American female with radio/broadcasting background. Warm, clear, conversational.
 - dee-smith-american-male: Dynamic, energetic, professional African American male. Versatile, conversational, commercial-friendly.
 
-VISUAL AESTHETIC (FLUX.1):
-You must write a scene description that fits this visual world: ${aestheticInstruction}
-- Write a highly descriptive paragraph using natural language describing the specific scene.
-- KINETIC ENERGY MANDATE: You MUST change the visual prompt for EVERY SINGLE SHOT. Do not just change the camera angle — change the focus, the lighting, the micro-actions (e.g., "dust motes dancing in a shaft of light", "a hand violently slamming a folder down", "sweat dripping onto a keyboard"). Make it cinematic and intensely visceral.
-- NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS.
-- HARD BAN ON THESE OVERUSED AI LOOKS — never describe: glassmorphism, frosted/liquid glass panels, glossy soft-3D renders, pastel gradient blobs, isometric miniature dioramas, generic bento-grid layouts, neon wireframes, or sumi-e ink wash. If your instinct reaches for one of these, describe the material and light instead (paper grain, ink, stone, patina, halftone dot, contour line).
-- CRITICAL: The environment must have NO written words, NO signs, NO legible letters or numbers, and NO text of any kind — this includes fake labels on maps, redaction stamps, inscriptions, or document text. Represent documents/maps/carvings with blank marks, plain bars, or abstract lines only, never characters that could be misread as words.
+VISUAL AESTHETICS & SHOT VARIETY MANDATE (CRITICAL):
+Visual World: ${aestheticInstruction}
+
+To prevent repetitive, boring images, you MUST use a "Shot Sequence Architecture". You must violently alternate the camera distance and subject for EVERY single shot. Cycle through these 4 shot types in order:
+1. WIDE ESTABLISHING SHOT (e.g., A massive, empty brutalist room)
+2. MACRO INSERT SHOT (e.g., Extreme close-up of sweat on a fingerprint)
+3. OVER-THE-SHOULDER / POV (e.g., Looking down at a shredded document)
+4. ABSTRACT / TEXTURAL (e.g., Pure heavy film grain over oxidized metal)
+
+- Write a highly descriptive, visceral paragraph for the visual_prompt.
+- NEVER describe the same shot type twice in a row. 
+- HARD BAN: No glassmorphism, no glossy 3D, no "cinematic lighting", no neon. Describe physical mediums (halftone, xerox, polaroid, 35mm film, risograph, CCTV).
+- CRITICAL: NO written words, letters, or numbers in the scene. Represent documents with abstract redacted black bars or blank scribbles.
 
 CENSORSHIP & NSFW GUARDRAILS (ZERO TOLERANCE):
 - FORBIDDEN WORDS: blood, bloody, wound, severed, arterial, flesh, visceral, raw, bare chest, corpse, dead, murder.

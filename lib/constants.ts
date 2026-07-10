@@ -1,4 +1,4 @@
-// lib/constants.ts
+// Path: lib/constants.ts
 import path from 'path';
 
 export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'canvas_center';
@@ -122,39 +122,37 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
   'psychology-minimalist': {
     fontFamily: 'Space Grotesk',
     fontFile: 'SpaceGrotesk-Bold.ttf',
-    textColor: '#1A1A1A',
-    strokeColor: '#EAEAEA',
-    accentColor: '#0055A4',
+    textColor: '#FFFFFF',      // Stark white
+    strokeColor: '#000000',    // Pitch black stroke for separation
+    accentColor: '#FF2A00',    // Aggressive alert red
     maxCharsPerLine: 34,
     maxChars: 85,
   },
   'wealth-editorial': {
     fontFamily: 'Fraunces 72pt Black',
     fontFile: 'Fraunces-Black.ttf',
-    textColor: '#F0EDE6',
-    strokeColor: '#1C1917',
-    accentColor: '#4A0E17',
-    maxCharsPerLine: 36,
-    maxChars: 90,
+    textColor: '#FFFFFF',
+    strokeColor: '#050505',
+    accentColor: '#00D15E',    // Institutional money green
+    maxCharsPerLine: 32,       // Tighter for heavy serif readability
+    maxChars: 80,
   },
   'history-cinematic': {
-    // Same story as Fraunces above: instancing Cinzel's variable font to
-    // wght=900 produces a static face named "Cinzel Black", not "Cinzel".
     fontFamily: 'Cinzel Black',
     fontFile: 'Cinzel-Black.ttf',
-    textColor: '#FFFFF0',
-    strokeColor: '#27272A',
-    accentColor: '#C5A059',
-    maxCharsPerLine: 29,
+    textColor: '#F5F5F0',      // Slight bone-white
+    strokeColor: '#0A0A0A',
+    accentColor: '#E6A822',    // Oxidized gold
+    maxCharsPerLine: 28,
     maxChars: 72,
   },
   'learn-technical': {
     fontFamily: 'Big Shoulders Stencil Display',
     fontFile: 'BigShouldersStencilDisplay-Bold.ttf',
-    textColor: '#F4F4F4',
-    strokeColor: '#09090B',
-    accentColor: '#CC5500',
-    maxCharsPerLine: 48,
+    textColor: '#000000',      // Black text (requires white/yellow BG or massive white stroke)
+    strokeColor: '#FFFFFF',    // Thick white stroke for industrial tape look
+    accentColor: '#FFC000',    // High-vis hazard yellow
+    maxCharsPerLine: 42,
     maxChars: 120,
   },
 };
@@ -314,27 +312,27 @@ export type Aesthetic = {
 export const AESTHETICS: Record<string, Aesthetic> = {
   'psychology-minimalist': {
     id: 'psychology-minimalist',
-    instruction: 'Describe an unsettling, high-contrast minimalist concept mapping to biological weakness or anxiety: think sterile liminal spaces, stark shadows, and isolated geometric objects.',
-    imagePrefix: 'A deeply unsettling, high-contrast photograph of surreal minimalism. Empty liminal spaces, deep shadows, geometric forms, isolated objects. Desaturated off-white and cold, sickly greys. Absolutely no cinematic lighting, no bloom, no glowing edges, no glossy reflections, no neon. Stark shadows, flat light, matte finish, muted colors. No text, letters, or numbers anywhere. ',
-    thumbnailPrefix: 'A deeply unsettling photograph of surreal minimalism. Empty liminal spaces, deep shadows, geometric forms, isolated objects. Desaturated off-white and cold greys. Strong asymmetrical composition with a large clean void on one side for text overlay. Matte finish, flat light. No text, letters, or numbers anywhere. ',
+    instruction: 'Force a clinical, paranoid surveillance aesthetic. Mediums: CCTV footage, thermal imaging, harsh flash polaroids, or sterile medical textbook illustrations. The scenes should feel invasive and uncomfortable.',
+    imagePrefix: 'A low-fidelity surveillance image. Physical medium: gritty CCTV capture, harsh direct flash photography, or stark thermal imaging. Extreme contrast, degraded resolution, raw, paranoid framing. Absolutely no smooth gradients, no 3D renders, no soft lighting. Ugly, clinical, and striking. No legible text. ',
+    thumbnailPrefix: 'A gritty surveillance or harsh flash photograph. Extreme contrast, clinical and paranoid framing. Massive blank void on one side for text. No text, letters, or numbers in the image itself. ',
   },
   'wealth-editorial': {
     id: 'wealth-editorial',
-    instruction: 'Describe a cynical, high-end luxury macro concept: think extreme close-ups of money, expensive materials, marble, and corporate power symbols shot with harsh, ugly flash.',
-    imagePrefix: 'An extreme macro photograph of cynical high-end luxury or financial elements. Thick paper textures, marble, mahogany, stark corporate architecture, harsh direct camera flash. Extremely high contrast, desaturated. Absolutely no digital UI, no trading terminals, no cinematic lighting, no glowing elements. Flat, ugly, aggressive lighting. No legible text, letters, numbers, or stamps anywhere. ',
-    thumbnailPrefix: 'An extreme macro photograph of high-end luxury or financial elements. Thick paper textures, marble, mahogany, stark corporate architecture, harsh direct camera flash. Extremely high contrast, desaturated. Large blank void on one side for overlay. No digital UI, no glowing elements. No legible text, letters, numbers, or stamps anywhere. ',
+    instruction: 'Force a ruthless institutional aesthetic. Mediums: Macro photography of currency, classified document redactions, brutalist corporate architecture on 35mm film, heavy halftone newspaper prints.',
+    imagePrefix: 'A macro physical artifact of institutional power. Physical medium: 16mm microfilm scan, heavy halftone newspaper print, or extreme macro of heavily textured paper/currency/marble. Stark black, white, and harsh lighting. No digital trading UI, no neon, no glossy luxury ads. Pure cold power. No legible text or characters. ',
+    thumbnailPrefix: 'An aggressive macro shot of institutional texture (marble, heavy paper, ink). Stark contrast. Heavy halftone or microfilm aesthetic. Massive blank void on one side. No legible text. ',
   },
   'history-cinematic': {
     id: 'history-cinematic',
-    instruction: 'Describe a terrifying historical archival concept: think dusty war rooms, oppressive ruins, and brutalist structures shot on medium format film.',
-    imagePrefix: 'A medium-format film photograph of gritty, oppressive historical archives or ruins. Dusty rooms, sepia tones, oxidized metal, ancient stone, overcast sky, diffuse flat light. Desaturated earthy, sickly tones. Absolutely no epic cinematic lighting, no god rays, no human figures, no marble statues. Cold, stark, terrifyingly empty scene. No text, letters, or symbols anywhere. ',
-    thumbnailPrefix: 'A medium-format film photograph of gritty, oppressive historical archives or ruins. Overcast sky, diffuse flat light. Desaturated earthy tones. Bold asymmetrical composition with a large blank void for overlay. Absolutely no epic cinematic lighting, no glowing edges, no human figures, no marble statues. No text or characters anywhere. ',
+    instruction: 'Force a forensic archival aesthetic. Mediums: Degraded silver gelatin prints, classified evidence boards, macro shots of rust/shrapnel, or muddy trench photography.',
+    imagePrefix: 'A terrifying forensic archival photograph. Physical medium: degraded silver gelatin print, harsh evidence-board flash, or physical macro of rusted metal/bone/dirt. Heavy film grain, scratches, light leaks. Absolutely no majestic cinematic lighting, no clean statues. Visceral, physical decay. No text, letters, or symbols. ',
+    thumbnailPrefix: 'A degraded silver gelatin print or harsh evidence-board photo. Heavy film grain, extreme physical decay. Bold asymmetrical composition with a large blank void for overlay. No text or characters anywhere. ',
   },
   'learn-technical': {
     id: 'learn-technical',
-    instruction: 'Describe a stark, paranoid utilitarian explainer concept: think a single fascinating object or cross-section on concrete shot with an aggressive direct flash.',
-    imagePrefix: 'A stark, aggressive flash photograph of a single fascinating object or mechanical cross-section on a scuffed, dirty concrete floor. Hard shadows, flat colors. Highly desaturated, paranoid framing. Absolutely no tactical HUDs, no glowing elements, no cinematic lighting. Purely functional, highly legible, but unsettling. No text, letters, or labels anywhere. ',
-    thumbnailPrefix: 'A stark, aggressive flash photograph of a single fascinating object or cross-section on a scuffed concrete floor. Hard shadows, flat colors. Desaturated, paranoid framing. Aggressively asymmetrical composition, large blank void for overlay. Absolutely no tactical HUDs, no glowing elements, no cinematic lighting. No text, letters, numbers, or labels anywhere. ',
+    instruction: 'Force a brutal industrial/schematic aesthetic. Mediums: Two-color risograph prints, heavy blueprint cyanotypes, electron microscope scans, or harsh xerox copies.',
+    imagePrefix: 'An industrial technical document scan. Physical medium: heavy xerox photocopy, two-color risograph print, or high-contrast electron microscope scan. Gritty paper texture, absolute flat depth of field. Purely utilitarian. No 3D renders, no neon sci-fi HUDs. No text, letters, or numbers anywhere. ',
+    thumbnailPrefix: 'An industrial xerox photocopy or risograph print aesthetic. High-contrast, gritty paper texture. Aggressively asymmetrical composition, large blank void for overlay. No text, letters, numbers, or labels anywhere. ',
   },
 };
 

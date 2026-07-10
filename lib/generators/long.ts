@@ -1,3 +1,4 @@
+// Path: lib/generators/long.ts
 import { z } from 'zod';
 import { NonRetriableError } from 'inngest';
 import { chatCompletion, extractJson } from '../llm';
@@ -124,14 +125,19 @@ VOICE SELECTION (same catalog as shorts — pick best for long-form niche):
 - mallory-handford-american-female: Bright, compelling. Alternative for any niche.
 - melissa-harlow-american-female: Warm, natural narration.
 
-VISUAL AESTHETIC (FLUX.1 — landscape 1344×768):
-${aestheticInstruction}
-- Write a descriptive paragraph per shot using natural language.
-- KINETIC ENERGY MANDATE: Change the visual prompt for EVERY SINGLE SHOT. Do not just change the camera angle — change the focus, the lighting, the micro-actions (e.g., "ink bleeding into paper", "a nervous hand adjusting a tie", "a flickering fluorescent light"). Make it cinematic and intimately detailed.
-- NEVER COPY-PASTE VISUAL PROMPTS BETWEEN SHOTS.
-- HARD BAN: No glassmorphism, frosted glass, glossy 3D, pastel blobs, isometric dioramas, neon wireframes, sumi-e.
-  Describe material and light instead (paper grain, ink, stone, patina, halftone, contour line).
-- CRITICAL: No written words, signs, legible letters, numbers, or text anywhere in the scene.
+VISUAL AESTHETICS & SHOT VARIETY MANDATE (CRITICAL):
+Visual World: ${aestheticInstruction}
+
+To prevent repetitive, boring images, you MUST use a "Shot Sequence Architecture". You must violently alternate the camera distance and subject for EVERY single shot. Cycle through these 4 shot types in order:
+1. WIDE ESTABLISHING SHOT (e.g., A massive, empty brutalist room)
+2. MACRO INSERT SHOT (e.g., Extreme close-up of sweat on a fingerprint)
+3. OVER-THE-SHOULDER / POV (e.g., Looking down at a shredded document)
+4. ABSTRACT / TEXTURAL (e.g., Pure heavy film grain over oxidized metal)
+
+- Write a highly descriptive, visceral paragraph for the visual_prompt.
+- NEVER describe the same shot type twice in a row. 
+- HARD BAN: No glassmorphism, no glossy 3D, no "cinematic lighting", no neon. Describe physical mediums (halftone, xerox, polaroid, 35mm film, risograph, CCTV).
+- CRITICAL: NO written words, letters, or numbers in the scene. Represent documents with abstract redacted black bars or blank scribbles.
 - Landscape frame: compose for 16:9 (wider than tall). Use horizontal scene depth.
 
 CENSORSHIP (ZERO TOLERANCE):
