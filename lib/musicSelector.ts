@@ -5,77 +5,52 @@ import type { FormatTemplate } from './constants';
 const FETCH_TIMEOUT_MS = 8 * 60 * 1000; // 8 min — covers 300s long-form audio; shorts never exceeds 60s
 
 const NICHE_MUSIC_PROMPTS: Record<string, Partial<Record<FormatTemplate, string[]>>> = {
-  'Financial Forensics': {
+  'Anti-Status Wealth': {
     RAPID_FIRE: [
-      'dark ambient, pulsing synth bass, investigative, sparse piano, tense, 85bpm, cinematic',
-      'electronic thriller, low drone, ticking clock percussion, corporate espionage, brooding',
-      'minimalist electronic, cold analog synths, slow build, mysterious, dark, 90bpm',
+      'dark synthwave, driving sub-bass, tense, aggressive, cynical, corporate thriller, 105bpm',
+      'minimalist electronic, cold analog synths, ticking clock percussion, ruthless, 100bpm',
     ],
     SLOW_BURN: [
-      'dark ambient, brooding cello, slow atmospheric pads, tension building, mysterious, 70bpm',
-      'cinematic drone, sparse piano, low strings, investigative, melancholy, 65bpm',
+      'dark ambient drone, sparse piano, ominous, investigative, cold and precise, 75bpm',
     ],
     THE_LIST: [
-      'dark synth, pulsing arpeggio, tense, investigative, building intensity, 95bpm',
-      'electronic, driving bassline, urgent, mysterious, minimalist percussion, 100bpm',
-    ],
-    DEEP_DIVE: [
-      'dark ambient documentary score, slow evolving strings, tense piano motif, investigative, cinematic build, 65bpm',
-      'minimal orchestral, brooding cello ostinato, sparse brass swells, cold and precise, 60bpm',
+      'driving synth bass, tense arpeggios, building intensity, aggressive, cynical, 100bpm',
     ],
   },
-  'Stoic Philosophy': {
+  'Weaponized History': {
     RAPID_FIRE: [
-      'epic orchestral, soaring strings, motivational brass, steady percussion, inspiring, 90bpm',
-      'cinematic, building crescendo, heroic horns, determined, triumphant, 95bpm',
+      'heavy industrial percussion, dark orchestral stabs, aggressive, cinematic, terrifying, 110bpm',
+      'driving war drums, low brass swells, intense, unrelenting, apocalyptic, 105bpm',
     ],
     SLOW_BURN: [
-      'ambient, deep pads, slow strings, contemplative, meditative, minimal piano, 60bpm',
-      'neoclassical, solo cello, sparse, introspective, melancholic, warm, 55bpm',
+      'dark cinematic ambient, low drones, distant thunder, eerie, foreboding, slow build, 70bpm',
     ],
     THE_LIST: [
-      'orchestral, steady build, strings and brass, contemplative yet powerful, 80bpm',
-      'cinematic, gradual crescendo, emotional strings, reflective, resolute, 75bpm',
-    ],
-    DEEP_DIVE: [
-      'neoclassical ambient, solo cello, slow evolving string pads, contemplative, meditative depth, 55bpm',
-      'cinematic orchestral, gradual crescendo, emotional but restrained, ancient and timeless, 60bpm',
+      'cinematic tension, heavy strings, urgent percussion, aggressive, epic, 95bpm',
     ],
   },
-  'Urban Survival': {
+  'Behavioral Friction': {
     RAPID_FIRE: [
-      'industrial, aggressive percussion, dark synth, urgent, tactical, high tension, 100bpm',
-      'electronic, driving beat, pulsing bass, alert, gritty, intense, 105bpm',
+      'industrial techno, distorted bass, aggressive, relentless, psychological tension, 115bpm',
+      'dark electronic, frantic arpeggio, intense, driving beat, uncomfortable, 110bpm',
     ],
     SLOW_BURN: [
-      'dark ambient, low drones, distant thunder, eerie, suspenseful, slow build, 65bpm',
-      'cinematic tension, sub-bass rumble, sparse percussion, ominous, foreboding, 70bpm',
+      'eerie ambient, high pitched drone, sparse metallic hits, psychological horror, 65bpm',
     ],
     THE_LIST: [
-      'industrial, mechanical rhythm, dark electronic, urgent, tactical, 95bpm',
-      'aggressive synth, heavy percussion, tense, driving, apocalyptic, 100bpm',
-    ],
-    DEEP_DIVE: [
-      'dark cinematic, low drones with distant percussion, tactical, methodical build, foreboding, 60bpm',
-      'ambient industrial, slow sub-bass pulse, sparse metallic percussion, ominous, deliberate, 65bpm',
+      'tense electronic, driving mechanical rhythm, aggressive, biological, urgent, 105bpm',
     ],
   },
-  'SaaS & AI Tools': {
+  'System Reverse-Engineering': {
     RAPID_FIRE: [
-      'electronic, upbeat synth, driving beat, optimistic, energetic, modern, 100bpm',
-      'synthwave, bright arpeggios, motivational, tech-forward, sleek, 95bpm',
+      'frantic electronic, glitchy percussion, tense, paranoid, driving, cyberpunk, 120bpm',
+      'fast synth sequence, intense bass pulse, hacking, urgent, aggressive, 115bpm',
     ],
     SLOW_BURN: [
-      'ambient electronic, soft pads, minimal beat, hopeful, reflective, inspiring, 70bpm',
-      'lo-fi, warm piano, gentle beat, contemplative, optimistic, cozy, 75bpm',
+      'paranoid ambient, subtle digital glitches, low hum, investigative, eerie, 75bpm',
     ],
     THE_LIST: [
-      'synthwave, driving bassline, optimistic, retro-future, energetic, modern, 95bpm',
-      'electronic, pulsing rhythm, bright, innovative, sleek, motivational, 90bpm',
-    ],
-    DEEP_DIVE: [
-      'ambient electronic documentary score, soft evolving pads, minimal beat, hopeful and reflective, 65bpm',
-      'lo-fi cinematic, warm piano, gentle atmospheric synth, contemplative, optimistic depth, 60bpm',
+      'driving cybernetic rhythm, aggressive synth, tense, methodical, exposing, 105bpm',
     ],
   },
 };
@@ -89,8 +64,9 @@ function pickMusicPrompt(niche: string, formatTemplate: FormatTemplate, title: s
   const nicheMap = NICHE_MUSIC_PROMPTS[niche];
   const prompts = nicheMap?.[formatTemplate] ?? GENERIC_PROMPTS;
   const base = prompts[Math.floor(Math.random() * prompts.length)];
-  const narrationSnippet = narrationText.split(/\\s+/).slice(0, 20).join(' ');
-  return `${base} — underscore: ${title}, visual style: ${visualWorld}, feeling: ${narrationSnippet}`;
+  const narrationSnippet = narrationText.split(/\s+/).slice(0, 20).join(' ');
+  const fullPrompt = `${base} — underscore: ${title}, visual style: ${visualWorld}, feeling: ${narrationSnippet}`;
+  return fullPrompt.length > 950 ? fullPrompt.slice(0, 950) + '...' : fullPrompt;
 }
 
 async function generateWithAceStep(prompt: string, duration: number): Promise<Buffer> {

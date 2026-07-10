@@ -67,6 +67,7 @@ async function executeAssetPipeline(
   ] = await Promise.all([
     
     // Task A: Generate Narration
+    // Task A: Generate Narration
     (async () => {
       let audioUrl = '';
       let durationMs = 0;
@@ -74,7 +75,13 @@ async function executeAssetPipeline(
       if (jobA?.narration_audio_url) {
         audioUrl = jobA.narration_audio_url;
       } else {
-        const fullNarrative = script.shots.map((s: Shot) => s.spoken_text).join(' ');
+        const fullNarrative = script.shots.map((s: Shot) => {
+          let text = s.spoken_text.trim();
+          if (!/[.!?]$/.test(text)) {
+            text += '.';
+          }
+          return text;
+        }).join(' ');
         const creds = await getAccountCredentials(accountId);
         const res = await step.run('generate-audio-narrative', async () => {
           const sanitized = fullNarrative
@@ -214,6 +221,11 @@ async function executeAssetPipeline(
             music_url: musicUrl,
             callback_url: callbackUrl.toString(),
             sync: isLocalDev,
+            cloudinary_credentials: {
+              cloud_name: (await getAccountCredentials(accountId)).cloudinaryCloudName,
+              api_key: (await getAccountCredentials(accountId)).cloudinaryApiKey,
+              api_secret: (await getAccountCredentials(accountId)).cloudinaryApiSecret,
+            }
           }),
           signal: controller.signal,
         });

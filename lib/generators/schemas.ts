@@ -1,3 +1,4 @@
+// lib/generators/schema.ts
 import { z } from 'zod';
 
 export const ShotSchema = z.object({
@@ -19,7 +20,7 @@ export const SlideshowScriptSchema = z.object({
     claim: z.string().min(10),
     source: z.string().min(2),
   })).min(3),
-  visual_world: z.enum(['tech-minimalist', 'finance-editorial', 'stoic-zen', 'survival-technical']),
+  visual_world: z.enum(['wealth-editorial', 'history-cinematic', 'psychology-minimalist', 'learn-technical']),
   format_template: z.enum(['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST']),
   title: z.string().min(5).max(100),
   description: z.string().min(30).max(500),
@@ -74,7 +75,7 @@ export const LongFormScriptSchema = z.object({
     claim: z.string().min(10),
     source: z.string().min(2),
   })).min(5),
-  visual_world: z.enum(['tech-minimalist', 'finance-editorial', 'stoic-zen', 'survival-technical']),
+  visual_world: z.enum(['wealth-editorial', 'history-cinematic', 'psychology-minimalist', 'learn-technical']),
   format_template: z.literal('DEEP_DIVE'),
   title: z.string().min(5).max(100),
   description: z.string().min(50).max(1000),

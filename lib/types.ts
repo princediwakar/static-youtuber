@@ -16,7 +16,7 @@ export type ContentType = 'shorts' | 'long';
 export type SlideshowScript = {
   title: string;
   description: string;
-  visual_world: 'tech-minimalist' | 'finance-editorial' | 'stoic-zen' | 'survival-technical';
+  visual_world: 'wealth-editorial' | 'history-cinematic' | 'psychology-minimalist' | 'learn-technical';
   format_template: 'RAPID_FIRE' | 'SLOW_BURN' | 'THE_LIST' | 'DEEP_DIVE';
   fact_check_and_sources: string;
   tags: string[];

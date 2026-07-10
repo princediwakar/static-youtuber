@@ -1,3 +1,4 @@
+// lib/generators/short.ts
 import { z } from 'zod';
 import { NonRetriableError } from 'inngest';
 import { chatCompletion, extractJson } from '../llm';
@@ -96,16 +97,16 @@ async function chunkScriptToJSON(
 Your job is to take a completed narrative script and slice it into exactly ${shotCounts.min}-${shotCounts.max} shots, formatted as strict JSON.
 
 FORMAT: ${formatTemplate}
-VISUAL WORLD: ${niche === 'Financial Forensics' ? 'finance-editorial' : niche === 'Stoic Philosophy' ? 'stoic-zen' : niche === 'Urban Survival' ? 'survival-technical' : 'tech-minimalist'}
+VISUAL WORLD: ${NICHE_PROFILES[niche]?.aestheticId || 'learn-technical'}
 
 DUAL-TEXT MANDATE (CRITICAL):
 Each shot has TWO text fields for different modalities:
 
 1. "caption_text" — The EXACT verbatim text from the narrative, burned onto the screen.
    - VERBATIM SLICING ONLY: You MUST preserve the exact prose, grammar, and punctuation of the narrative. Do NOT rewrite, paraphrase, summarize, or convert to title-case fragments.
-   - PUNCTUATION IS CRITICAL: Keep all commas, periods, and question marks exactly as they appear in the narrative. They dictate the pacing for the text-to-speech engine.
+   - PUNCTUATION IS CRITICAL (DO NOT DROP PERIODS!): You MUST keep all commas, periods, and question marks EXACTLY as they appear in the narrative. If a shot completes a sentence, IT MUST END WITH A PERIOD. Do not strip ending punctuation, as it dictates the pacing for the text-to-speech engine!
    - WORD LIMIT: No shot may contain more than 12 words.
-   - If a sentence is long, SPLIT it across multiple consecutive shots. Maintain the exact flow and punctuation of the sentence across the shots.
+   - If a sentence is long, SPLIT it across multiple consecutive shots. Maintain the exact flow and punctuation of the sentence across the shots (e.g., Shot 1: "When the market crashed,", Shot 2: "they bought everything.").
    - Keep symbols and abbreviations as-is from the narrative (e.g., "$1.4B", "26%", "CEO").
    - NO REPETITION: Do NOT repeat the exact same caption or spoken text across multiple shots.
 

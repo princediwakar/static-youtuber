@@ -100,7 +100,7 @@ async function chunkLongFormScriptToJSON(
 Slice this narrative into exactly 30-60 consecutive shots, formatted as strict JSON.
 
 FORMAT: DEEP_DIVE
-VISUAL WORLD: ${niche === 'Financial Forensics' ? 'finance-editorial' : niche === 'Stoic Philosophy' ? 'stoic-zen' : niche === 'Urban Survival' ? 'survival-technical' : 'tech-minimalist'}
+VISUAL WORLD: ${LONG_NICHE_PROFILES[niche]?.aestheticId || 'learn-technical'}
 
 DUAL-TEXT MANDATE (CRITICAL):
 Each shot has TWO text fields:
@@ -118,9 +118,9 @@ Each shot has TWO text fields:
    - Never add, remove, or reorder words beyond digit substitution.
 
 VOICE SELECTION (same catalog as shorts — pick best for long-form niche):
-- phil-freeman-american-male: Deep, rich, authoritative. Best for Financial Forensics / dramatic tech.
-- jon-british-male: Professional, clear, polished. Good for Stoic / editorial.
-- dee-smith-american-male: Dynamic, conversational. Good for SaaS / Urban Survival.
+- phil-freeman-american-male: Deep, rich, authoritative. Best for Wealth & Mindset / Fascinating History.
+- jon-british-male: Professional, clear, polished. Good for Growth Psychology.
+- dee-smith-american-male: Dynamic, conversational. Good for Learn Something New.
 - mallory-handford-american-female: Bright, compelling. Alternative for any niche.
 - melissa-harlow-american-female: Warm, natural narration.
 

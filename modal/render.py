@@ -151,17 +151,19 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
         return 0.0
 
     RESYNC_WINDOW = 24
-    # 1.0s per word — relaxed from 0.6 to accommodate F5-TTS voice-cloned audio
-    # which has non-standard prosody and 450ms inter-chunk silences. The tighter
-    # 0.6 value was rejecting valid matches and leaving large unmatched spans that
+    # 5.0s per word — relaxed from 1.0 to accommodate F5-TTS voice-cloned audio
+    # which has non-standard prosody and multi-second inter-chunk silences. The tighter
+    # values were rejecting valid matches and leaving large unmatched spans that
     # the interpolator then distributed catastrophically.
-    MAX_GAP_PER_WORD = 1.0
+    MAX_GAP_PER_WORD = 5.0
     MIN_GAP = -0.05
 
-    def is_match(target, candidate):
+    def is_match(target, candidate, allow_short=True):
         if not target or not candidate:
             return False
         if target == candidate:
+            if not allow_short and len(target) < 4:
+                return False
             return True
         if len(target) >= 4 and len(candidate) >= 4:
             return target in candidate or candidate in target
@@ -178,13 +180,18 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
         t_clean = target_words[t_idx]["clean"]
         w_clean = re.sub(r'[^a-z0-9]', '', words[w_idx]["text"].lower())
         
+        MAX_GAP_ABSOLUTE = 6.0
+
         candidate = w_idx if is_match(t_clean, w_clean) else None
 
         if candidate is None:
             for look in range(1, RESYNC_WINDOW):
                 if w_idx + look < len(words):
                     cand_clean = re.sub(r'[^a-z0-9]', '', words[w_idx + look]["text"].lower())
-                    if is_match(t_clean, cand_clean):
+                    # require a distinctive (len>=4) word to justify jumping the
+                    # cursor forward — short/common words recur too often and were
+                    # locking onto the wrong occurrence far downstream
+                    if is_match(t_clean, cand_clean, allow_short=False):
                         candidate = w_idx + look
                         break
 
@@ -193,7 +200,8 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
             prev_end = last_matched_end(t_idx)
             n_since = max(candidate - w_idx, 0) + 1
             gap = w["start"] - prev_end
-            if MIN_GAP <= gap <= MAX_GAP_PER_WORD * n_since:
+            gap_ceiling = min(MAX_GAP_PER_WORD * n_since, MAX_GAP_ABSOLUTE)
+            if MIN_GAP <= gap <= gap_ceiling:
                 target_words[t_idx]["start"] = w["start"]
                 target_words[t_idx]["end"] = w["end"]
                 w_idx = candidate + 1
@@ -231,6 +239,23 @@ def slice_words_by_shot(words: list, shots: list, total_duration: float) -> list
             end_t = shot_words[-1]["end"]
 
         boundaries.append([start_t, end_t, shot_words])
+
+    # A single bad anchor can inflate one shot's duration far past what its
+    # word count justifies. Unlike the global 60% kill-switch below, this
+    # catches localized drift on individual shots and swaps in a proportional
+    # estimate for just that shot — everything else stays untouched.
+    word_counts = [max(len(shot["spoken_text"].split()), 1) for shot in shots]
+    total_words = sum(word_counts)
+    cum_words = 0
+    for s_idx, b in enumerate(boundaries):
+        expected_dur = total_duration * (word_counts[s_idx] / total_words)
+        actual_dur = b[1] - b[0]
+        if actual_dur > max(expected_dur * 3, expected_dur + 5.0):
+            prop_start = total_duration * (cum_words / total_words)
+            print(f"[align] shot {s_idx}: {actual_dur:.1f}s vs expected {expected_dur:.1f}s — using proportional estimate")
+            b[0] = prop_start
+            b[1] = prop_start + expected_dur
+        cum_words += word_counts[s_idx]
 
     for i in range(len(boundaries) - 1):
         boundaries[i][1] = boundaries[i+1][0]
@@ -302,7 +327,7 @@ def build_continuous_ass(
     return "\n".join(ass_content)
 
 @app.function(cpu=8.0, timeout=1800, secrets=[modal.Secret.from_name("cloudinary")])
-def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str, visual_world: str = None, caption_style: dict = None, shot_audio_urls: list = None, content_type: str = 'shorts'):
+def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str, visual_world: str = None, caption_style: dict = None, shot_audio_urls: list = None, content_type: str = 'shorts', payload_creds: dict = None):
     import cloudinary.uploader
     import requests
 
@@ -505,9 +530,9 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         ], check=True, timeout=120)
 
         env_suffix = account_id.upper().replace("-", "_")
-        cloud_name = os.environ.get(f"CLOUDINARY_CLOUD_NAME_{env_suffix}")
-        api_key = os.environ.get(f"CLOUDINARY_API_KEY_{env_suffix}")
-        api_secret = os.environ.get(f"CLOUDINARY_API_SECRET_{env_suffix}")
+        cloud_name = payload_creds.get("cloud_name") if payload_creds else os.environ.get(f"CLOUDINARY_CLOUD_NAME_{env_suffix}")
+        api_key = payload_creds.get("api_key") if payload_creds else os.environ.get(f"CLOUDINARY_API_KEY_{env_suffix}")
+        api_secret = payload_creds.get("api_secret") if payload_creds else os.environ.get(f"CLOUDINARY_API_SECRET_{env_suffix}")
 
         if not (api_key and api_secret and cloud_name):
             raise Exception(f"[{job_id}] CRITICAL: No Cloudinary credentials found for account: {account_id}")
@@ -565,8 +590,9 @@ async def trigger_render(request: Request):
     caption_style = payload.get("caption_style")
     # Per-shot TTS — when present, bypasses Whisper alignment entirely
     shot_audio_urls = payload.get("shot_audio_urls")
-    # content_type: 'shorts' (portrait 1080×1920) or 'long' (landscape 1920×1080)
+    # content_type: 'shorts' (portrait 1080x1920) or 'long' (landscape 1920x1080)
     content_type = payload.get("content_type", "shorts")
+    payload_creds = payload.get("cloudinary_credentials")
     sync = payload.get("sync", False)
 
     if not all([job_id, account_id, shots, music_url, callback_url]):
@@ -577,10 +603,10 @@ async def trigger_render(request: Request):
     try:
         if sync:
             print(f"[trigger_render] Running synchronously for job {job_id}")
-            result = render_video.remote(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type)
+            result = render_video.remote(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type, payload_creds)
             return {"status": "completed", "jobId": job_id, "videoUrl": result["videoUrl"]}
         else:
-            render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type)
+            render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type, payload_creds)
             return {"status": "queued", "jobId": job_id}
     except Exception as e:
         print(f"[trigger_render] render_video failed: {e}")
