@@ -74,7 +74,7 @@ export const db = {
     const res = await query(
       `SELECT * FROM slideshow_jobs
        WHERE account_id = $1
-         AND status NOT IN ('published', 'failed', 'assembled', 'assets_ready')
+         AND status NOT IN ('published', 'failed')
        ORDER BY created_at DESC
        LIMIT 1`,
       [accountId]
