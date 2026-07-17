@@ -261,7 +261,7 @@ async function executeAssetPipeline(
 export const publishVideo = inngest.createFunction(
   {
     id: 'publish-video',
-    retries: 3,
+    retries: 1,
     timeouts: { finish: '30m' },
     triggers: [{ event: 'slideshow/publish' }],
     onFailure: async ({ error, event }) => {
@@ -346,7 +346,7 @@ export const publishVideo = inngest.createFunction(
 export const generateShort = inngest.createFunction(
   {
     id: 'generate-short',
-    retries: 3,
+    retries: 1,
     timeouts: { finish: '20m' },
     triggers: [{ event: 'slideshow/trigger' }],
     onFailure: async ({ error, event }) => {
@@ -399,7 +399,7 @@ export const generateShort = inngest.createFunction(
 export const generateLongForm = inngest.createFunction(
   {
     id: 'generate-long-form',
-    retries: 3,
+    retries: 1,
     timeouts: { finish: '20m' },
     triggers: [{ event: 'slideshow/trigger-long' }],
     onFailure: async ({ error, event }) => {

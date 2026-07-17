@@ -137,10 +137,12 @@ def chunk_text(text: str, max_chars: int = F5_MAX_CHARS) -> list[str]:
 @app.cls(
     gpu="A10G",
     timeout=600,  # 10 min — long narrations need time for chunked synthesis
+    scaledown_window=60,
     volumes={"/voices": voice_volume},
     secrets=[modal.Secret.from_name("f5-tts-secrets")],
+    max_containers=1,
 )
-@modal.concurrent(max_inputs=5)
+@modal.concurrent(max_inputs=2)
 class F5TTSModel:
     @modal.enter()
     def load(self):

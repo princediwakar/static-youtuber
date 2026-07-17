@@ -50,6 +50,7 @@ class BGMRequest(BaseModel):
 @app.cls(
     gpu="A10G",
     timeout=300,
+    scaledown_window=60,
     volumes={checkpoints_dir: model_cache},
     secrets=[modal.Secret.from_name("acestep-secrets")],
     max_containers=1,

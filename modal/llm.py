@@ -19,9 +19,10 @@ hf_volume = modal.Volume.from_name("huggingface-cache", create_if_missing=True)
 @app.function(
     image=vllm_image,
     gpu="A10G",
-    scaledown_window=5 * MINUTES, # Fixed deprecation warning from container_idle_timeout
+    scaledown_window=60,
     timeout=10 * MINUTES,
     volumes={"/root/.cache/huggingface": hf_volume},
+    max_containers=1,
 )
 @modal.asgi_app()
 def fastapi_app():
