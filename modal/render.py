@@ -58,8 +58,8 @@ FPS = 30
 # manual test calls, etc.) — the same look the pipeline always had.
 DEFAULT_CAPTION_STYLE = {
     "fontFamily": "Montserrat",
-    "textColor": "#FFD23F",
-    "strokeColor": "#000000",
+    "textColor": "#000000",
+    "strokeColor": "#FFFFFF",
 }
 
 
@@ -69,8 +69,9 @@ def get_render_config(content_type: str) -> dict:
     if content_type == 'long':
         return {
             'play_res_x': 1920, 'play_res_y': 1080,
-            'font_size': 48,
-            'margin_l': 120, 'margin_r': 120, 'margin_v': 60,
+            'font_size': 72,
+            'margin_l': 120, 'margin_r': 120, 'margin_v': 80,
+            'alignment': 2,
             'scale': '1920:1080', 'size': '1920x1080',
             'cloudinary_folder': 'ai-slideshow/rendered-long',
         }
@@ -78,6 +79,7 @@ def get_render_config(content_type: str) -> dict:
         'play_res_x': 1080, 'play_res_y': 1920,
         'font_size': 72,
         'margin_l': 120, 'margin_r': 120, 'margin_v': 1080,
+        'alignment': 8,
         'scale': '1080:1920', 'size': '1080x1920',
         'cloudinary_folder': 'ai-slideshow/rendered',
     }
@@ -293,10 +295,11 @@ def build_continuous_ass(
     play_res_y: int = 1920,
     font_size: int = 72,
     margin_v: int = 1080,
+    alignment: int = 8,
 ) -> str:
     style = {**DEFAULT_CAPTION_STYLE, **(caption_style or {})}
-    primary_colour = hex_to_ass_color(style.get("textColor"), alpha="00")
-    outline_colour = hex_to_ass_color(style.get("strokeColor"), alpha="00")
+    primary_colour = hex_to_ass_color(style.get("textColor", "#000000"), alpha="00")
+    back_colour = hex_to_ass_color(style.get("strokeColor", "#FFFFFF"), alpha="00")
 
     ass_content = [
         "[Script Info]",
@@ -307,7 +310,7 @@ def build_continuous_ass(
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Default,{style['fontFamily']},{font_size},{primary_colour},&H000000FF,{outline_colour},&H80000000,-1,0,0,0,100,100,0,0,1,4,4,8,120,120,{margin_v},1",
+        f"Style: Default,{style['fontFamily']},{font_size},{primary_colour},&H000000FF,{back_colour},{back_colour},-1,0,0,0,100,100,0,0,3,10,0,{alignment},120,120,{margin_v},1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -446,6 +449,7 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
                 play_res_y=cfg['play_res_y'],
                 font_size=cfg['font_size'],
                 margin_v=cfg['margin_v'],
+                alignment=cfg.get('alignment', 8),
             ))
 
         rendered_shots = []

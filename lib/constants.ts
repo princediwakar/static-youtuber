@@ -122,8 +122,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
   'psychology-minimalist': {
     fontFamily: 'Space Grotesk',
     fontFile: 'SpaceGrotesk-Bold.ttf',
-    textColor: '#FFFFFF',      // Stark white
-    strokeColor: '#000000',    // Pitch black stroke for separation
+    textColor: '#000000',
+    strokeColor: '#FFFFFF',
     accentColor: '#FF2A00',    // Aggressive alert red
     maxCharsPerLine: 34,
     maxChars: 85,
@@ -131,8 +131,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
   'wealth-editorial': {
     fontFamily: 'Fraunces 72pt Black',
     fontFile: 'Fraunces-Black.ttf',
-    textColor: '#FFFFFF',
-    strokeColor: '#050505',
+    textColor: '#000000',
+    strokeColor: '#FFFFFF',
     accentColor: '#00D15E',    // Institutional money green
     maxCharsPerLine: 32,       // Tighter for heavy serif readability
     maxChars: 80,
@@ -140,8 +140,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
   'history-cinematic': {
     fontFamily: 'Cinzel Black',
     fontFile: 'Cinzel-Black.ttf',
-    textColor: '#F5F5F0',      // Slight bone-white
-    strokeColor: '#0A0A0A',
+    textColor: '#000000',
+    strokeColor: '#FFFFFF',
     accentColor: '#E6A822',    // Oxidized gold
     maxCharsPerLine: 28,
     maxChars: 72,
@@ -149,8 +149,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
   'learn-technical': {
     fontFamily: 'Big Shoulders Stencil Display',
     fontFile: 'BigShouldersStencilDisplay-Bold.ttf',
-    textColor: '#000000',      // Black text (requires white/yellow BG or massive white stroke)
-    strokeColor: '#FFFFFF',    // Thick white stroke for industrial tape look
+    textColor: '#000000',
+    strokeColor: '#FFFFFF',
     accentColor: '#FFC000',    // High-vis hazard yellow
     maxCharsPerLine: 42,
     maxChars: 120,
@@ -161,8 +161,8 @@ export function getCaptionStyle(aestheticId: string): CaptionStyle {
   return CAPTION_STYLES[aestheticId] ?? {
     fontFamily: 'Montserrat',
     fontFile: 'Montserrat-Bold.ttf',
-    textColor: '#FFFFFF',
-    strokeColor: '#000000',
+    textColor: '#000000',
+    strokeColor: '#FFFFFF',
     accentColor: '#FFD23F',
     maxCharsPerLine: CAPTION_MAX_CHARS_PER_LINE,
     maxChars: CAPTION_MAX_CHARS,
