@@ -267,11 +267,16 @@ export const publishVideo = inngest.createFunction(
     onFailure: async ({ error, event }) => {
       console.error(`[CRITICAL] Publish failed: ${error.message}`);
       const explicitJobId = (event as any)?.data?.jobId;
+      const accountId = (event as any)?.data?.accountId;
       if (explicitJobId) {
         try {
           await db.updateJob(explicitJobId, { status: 'failed', error_message: `Publish failed: ${error.message}` });
+          if (accountId) {
+            const creds = await getAccountCredentials(accountId);
+            await cleanupJobArtifacts(explicitJobId, creds);
+          }
         } catch (dbErr: any) {
-          console.error(`[CRITICAL] Failed to update job failure status: ${dbErr.message}`);
+          console.error(`[CRITICAL] Failed to update job failure status or cleanup: ${dbErr.message}`);
         }
       }
     }
@@ -335,6 +340,9 @@ export const publishVideo = inngest.createFunction(
       }
 
       await db.updateJob(jobId, { status: 'published', youtube_video_id: result.youtubeVideoId });
+      
+      // Clean up intermediate assets after successful publish to save Cloudinary storage
+      await cleanupJobArtifacts(jobId, creds);
     });
   }
 );
@@ -355,9 +363,15 @@ export const generateShort = inngest.createFunction(
       const explicitJobId = (event as any)?.data?.jobId;
       try {
         const job = explicitJobId ? await db.getJob(explicitJobId) : accountId ? await db.getIncompleteJob(accountId) : null;
-        if (job?.id) await db.updateJob(job.id, { status: 'failed', error_message: error.message });
+        if (job?.id) {
+          await db.updateJob(job.id, { status: 'failed', error_message: error.message });
+          if (accountId) {
+            const creds = await getAccountCredentials(accountId);
+            await cleanupJobArtifacts(job.id, creds);
+          }
+        }
       } catch (dbErr: any) {
-        console.error(`[CRITICAL] Failed to update job failure status: ${dbErr.message}`);
+        console.error(`[CRITICAL] Failed to update job failure status or cleanup: ${dbErr.message}`);
       }
     }
   },
@@ -408,9 +422,15 @@ export const generateLongForm = inngest.createFunction(
       const explicitJobId = (event as any)?.data?.jobId;
       try {
         const job = explicitJobId ? await db.getJob(explicitJobId) : accountId ? await db.getIncompleteJobByType(accountId, 'long') : null;
-        if (job?.id) await db.updateJob(job.id, { status: 'failed', error_message: error.message });
+        if (job?.id) {
+          await db.updateJob(job.id, { status: 'failed', error_message: error.message });
+          if (accountId) {
+            const creds = await getAccountCredentials(accountId);
+            await cleanupJobArtifacts(job.id, creds);
+          }
+        }
       } catch (dbErr: any) {
-        console.error(`[CRITICAL] Failed to update long-form job failure status: ${dbErr.message}`);
+        console.error(`[CRITICAL] Failed to update long-form job failure status or cleanup: ${dbErr.message}`);
       }
     },
   },

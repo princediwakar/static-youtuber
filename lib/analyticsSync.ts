@@ -29,9 +29,12 @@ function getAnalyticsClient(creds: AccountCredentials) {
   return google.youtubeAnalytics({ version: 'v2', auth: oauth2 });
 }
 
-function getYouTubeDataClient() {
+function getYouTubeDataClient(): ReturnType<typeof google.youtube> | null {
   const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) throw new Error('YOUTUBE_API_KEY is not set');
+  if (!apiKey) {
+    console.warn('[Analytics] YOUTUBE_API_KEY not configured, Data API fallback disabled');
+    return null;
+  }
   return google.youtube({ version: 'v3', auth: apiKey });
 }
 
@@ -194,7 +197,7 @@ async function getChannelId(creds: AccountCredentials): Promise<string | null> {
  * falls back to Data API v3 (API key) for basic view counts.
  */
 export async function syncAnalytics(accountId?: string): Promise<void> {
-  // ── Phase 1: Data API fallback for all accounts (always works) ──────────────
+  // ── Phase 1: Data API client (may be null if API key not configured) ────────
   const yt = getYouTubeDataClient();
 
   let toSyncQuery = `
@@ -202,8 +205,8 @@ export async function syncAnalytics(accountId?: string): Promise<void> {
     FROM slideshow_topics
     WHERE youtube_id IS NOT NULL
       AND (analytics_synced_at IS NULL OR analytics_synced_at < NOW() - INTERVAL '24 hours')
-    ORDER BY used_at DESC
-    LIMIT 50
+    ORDER BY analytics_synced_at ASC NULLS FIRST
+    LIMIT 200
   `;
   let toSyncParams: any[] = [];
 
@@ -213,8 +216,8 @@ export async function syncAnalytics(accountId?: string): Promise<void> {
       FROM slideshow_topics
       WHERE youtube_id IS NOT NULL AND account_id = $1
         AND (analytics_synced_at IS NULL OR analytics_synced_at < NOW() - INTERVAL '24 hours')
-      ORDER BY used_at DESC
-      LIMIT 50
+      ORDER BY analytics_synced_at ASC NULLS FIRST
+      LIMIT 200
     `;
     toSyncParams = [accountId];
   }
@@ -244,10 +247,13 @@ export async function syncAnalytics(accountId?: string): Promise<void> {
           .filter(r => r.account_id === aid)
           .map(r => r.youtube_id);
 
-        const metrics = await fetchShortsMetrics(creds, accountVideoIds, channelId);
-        if (metrics) {
-          for (const [vid, m] of metrics) {
-            analyticsMetrics.set(vid, m);
+        for (let i = 0; i < accountVideoIds.length; i += 50) {
+          const batch = accountVideoIds.slice(i, i + 50);
+          const metrics = await fetchShortsMetrics(creds, batch, channelId);
+          if (metrics) {
+            for (const [vid, m] of metrics) {
+              analyticsMetrics.set(vid, m);
+            }
           }
         }
       }
@@ -257,15 +263,26 @@ export async function syncAnalytics(accountId?: string): Promise<void> {
   }
 
   // ── Phase 3: Data API fallback for basic view counts ────────────────────────
-  const statsResponse = await yt.videos.list({
-    part: ['statistics'],
-    id: videoIds,
-    maxResults: 50,
-  });
-
   const statsMap = new Map<string, youtube_v3.Schema$Video>();
-  for (const item of statsResponse.data.items ?? []) {
-    if (item.id) statsMap.set(item.id, item);
+  if (yt) {
+    try {
+      for (let i = 0; i < videoIds.length; i += 50) {
+        const batch = videoIds.slice(i, i + 50);
+        const statsResponse = await yt.videos.list({
+          part: ['statistics'],
+          id: batch,
+          maxResults: 50,
+        });
+        for (const item of statsResponse.data.items ?? []) {
+          if (item.id) statsMap.set(item.id, item);
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[Analytics] Data API fallback failed (API key may be blocked): ${err.message}`);
+    }
+  } else if (analyticsMetrics.size === 0) {
+    console.warn('[Analytics] No YouTube API key and no OAuth analytics data — skipping sync');
+    return;
   }
 
   // ── Phase 4: Write to DB ────────────────────────────────────────────────────

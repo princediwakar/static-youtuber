@@ -23,7 +23,9 @@ export async function query<T extends QueryResultRow = any>(text: string, params
     // Neon cold start — retry with backoff (compute needs ~3–10s to wake)
     if (error?.code === 'ECONNREFUSED') {
       for (let attempt = 1; attempt <= 5; attempt++) {
-        const delay = attempt * 3000;
+        // Base delay + up to 2 seconds of random jitter to prevent thundering herd
+        const jitter = Math.floor(Math.random() * 2000);
+        const delay = attempt * 3000 + jitter;
         console.warn(`[DB] Compute cold (attempt ${attempt}/5), waiting ${delay / 1000}s...`);
         await new Promise(r => setTimeout(r, delay));
         try {

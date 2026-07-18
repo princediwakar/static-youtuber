@@ -21,12 +21,36 @@ import {
 } from './schemas';
 import { reserveTopic, releaseTopic } from './topic';
 
+// ─── Narrative deduplication check ────────────────────────────────────────────
+function checkNarrativeRepetition(narrative: string): { ok: boolean; feedback: string } {
+  const sentences = narrative.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(s => s.length > 10);
+  if (sentences.length < 10) return { ok: false, feedback: 'Narrative too short — must contain at least 10 distinct sentences.' };
+
+  // Check for near-duplicate sentences (Jaccard similarity on word sets)
+  const wordSets = sentences.map(s => new Set(s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/)));
+  let dupeCount = 0;
+  for (let i = 0; i < wordSets.length; i++) {
+    for (let j = i + 1; j < wordSets.length; j++) {
+      const intersection = [...wordSets[i]].filter(w => wordSets[j].has(w)).length;
+      const union = new Set([...wordSets[i], ...wordSets[j]]).size;
+      if (union > 0 && intersection / union > 0.7) dupeCount++;
+    }
+  }
+
+  const dupePct = dupeCount / sentences.length;
+  if (dupePct > 0.3) {
+    return { ok: false, feedback: `Narrative is excessively repetitive (${dupeCount} near-duplicate sentence pairs out of ${sentences.length} sentences). Each sentence must introduce a NEW fact, perspective, or narrative beat. Do not rephrase the same point.` };
+  }
+  return { ok: true, feedback: '' };
+}
+
 // ─── LONG-FORM PASS 1: NARRATIVE ─────────────────────────────────────────────
 async function generateLongFormNarrative(
   topic: string,
   researchContext: string,
   toneInstruction: string,
   shotCounts: {min: number, max: number},
+  qualityFeedback?: string,
 ): Promise<string> {
   const systemPrompt = `You are a master screenwriter writing a highly-retained, cinematic YouTube documentary.
 Your job is to write a compelling, fact-dense deep-dive script based on the provided research.
@@ -47,6 +71,13 @@ THE HOOK ARCHITECTURE:
 1. The Hook: The first sentence must create a massive curiosity gap.
 2. The Context: Ground it in reality fast.
 3. The Pivot: Introduce the twist or high stakes.
+
+ANTI-REPETITION MANDATE (CRITICAL — ZERO TOLERANCE):
+- EVERY sentence must introduce a NEW fact, a NEW dimension, or advance the story forward.
+- NEVER rephrase the same point in different words. If you already said "Rome fell because of outsourcing", do NOT say "The outsourcing of Rome's army led to its collapse" — that is the SAME point.
+- After writing each paragraph, mentally check: "Does this paragraph contain information that was NOT in any previous paragraph?" If the answer is no, DELETE IT and write something new.
+- Use SPECIFIC names, dates, numbers, and places from the research. Vague claims like "many experts believe" or "throughout history" are BANNED.
+- The narrative must have FORWARD MOMENTUM — each paragraph should build on the previous one, not circle back.
 
 BREVITY & STYLE (ORWELLIAN CONSTRAINTS):
 1. Cut the Fat: If it is possible to cut a word out, always cut it out. Eliminate fluff, weak verbs, and unnecessary adjectives. Make every word tell.
@@ -73,7 +104,11 @@ FORMATTING:
 - Use digits and symbols for numbers ("$1.4B", "26%", "CEO").
 - Pure prose. NO JSON. NO formatting headers. Just the story.`;
 
-  const userPrompt = `TOPIC: ${topic}\n\nRESEARCH CONTEXT (TREAT AS ABSOLUTE FACT):\n${researchContext}`;
+  let userPrompt = `TOPIC: ${topic}\n\nRESEARCH CONTEXT (TREAT AS ABSOLUTE FACT):\n${researchContext}`;
+
+  if (qualityFeedback) {
+    userPrompt += `\n\nPREVIOUS ATTEMPT FAILED QUALITY REVIEW. ISSUES:\n${qualityFeedback}\n\nYou MUST write a COMPLETELY NEW narrative from scratch that fixes these issues. Do NOT repeat the same structure or phrasing. Every sentence must contain a specific fact from the research context.`;
+  }
 
   const raw = await chatCompletion(
     [
@@ -245,6 +280,20 @@ Output JSON only:
 }
 
 // ─── LONG-FORM MAIN PIPELINE ──────────────────────────────────────────────────
+
+// Determines if quality gate failure is a narrative-level problem (needs narrative
+// regeneration) vs. a chunking-level problem (can be fixed by re-chunking).
+function isNarrativeLevelFailure(score: LongQualityScore): boolean {
+  return (
+    score.narrative_coherence <= 3 ||
+    score.factual_depth <= 3 ||
+    score.arc_satisfaction <= 3 ||
+    score.information_density <= 3
+  );
+}
+
+const MAX_NARRATIVE_RETRIES = 2;
+
 export async function generateLongFormScript(
   step: any,
   niche: string,
@@ -256,91 +305,137 @@ export async function generateLongFormScript(
   const reserved = await step.run('init-topic', () => reserveTopic(niche, accountId));
 
   try {
-    const narrative = await step.run('generate-narrative', () => generateLongFormNarrative(reserved.topic, reserved.research_context, profile.toneInstruction, {min: 30, max: 60}));
-
     let lastScore: LongQualityScore | null = null;
-    let validationFeedback = '';
     const captionLimits = getLongFormCaptionStyle(profile.aestheticId);
 
-    for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
-      const parsed = await step.run(`script-attempt-${attempt}`, () => chunkLongFormScriptToJSON(
-        narrative,
-        reserved.topic,
-        reserved.research_context,
-        niche,
-        aesthetic.instruction,
-        validationFeedback || undefined,
-        attempt,
-      ));
+    // Outer loop: regenerate narrative when quality failures are narrative-level
+    for (let narrativeAttempt = 0; narrativeAttempt <= MAX_NARRATIVE_RETRIES; narrativeAttempt++) {
+      const narrativeQualityFeedback = lastScore && isNarrativeLevelFailure(lastScore)
+        ? `Quality Gate Failed. Issues: ${lastScore.issues.join(' | ')}`
+        : undefined;
 
-      validationFeedback = '';
-
-      let validated: z.infer<typeof LongFormScriptSchema>;
-      try {
-        validated = LongFormScriptSchema.parse(parsed);
-      } catch (zodErr) {
-        if (zodErr instanceof z.ZodError) {
-          validationFeedback = zodErr.issues.map(i =>
-            `${i.path.length > 0 ? i.path.join('.') + ': ' : ''}${i.message}`
-          ).join('\n');
-          if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-          throw new NonRetriableError(`Long-form script validation failed:\n${validationFeedback}`);
-        }
-        throw zodErr;
-      }
-
-      // Caption validation using landscape char limits (maxWords=20)
-      const captionValidation = validateAllCaptions(
-        validated.shots.map(s => ({ caption_text: s.caption_text, spoken_text: s.spoken_text })),
-        captionLimits,
+      const narrative = await step.run(`generate-narrative-${narrativeAttempt}`, () =>
+        generateLongFormNarrative(
+          reserved.topic,
+          reserved.research_context,
+          profile.toneInstruction,
+          { min: 30, max: 60 },
+          narrativeQualityFeedback,
+        )
       );
-      if (!captionValidation.valid) {
-        validationFeedback = captionValidation.errors.join('\n');
-        if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
-        throw new NonRetriableError(`Long-form caption validation failed:\n${validationFeedback}`);
+
+      // Pre-check: reject obviously repetitive narratives before wasting chunking attempts
+      const dedup = await step.run(`check-narrative-dedup-${narrativeAttempt}`, () =>
+        checkNarrativeRepetition(narrative)
+      );
+      if (!dedup.ok) {
+        console.warn(`[LongForm] Narrative attempt ${narrativeAttempt} rejected: ${dedup.feedback}`);
+        if (narrativeAttempt < MAX_NARRATIVE_RETRIES) {
+          lastScore = {
+            narrative_coherence: 1, factual_depth: 1, arc_satisfaction: 1,
+            visual_variety: 1, information_density: 1, tone_calibration: 1,
+            overall: 1, issues: [dedup.feedback], approved: false,
+          };
+          continue;
+        }
+        throw new NonRetriableError(`Long-form narrative too repetitive after ${narrativeAttempt + 1} attempts: ${dedup.feedback}`);
       }
 
-      const score = await step.run(`score-script-${attempt}`, () => scoreLongFormScript(validated, reserved.research_context, niche, profile.minQualityScore));
-      const passesFloor = score.overall >= profile.minQualityScore;
+      let validationFeedback = '';
 
-      if (score.approved && !passesFloor) {
-        console.warn(
-          `[LongForm] Quality gate: model self-reported approved=true but ` +
-          `overall=${score.overall} failed code-side floor (min=${profile.minQualityScore}). Treating as not approved.`
+      // Inner loop: re-chunk the same narrative on schema/formatting failures
+      for (let attempt = 0; attempt <= QUALITY_GATE_MAX_RETRIES; attempt++) {
+        const parsed = await step.run(`script-n${narrativeAttempt}-a${attempt}`, () => chunkLongFormScriptToJSON(
+          narrative,
+          reserved.topic,
+          reserved.research_context,
+          niche,
+          aesthetic.instruction,
+          validationFeedback || undefined,
+          attempt,
+        ));
+
+        validationFeedback = '';
+
+        // Force-coerce visual_world — it's deterministic from the niche profile,
+        // no reason to trust the LLM to echo it back correctly.
+        if (parsed && typeof parsed === 'object') {
+          (parsed as any).visual_world = profile.aestheticId;
+        }
+
+        let validated: z.infer<typeof LongFormScriptSchema>;
+        try {
+          validated = LongFormScriptSchema.parse(parsed);
+        } catch (zodErr) {
+          if (zodErr instanceof z.ZodError) {
+            validationFeedback = zodErr.issues.map(i =>
+              `${i.path.length > 0 ? i.path.join('.') + ': ' : ''}${i.message}`
+            ).join('\n');
+            if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
+            throw new NonRetriableError(`Long-form script validation failed:\n${validationFeedback}`);
+          }
+          throw zodErr;
+        }
+
+        // Caption validation using landscape char limits (maxWords=20)
+        const captionValidation = validateAllCaptions(
+          validated.shots.map(s => ({ caption_text: s.caption_text, spoken_text: s.spoken_text })),
+          captionLimits,
         );
-      }
+        if (!captionValidation.valid) {
+          validationFeedback = captionValidation.errors.join('\n');
+          if (attempt < QUALITY_GATE_MAX_RETRIES) continue;
+          throw new NonRetriableError(`Long-form caption validation failed:\n${validationFeedback}`);
+        }
 
-      if (score.approved && passesFloor) {
-        const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
-        const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
-        return {
-          script: {
-            title: validated.title,
-            description: validated.description,
-            visual_world: validated.visual_world,
-            format_template: 'DEEP_DIVE',
-            voiceName: validated.voiceName,
-            fact_check_and_sources: validated.fact_check_and_sources
-              .map(f => `${f.claim} → ${f.source}`).join('\n'),
-            tags: validated.tags,
-            shots: validated.shots.map(shot => ({
-              id: shot.id,
-              visual_prompt: `${aesthetic.imagePrefix}Scene description: ${shot.visual_prompt}`,
-              caption_text: shot.caption_text,
-              spoken_text: shot.spoken_text,
-              is_conclusion: shot.is_conclusion,
-            })),
-            thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt}`,
-            hook_intro,
-            contentType: 'long',
-          },
-          topic: reserved.topic,
-          formatTemplate: 'DEEP_DIVE',
-        };
-      }
+        const score = await step.run(`score-n${narrativeAttempt}-a${attempt}`, () => scoreLongFormScript(validated, reserved.research_context, niche, profile.minQualityScore));
+        const passesFloor = score.overall >= profile.minQualityScore;
 
-      lastScore = score;
-      validationFeedback = `Quality Gate Failed. Issues: ${score.issues.join(' | ')}`;
+        if (score.approved && !passesFloor) {
+          console.warn(
+            `[LongForm] Quality gate: model self-reported approved=true but ` +
+            `overall=${score.overall} failed code-side floor (min=${profile.minQualityScore}). Treating as not approved.`
+          );
+        }
+
+        if (score.approved && passesFloor) {
+          const hookWords = validated.shots[0].caption_text.split(/\s+/).slice(0, 4).join(' ');
+          const hook_intro = hookWords.replace(/[.!?:;,]/g, '');
+          return {
+            script: {
+              title: validated.title,
+              description: validated.description,
+              visual_world: validated.visual_world,
+              format_template: 'DEEP_DIVE',
+              voiceName: validated.voiceName,
+              fact_check_and_sources: validated.fact_check_and_sources
+                .map(f => `${f.claim} → ${f.source}`).join('\n'),
+              tags: validated.tags,
+              shots: validated.shots.map(shot => ({
+                id: shot.id,
+                visual_prompt: `${aesthetic.imagePrefix}Scene description: ${shot.visual_prompt}`,
+                caption_text: shot.caption_text,
+                spoken_text: shot.spoken_text,
+                is_conclusion: shot.is_conclusion,
+              })),
+              thumbnailPrompt: `${aesthetic.thumbnailPrefix}${validated.thumbnailPrompt}`,
+              hook_intro,
+              contentType: 'long',
+            },
+            topic: reserved.topic,
+            formatTemplate: 'DEEP_DIVE',
+          };
+        }
+
+        lastScore = score;
+        validationFeedback = `Quality Gate Failed. Issues: ${score.issues.join(' | ')}`;
+
+        // If this is a narrative-level failure, break inner loop to regenerate narrative
+        if (isNarrativeLevelFailure(score) && narrativeAttempt < MAX_NARRATIVE_RETRIES) {
+          console.warn(`[LongForm] Narrative-level failure detected (coherence=${score.narrative_coherence}, facts=${score.factual_depth}, arc=${score.arc_satisfaction}). Regenerating narrative.`);
+          break;
+        }
+      }
     }
 
     if (lastScore) {

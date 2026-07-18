@@ -296,6 +296,12 @@ export async function generateScript(
 
       validationFeedback = '';
 
+      // Force-coerce visual_world — it's deterministic from the niche profile,
+      // no reason to trust the LLM to echo it back correctly.
+      if (parsed && typeof parsed === 'object') {
+        (parsed as any).visual_world = aesthetic.id;
+      }
+
       let validated: z.infer<typeof SlideshowScriptSchema>;
       try {
         validated = SlideshowScriptSchema.parse(parsed);
