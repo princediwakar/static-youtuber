@@ -1,11 +1,11 @@
 // Path: lib/llm.ts
-import { MODAL_LLM_URL } from './constants';
+import { getModalLlmUrl } from './constants';
 
 export async function chatCompletion(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
   options: { temperature?: number; maxTokens?: number; responseJson?: boolean; timeout?: number } = {},
 ): Promise<string> {
-  const llmUrl = `${MODAL_LLM_URL}/v1/chat/completions`;
+  const llmUrl = `${getModalLlmUrl()}/v1/chat/completions`;
 
   const { temperature = 0.7, maxTokens = 4096, responseJson = false, timeout = 600_000 } = options;
 

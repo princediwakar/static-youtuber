@@ -1,5 +1,5 @@
 // Path: lib/musicSelector.ts
-import { ACE_STEP_BGM_URL, ACE_STEP_API_KEY } from './constants';
+import { getAceStepBgmUrl, ACE_STEP_API_KEY } from './constants';
 import type { FormatTemplate } from './constants';
 
 const FETCH_TIMEOUT_MS = 8 * 60 * 1000; // 8 min — covers 300s long-form audio; shorts never exceeds 60s
@@ -74,7 +74,8 @@ async function generateWithAceStep(prompt: string, duration: number): Promise<Bu
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(ACE_STEP_BGM_URL, {
+    const aceStepBgmUrl = getAceStepBgmUrl();
+    const response = await fetch(aceStepBgmUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -114,7 +115,8 @@ export async function selectMusicTrack(
   durationSeconds: number,
 ): Promise<{ buffer: Buffer; filename: string; title: string }> {
   
-  if (!ACE_STEP_BGM_URL || ACE_STEP_BGM_URL.includes('example-modal-url')) {
+  const aceStepBgmUrl = getAceStepBgmUrl();
+  if (!aceStepBgmUrl || aceStepBgmUrl.includes('example-modal-url')) {
     throw new Error('CRITICAL: ACE_STEP_BGM_URL is not configured. Pipeline halting.');
   }
 

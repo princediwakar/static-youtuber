@@ -1,5 +1,5 @@
 // Path: lib/audioEngine.ts
-import { F5_TTS_URL, F5_TTS_API_KEY } from './constants';
+import { getF5TtsUrl, F5_TTS_API_KEY } from './constants';
 
 const MAX_RETRIES = 3;
 
@@ -13,7 +13,8 @@ const FETCH_TIMEOUT_MS = 8 * 60 * 1000;
  * Each call creates a fresh AbortController so retries get full timeout.
  */
 async function callF5Tts(text: string, voiceName: string): Promise<Buffer> {
-  if (!F5_TTS_URL) {
+  const f5TtsUrl = getF5TtsUrl();
+  if (!f5TtsUrl) {
     throw new Error('[AudioEngine] Missing F5_TTS_URL environment variable.');
   }
 
@@ -26,7 +27,7 @@ async function callF5Tts(text: string, voiceName: string): Promise<Buffer> {
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(F5_TTS_URL, {
+    const response = await fetch(f5TtsUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

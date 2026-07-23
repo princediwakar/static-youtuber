@@ -5,7 +5,7 @@ dotenv.config({ path: '.env.local' });
 
 import { existsSync } from 'fs';
 import {
-  ACE_STEP_BGM_URL,
+  getAceStepBgmUrl,
   ACE_STEP_API_KEY,
   FONT_PATH,
 } from '../lib/constants';
@@ -26,13 +26,15 @@ async function main() {
 
   // ── 2. Music (ACE-Step) ──────────────────────────────────────────────
   console.log('\n2. Background Music (ACE-Step)');
-  const acestepConfigured = ACE_STEP_BGM_URL && !ACE_STEP_BGM_URL.includes('example-modal-url');
-  console.log(`   ACE-Step BGM URL: ${ACE_STEP_BGM_URL ? (acestepConfigured ? '✅ configured' : '⚠️  placeholder') : '❌ not set'}`);
+  const aceStepBgmUrl = getAceStepBgmUrl();
+  const acestepConfigured = aceStepBgmUrl && !aceStepBgmUrl.includes('example-modal-url');
+  console.log(`   ACE-Step BGM URL: ${aceStepBgmUrl ? (acestepConfigured ? '✅ configured' : '⚠️  placeholder') : '❌ not set'}`);
   console.log(`   ACE-Step API Key: ${ACE_STEP_API_KEY ? '✅ set' : '❌ not set'}`);
 
   if (acestepConfigured && ACE_STEP_API_KEY) {
     try {
-      const baseUrl = new URL(ACE_STEP_BGM_URL);
+      const baseUrl = new URL(aceStepBgmUrl);
+      console.log(`   └─ Host: ${baseUrl.host}`);
       const warmupUrl = new URL('/warmup', baseUrl.origin).toString();
       const res = await fetch(warmupUrl, { method: 'GET', signal: AbortSignal.timeout(10_000) });
       if (res.ok) {

@@ -1,6 +1,27 @@
 // Path: lib/constants.ts
 import path from 'path';
 
+export function getModalUrl(baseEnvVarName: string, fallback: string = ''): string {
+  const urls: string[] = [];
+  
+  if (process.env[baseEnvVarName]) {
+    urls.push(process.env[baseEnvVarName] as string);
+  }
+  
+  let i = 2;
+  while (process.env[`${baseEnvVarName}_${i}`]) {
+    urls.push(process.env[`${baseEnvVarName}_${i}`] as string);
+    i++;
+  }
+  
+  if (urls.length === 0) {
+    return fallback;
+  }
+  
+  const randomIndex = Math.floor(Math.random() * urls.length);
+  return urls[randomIndex];
+}
+
 export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'canvas_center';
 
 export const NICHES = ['Anti-Status Wealth', 'Weaponized History', 'YouTube Automation', 'System Reverse-Engineering'];
@@ -41,7 +62,7 @@ export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: nu
 };
 
 // LLM config (Modal vLLM endpoint)
-export const MODAL_LLM_URL = process.env.MODAL_LLM_URL || 'https://princediwakar25--llm-server-fastapi-app.modal.run';
+export const getModalLlmUrl = () => getModalUrl('MODAL_LLM_URL', 'https://princediwakar25--llm-server-fastapi-app.modal.run');
 
 // FLUX.1 [schnell] — fast + cheap.
 export const CF_AI_IMAGE_MODEL = process.env.CF_AI_IMAGE_MODEL || '@cf/black-forest-labs/flux-1-schnell';
@@ -56,17 +77,21 @@ export const CF_AI_IMAGE_GUIDANCE_FLUX2 = Number(process.env.CF_AI_IMAGE_GUIDANC
 export const CF_AI_SLIDE_WIDTH = 768;
 export const CF_AI_SLIDE_HEIGHT = 1344;
 // F5-TTS Modal endpoint (voice cloning)
-export const F5_TTS_URL = process.env.F5_TTS_URL || '';
+export const getF5TtsUrl = () => getModalUrl('F5_TTS_URL');
 export const F5_TTS_API_KEY = process.env.F5_TTS_API_KEY || '';
 
 // ACE-Step BGM Modal endpoint (instrumental music generation)
-export const ACE_STEP_BGM_URL = process.env.ACE_STEP_BGM_URL || '';
+export const getAceStepBgmUrl = () => getModalUrl('ACE_STEP_BGM_URL');
 export const ACE_STEP_API_KEY = process.env.ACE_STEP_API_KEY || '';
 // Separate endpoint for warmup. Modal fastapi_endpoint creates a unique domain
 // per method, so appending /warmup to the BGM URL won't work.
 // Falls back to deriving from ACE_STEP_BGM_URL by replacing the method slug.
-export const ACE_STEP_WARMUP_URL = process.env.ACE_STEP_WARMUP_URL ||
-  (ACE_STEP_BGM_URL ? ACE_STEP_BGM_URL.replace('-generate-bgm', '-warmup') : '');
+export const getAceStepWarmupUrl = () => {
+  const explicitUrl = getModalUrl('ACE_STEP_WARMUP_URL');
+  if (explicitUrl) return explicitUrl;
+  const bgmUrl = getAceStepBgmUrl();
+  return bgmUrl ? bgmUrl.replace('-generate-bgm', '-warmup') : '';
+};
 
 // ─── Music ─────────────────────────────────────────────────────────────────────
 export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
@@ -74,7 +99,7 @@ export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — L
 
 export const FORMATS = FORMAT_TEMPLATES; // alias for backward compatibility
 
-export const MODAL_RENDER_URL = process.env.MODAL_RENDER_URL || 'https://example-modal-url.com/render';
+export const getModalRenderUrl = () => getModalUrl('MODAL_RENDER_URL', 'https://example-modal-url.com/render');
 
 export const FFMPEG_CRF = '23';
 export const FFMPEG_PRESET = 'medium';
