@@ -35,18 +35,18 @@ STORYTELLING & PACING:
 - Write in a natural, gripping conversational rhythm. This is for spoken word, not a dense essay.
 - Sentences must sound like a passionate storyteller recounting a high-stakes tale. Use natural punctuation (commas, periods) to guide the narrator's pacing and pauses.
 - Mix short, punchy sentences with flowing, well-connected thoughts to create momentum.
-- Do NOT write dense, comma-heavy sentences like "In 1998, Larry Page and Sergey Brin, Stanford PhD students, built a search engine."
-- Instead, write with momentum: "In 1998, two Stanford PhDs named Larry and Sergey had an idea. They built a search engine called BackRub."
+- Do NOT write dense, comma-heavy sentences like "In 2010, John Smith, a struggling student, built a successful company."
+- Instead, write with momentum: "In 2010, a struggling student named John had an idea. He built a company that changed everything."
 - Use transition words seamlessly to connect ideas and maintain cause-and-effect flow.
 
 THE HOOK ARCHITECTURE:
-1. The Hook: The first sentence must create a massive curiosity gap (e.g., "They had $750,000 on the table.").
-2. The Context: Ground it in reality fast (e.g., "It was 1998. Google was just a college project.").
+1. The Hook: The first sentence must create a massive curiosity gap (e.g., "[High stakes statement]").
+2. The Context: Ground it in reality fast (e.g., "[Time period]. [Grounding fact]").
 3. The Pivot: Introduce the twist or high stakes.
 
 BREVITY & STYLE (ORWELLIAN CONSTRAINTS):
 1. Cut the Fat: If it is possible to cut a word out, always cut it out. Eliminate fluff, weak verbs, and unnecessary adjectives. Make every word tell.
-2. Active Voice Only: Never use the passive where you can use the active (e.g., Use "Larry Page built Google" instead of "Google was built by Larry Page").
+2. Active Voice Only: Never use the passive where you can use the active (e.g., Use "The CEO destroyed the company" instead of "The company was destroyed by the CEO").
 3. No Clichés: Never use a metaphor, simile, or phrase you are used to seeing in print (e.g., NO "the rest is history," "skyrocketed to success," or "a force to be reckoned with").
 4. Simple Language: Never use a long word where a short one will do. Never use jargon if you can use an everyday English equivalent.
 
@@ -239,6 +239,7 @@ SCORING RUBRIC (0-10):
 - visual_coherence (0-10): Are images cohesive?
 - caption_flow (0-10): If you read just the text in sequence, does it read smoothly?
 - hook_payoff_match (0-10): Does the title and thumbnailPrompt accurately represent what the shots actually deliver? A viewer who reads the title/thumbnail then watches the whole thing should feel the payoff matched the promise — score low for any bait-and-switch, exaggeration, or unresolved tease.
+- overall (0-10): The final composite score (average of the above). Must be 0 if Censorship or Style-Drift checks fail.
 
 CRITICAL CENSORSHIP CHECK:
 If ANY visual_prompt contains explicit gore, blood, or visceral anatomy descriptions, you MUST score 'overall' as 0 and set 'approved' to false. State the exact trigger word in the 'issues' array.

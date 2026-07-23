@@ -24,10 +24,9 @@ import {
   LONG_THUMBNAIL_HEIGHT,
   NICHE_PROFILES,
   DEFAULT_NICHE_PROFILE,
-  MODAL_RENDER_URL,
   NICHES,
   ACCOUNT_NICHE,
-  ACE_STEP_WARMUP_URL,
+  getModalRenderUrl,
   getCaptionStyle,
 } from '@/lib/constants';
 import { getAccountCredentials } from '@/lib/accountService';
@@ -186,7 +185,8 @@ async function executeAssetPipeline(
   });
 
   // ── Step 3: Render ───────────────────────────────────────────────────────
-  const useModal = MODAL_RENDER_URL && !MODAL_RENDER_URL.includes('example-modal-url');
+  const modalRenderUrl = getModalRenderUrl();
+  const useModal = modalRenderUrl && !modalRenderUrl.includes('example-modal-url');
 
   const videoUrl = await step.run('render-video', async () => {
     const job = await db.getJob(jobId);
@@ -203,7 +203,7 @@ async function executeAssetPipeline(
         callbackUrl.searchParams.set('accountId', accountId);
         callbackUrl.searchParams.set('skipPublish', String(skipPublish));
 
-        const response = await fetch(MODAL_RENDER_URL, {
+        const response = await fetch(modalRenderUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -382,22 +382,32 @@ export const generateShort = inngest.createFunction(
 
     // ── Step 1: Script + GPU warmup (parallel) ────────────────────────────────────
     const generateScriptTask = async () => {
-      const jobToResume = await step.run('check-resume', () => 
-        explicitJobId ? db.getJob(explicitJobId) : db.getIncompleteJob(accountId)
-      );
+      const jobToResume = await step.run('check-resume', async () => {
+        const job = explicitJobId ? await db.getJob(explicitJobId) : await db.getIncompleteJob(accountId);
+        if (job && !job.script) {
+          await db.updateJob(job.id, { status: 'failed', error_message: 'Abandoned before script generation completed' });
+          return null;
+        }
+        return job;
+      });
+      
       if (jobToResume) {
-        if (!jobToResume.script) throw new Error(`Job ${jobToResume.id} has no script`);
         return { script: jobToResume.script, jobId: jobToResume.id, format_template: jobToResume.format_template, niche: jobToResume.niche, variant: jobToResume.variant ?? 'A', topic: jobToResume.topic };
       }
 
       const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
       const variant = Math.random() < 0.5 ? 'A' : 'B';
-      const { script, topic, formatTemplate: chosenFormat } = await generateScript(step, niche, accountId);
       
       const jobId = await step.run('create-job', () => 
-        db.createJob({ account_id: accountId, topic, niche, format_template: chosenFormat, script, status: 'script_ready', variant })
+        db.createJob({ account_id: accountId, topic: 'Generating Script...', niche, format_template: 'pending', script: null, status: 'pending', variant })
       );
-      (event as any).data.jobId = jobId;
+      
+      const { script, topic, formatTemplate: chosenFormat } = await generateScript(step, niche, accountId);
+      
+      await step.run('update-job', () => 
+        db.updateJob(jobId, { topic, format_template: chosenFormat, script, status: 'script_ready' })
+      );
+      
       return { script, jobId, format_template: chosenFormat, niche, variant, topic };
     };
 
@@ -441,21 +451,31 @@ export const generateLongForm = inngest.createFunction(
 
     // ── Step 1: Script + GPU warmup (parallel) ────────────────────────────────────
     const generateLongFormScriptTask = async () => {
-      const jobToResume = await step.run('check-resume', () => 
-        explicitJobId ? db.getJob(explicitJobId) : db.getIncompleteJobByType(accountId, 'long')
-      );
+      const jobToResume = await step.run('check-resume', async () => {
+        const job = explicitJobId ? await db.getJob(explicitJobId) : await db.getIncompleteJobByType(accountId, 'long');
+        if (job && !job.script) {
+          await db.updateJob(job.id, { status: 'failed', error_message: 'Abandoned before script generation completed' });
+          return null;
+        }
+        return job;
+      });
+      
       if (jobToResume) {
-        if (!jobToResume.script) throw new Error(`Job ${jobToResume.id} has no script`);
         return { script: jobToResume.script, jobId: jobToResume.id, format_template: jobToResume.format_template, niche: jobToResume.niche, topic: jobToResume.topic };
       }
 
       const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
-      const { script, topic, formatTemplate } = await generateLongFormScript(step, niche, accountId);
       
       const jobId = await step.run('create-job', () => 
-        db.createJob({ account_id: accountId, topic, niche, format_template: formatTemplate, script, status: 'script_ready', content_type: 'long' })
+        db.createJob({ account_id: accountId, topic: 'Generating Script...', niche, format_template: 'pending', script: null, status: 'pending', content_type: 'long' })
       );
-      (event as any).data.jobId = jobId;
+      
+      const { script, topic, formatTemplate } = await generateLongFormScript(step, niche, accountId);
+      
+      await step.run('update-job', () => 
+        db.updateJob(jobId, { topic, format_template: formatTemplate, script, status: 'script_ready' })
+      );
+      
       return { script, jobId, format_template: formatTemplate, niche, topic };
     };
 

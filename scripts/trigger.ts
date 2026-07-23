@@ -200,7 +200,7 @@ async function triggerPipeline() {
   const STEP_LINE =
     '   ─────────────────────────────────────────────────────────────────────';
 
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 120; i++) {
     await new Promise(r => setTimeout(r, 10_000));
 
     const res = await query<{
@@ -283,7 +283,7 @@ async function triggerPipeline() {
     }
   }
 
-  console.log(`\n⏰ Timed out after 10 min. The pipeline may still be running — check Inngest or the DB.`);
+  console.log(`\n⏰ Timed out after 20 min. The pipeline may still be running — check Inngest or the DB.`);
 }
 
 triggerPipeline().catch((err) => {

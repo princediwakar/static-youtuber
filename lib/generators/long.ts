@@ -63,8 +63,8 @@ STORYTELLING & PACING:
 - Write in a natural, gripping conversational rhythm. This is for spoken word, not a dense essay.
 - Sentences must sound like a passionate storyteller recounting a high-stakes tale. Use natural punctuation (commas, periods) to guide the narrator's pacing and pauses.
 - Mix short, punchy sentences with flowing, well-connected thoughts to create momentum.
-- Do NOT write dense, comma-heavy sentences like "In 1998, Larry Page and Sergey Brin, Stanford PhD students, built a search engine."
-- Instead, write with momentum: "In 1998, two Stanford PhDs named Larry and Sergey had an idea. They built a search engine called BackRub."
+- Do NOT write dense, comma-heavy sentences like "In 2010, John Smith, a struggling student, built a successful company."
+- Instead, write with momentum: "In 2010, a struggling student named John had an idea. He built a company that changed everything."
 - Use transition words seamlessly to connect ideas and maintain cause-and-effect flow.
 
 THE HOOK ARCHITECTURE:
@@ -81,7 +81,7 @@ ANTI-REPETITION MANDATE (CRITICAL — ZERO TOLERANCE):
 
 BREVITY & STYLE (ORWELLIAN CONSTRAINTS):
 1. Cut the Fat: If it is possible to cut a word out, always cut it out. Eliminate fluff, weak verbs, and unnecessary adjectives. Make every word tell.
-2. Active Voice Only: Never use the passive where you can use the active (e.g., Use "Larry Page built Google" instead of "Google was built by Larry Page").
+2. Active Voice Only: Never use the passive where you can use the active (e.g., Use "The CEO destroyed the company" instead of "The company was destroyed by the CEO").
 3. No Clichés: Never use a metaphor, simile, or phrase you are used to seeing in print (e.g., NO "the rest is history," "skyrocketed to success," or "a force to be reckoned with").
 4. Simple Language: Never use a long word where a short one will do. Never use jargon if you can use an everyday English equivalent.
 
@@ -257,6 +257,7 @@ SCORING RUBRIC (0-10):
 - visual_variety (0-10): Are the 30-60 visual prompts genuinely diverse — different angles, locations, lighting, materials? Or repetitive?
 - information_density (0-10): Is every shot advancing the narrative? No filler, no repetition of the same point.
 - tone_calibration (0-10): Does the writing match the deep documentary tone? Flowing sentences, subordinate clauses, not caption bullets?
+- overall (0-10): The final composite score (average of the above). Must be 0 if Censorship or Style-Drift checks fail.
 
 CRITICAL CENSORSHIP CHECK:
 If ANY visual_prompt contains explicit gore, blood, or visceral anatomy → score overall=0, approved=false.

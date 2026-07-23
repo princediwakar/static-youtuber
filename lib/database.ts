@@ -16,8 +16,8 @@ export async function query<T extends QueryResultRow = any>(text: string, params
   try {
     return await pool.query<T>(text, params);
   } catch (error: any) {
-    if (error?.code === 'ECONNRESET' || error?.message?.includes('Connection terminated')) {
-      console.warn('[DB] Connection lost, retrying...');
+    if (error?.code === 'ECONNRESET' || error?.code === 'ENOTFOUND' || error?.message?.includes('Connection terminated')) {
+      console.warn('[DB] Connection lost or DNS failed, retrying...');
       return await pool.query<T>(text, params);
     }
     // Neon cold start — retry with backoff (compute needs ~3–10s to wake)
