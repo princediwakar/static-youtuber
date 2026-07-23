@@ -3,13 +3,13 @@ import path from 'path';
 
 export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'canvas_center';
 
-export const NICHES = ['Anti-Status Wealth', 'Weaponized History', 'Behavioral Friction', 'System Reverse-Engineering'];
+export const NICHES = ['Anti-Status Wealth', 'Weaponized History', 'YouTube Automation', 'System Reverse-Engineering'];
 
 // One niche per channel — deterministic, no random selection
 export const ACCOUNT_NICHE: Record<string, string> = {
   canvas_center: 'Anti-Status Wealth',
   canvas_area: 'Weaponized History',
-  canvas_station: 'Behavioral Friction',
+  canvas_station: 'YouTube Automation',
   canvas_base: 'System Reverse-Engineering',
 };
 
@@ -29,7 +29,7 @@ export type FormatTemplate = typeof FORMAT_TEMPLATES[number];
 export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, number>> = {
   'Anti-Status Wealth':         { RAPID_FIRE: 0.7, SLOW_BURN: 0,   THE_LIST: 0.3, DEEP_DIVE: 0 },
   'Weaponized History':         { RAPID_FIRE: 0.6, SLOW_BURN: 0.4, THE_LIST: 0,   DEEP_DIVE: 0 },
-  'Behavioral Friction':        { RAPID_FIRE: 0.8, SLOW_BURN: 0,   THE_LIST: 0.2, DEEP_DIVE: 0 },
+  'YouTube Automation':         { RAPID_FIRE: 1.0, SLOW_BURN: 0,   THE_LIST: 0.0, DEEP_DIVE: 0 },
   'System Reverse-Engineering': { RAPID_FIRE: 0.9, SLOW_BURN: 0,   THE_LIST: 0.1, DEEP_DIVE: 0 },
 };
 
@@ -226,14 +226,14 @@ Never use passive voice. Start with a polarizing statement. Present every fact a
 
 Write in driving, relentless paragraphs (15–20 words). Structure: The Unsettling Parallel → The Historical Brutality → The Core Mechanism of Power → The Modern Execution → The Inevitable Collapse. Do not soften the edges of history. Make the viewer feel the dread of realizing that the systems controlling them now are identical to the ones that collapsed empires before. Do not trail off or repeat yourself at the end. End decisively.`,
   },
-  'Behavioral Friction': {
-    aestheticId: 'psychology-minimalist',
+  'YouTube Automation': {
+    aestheticId: 'learn-technical',
     minQualityScore: 5,
-    toneInstruction: `You are confronting the biological and psychological weaknesses of your audience. Your goal is to deliver deeply uncomfortable truths about human nature.
+    toneInstruction: `You are exposing the massive inefficiency of manual YouTube channel management. Your audience is wasting hours on metadata instead of creating content.
 
 Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
 
-Write in aggressive, direct paragraphs (15–20 words). Structure: The Biological Weakness → The Illusion of Control → The Harsh Neurological Reality → The Aggressive Fix → The Verdict. Attack modern coping mechanisms (dopamine detoxes, self-care) as placebos for people who lack real discipline. Break down human behavior into raw evolutionary incentives. Do not comfort the viewer. Do not trail off or repeat yourself at the end. End decisively.`,
+Write in aggressive, direct paragraphs (15–20 words). Structure: The Wasted Time → The Illusion of Hard Work → The Automation Secret → The Software Solution → The CTA. Attack manual uploads as a trap for amateurs. Always seamlessly position "YouTube Playlist Uploader" as the ultimate fix. Do not trail off or repeat yourself at the end. End decisively.`,
   },
   'System Reverse-Engineering': {
     aestheticId: 'learn-technical',
@@ -270,15 +270,15 @@ Focus on the brutal realities of power, the absurdity of war, and the mechanisms
 Make the viewer feel the dread of realizing nothing has changed. Let the raw facts do the work—no need for exaggeration. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
   },
-  'Behavioral Friction': {
-    aestheticId: 'psychology-minimalist',
-    toneInstruction: `Your tone is confrontational, cold, and biologically deterministic. You are attacking the viewer's psychological weaknesses and modern coping mechanisms.
+  'YouTube Automation': {
+    aestheticId: 'learn-technical',
+    toneInstruction: `Your tone is confrontational, fast-paced, and highly technical. You are attacking the viewer's inefficient video upload workflow.
 
 Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
 
-Break down exactly how their brain is failing them. Attack concepts like "motivation," "passion," and "self-care" as lies sold to weak people. Explain the raw evolutionary and neurochemical drivers behind their worst behaviors.
+Break down exactly how many hours they are wasting on titles, tags, and descriptions. Attack manual labor as a lie sold to amateurs. Explain the exact mechanism of batch uploading and AI metadata generation.
 
-Be brutal. Provide the exact, aggressive psychological fix required to override their weak biology. Do not comfort them. Provide extreme friction. Do not trail off or repeat yourself at the end. End decisively.`,
+Be brutal. Position "YouTube Playlist Uploader" as the only logical solution. Do not comfort them. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
   },
   'System Reverse-Engineering': {
