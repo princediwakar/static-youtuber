@@ -24,14 +24,14 @@ export function getModalUrl(baseEnvVarName: string, fallback: string = ''): stri
 
 export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'canvas_center';
 
-export const NICHES = ['Trade Wealth', 'The Case File', 'Second Act', 'YouTube Automation', 'Clinic Builders'];
+export const NICHES = ['Trade Wealth', 'The Case File', 'Second Act', 'YouTube Automation', 'The Clinic Playbook'];
 
 export const ACCOUNT_NICHE: Record<string, string> = {
   canvas_center: 'Trade Wealth',
   canvas_area: 'The Case File',
   canvas_base: 'Second Act',
   canvas_station: 'YouTube Automation',
-  clinic_playbook: 'Clinic Builders',
+  clinic_playbook: 'The Clinic Playbook',
 };
 
 // Immutable YouTube channel IDs — handles can be renamed, these never change
@@ -50,10 +50,10 @@ export type FormatTemplate = typeof FORMAT_TEMPLATES[number];
 
 export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, number>> = {
   'Trade Wealth':       { RAPID_FIRE: 0.3, SLOW_BURN: 0.2, THE_LIST: 0.3, DEEP_DIVE: 0.2 },
-  'The Case File':      { RAPID_FIRE: 0.2, SLOW_BURN: 0.6, THE_LIST: 0.0, DEEP_DIVE: 0.2 },
-  'Second Act':         { RAPID_FIRE: 0.4, SLOW_BURN: 0.4, THE_LIST: 0.2, DEEP_DIVE: 0.0 },
+  'The Case File':      { RAPID_FIRE: 0.4, SLOW_BURN: 0.4, THE_LIST: 0.0, DEEP_DIVE: 0.2 },
+  'Second Act':         { RAPID_FIRE: 0.3, SLOW_BURN: 0.4, THE_LIST: 0.2, DEEP_DIVE: 0.1 },
   'YouTube Automation': { RAPID_FIRE: 1.0, SLOW_BURN: 0.0, THE_LIST: 0.0, DEEP_DIVE: 0.0 },
-  'Clinic Builders':    { RAPID_FIRE: 0.5, SLOW_BURN: 0.3, THE_LIST: 0.2, DEEP_DIVE: 0.0 },
+  'The Clinic Playbook':    { RAPID_FIRE: 0.4, SLOW_BURN: 0.3, THE_LIST: 0.2, DEEP_DIVE: 0.1 },
 };
 
 export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: number }> = {
@@ -146,24 +146,6 @@ export type CaptionStyle = {
 };
 
 export const CAPTION_STYLES: Record<string, CaptionStyle> = {
-  'psychology-minimalist': {
-    fontFamily: 'Space Grotesk',
-    fontFile: 'SpaceGrotesk-Bold.ttf',
-    textColor: '#000000',
-    strokeColor: '#FFFFFF',
-    accentColor: '#FF2A00',    // Aggressive alert red
-    maxCharsPerLine: 34,
-    maxChars: 85,
-  },
-  'wealth-editorial': {
-    fontFamily: 'Fraunces 72pt Black',
-    fontFile: 'Fraunces-Black.ttf',
-    textColor: '#000000',
-    strokeColor: '#FFFFFF',
-    accentColor: '#00D15E',    // Institutional money green
-    maxCharsPerLine: 32,       // Tighter for heavy serif readability
-    maxChars: 80,
-  },
   'history-cinematic': {
     fontFamily: 'Cinzel Black',
     fontFile: 'Cinzel-Black.ttf',
@@ -237,8 +219,6 @@ export const LONG_THUMBNAIL_HEIGHT = 1080;
 
 
 export const LONG_FORM_CAPTION_STYLES: Record<string, CaptionStyle & { maxWords: number }> = {
-  'psychology-minimalist': { ...CAPTION_STYLES['psychology-minimalist'], maxCharsPerLine: 58, maxChars: 145, maxWords: 20 },
-  'wealth-editorial':      { ...CAPTION_STYLES['wealth-editorial'],      maxCharsPerLine: 60, maxChars: 150, maxWords: 20 },
   'history-cinematic':     { ...CAPTION_STYLES['history-cinematic'],     maxCharsPerLine: 48, maxChars: 120, maxWords: 20 },
   'learn-technical':       { ...CAPTION_STYLES['learn-technical'],       maxCharsPerLine: 80, maxChars: 200, maxWords: 20 },
   'industrial-wealth':       { ...CAPTION_STYLES['industrial-wealth'],       maxCharsPerLine: 60, maxChars: 150, maxWords: 20 },
@@ -301,7 +281,7 @@ Never use passive voice. Start with a polarizing statement. Present every fact a
 
 Write in aggressive, direct paragraphs (15–20 words). Structure: The Wasted Time → The Illusion of Hard Work → The Automation Secret → The Software Solution → The CTA. Attack manual uploads as a trap for amateurs. Always seamlessly position "YouTube Playlist Uploader" as the ultimate fix. Do not trail off or repeat yourself at the end. End decisively.`,
   },
-  'Clinic Builders': {
+  'The Clinic Playbook': {
     aestheticId: 'clinical-architectural',
     minQualityScore: 5,
     toneInstruction: `You are providing the business education doctors never got in med school. Your audience consists of aspiring, early-stage, or growth-stage clinic owners.
@@ -351,7 +331,7 @@ Break down exactly how many hours they are wasting on titles, tags, and descript
 Be brutal. Position "YouTube Playlist Uploader" as the only logical solution. Do not comfort them. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
   },
-  'Clinic Builders': {
+  'The Clinic Playbook': {
     aestheticId: 'clinical-architectural',
     toneInstruction: `Your tone is empowering and competence-building. You are giving doctors the hardcore business education they missed in medical school.
 
@@ -378,18 +358,6 @@ export type Aesthetic = {
 // FLUX.1 [schnell] optimized image prefixes.
 
 export const AESTHETICS: Record<string, Aesthetic> = {
-  'psychology-minimalist': {
-    id: 'psychology-minimalist',
-    instruction: 'Force a clinical, paranoid surveillance aesthetic. Mediums: CCTV footage, thermal imaging, harsh flash polaroids, or sterile medical textbook illustrations. The scenes should feel invasive and uncomfortable.',
-    imagePrefix: 'A low-fidelity surveillance image. Physical medium: gritty CCTV capture, harsh direct flash photography, or stark thermal imaging. Extreme contrast, degraded resolution, raw, paranoid framing. Absolutely no smooth gradients, no 3D renders, no soft lighting. Ugly, clinical, and striking. No legible text. ',
-    thumbnailPrefix: 'A gritty surveillance or harsh flash photograph. Extreme contrast, clinical and paranoid framing. Massive blank void on one side for text. No text, letters, or numbers in the image itself. ',
-  },
-  'wealth-editorial': {
-    id: 'wealth-editorial',
-    instruction: 'Force a ruthless institutional aesthetic. Mediums: Macro photography of currency, classified document redactions, brutalist corporate architecture on 35mm film, heavy halftone newspaper prints.',
-    imagePrefix: 'A macro physical artifact of institutional power. Physical medium: 16mm microfilm scan, heavy halftone newspaper print, or extreme macro of heavily textured paper/currency/marble. Stark black, white, and harsh lighting. No digital trading UI, no neon, no glossy luxury ads. Pure cold power. No legible text or characters. ',
-    thumbnailPrefix: 'An aggressive macro shot of institutional texture (marble, heavy paper, ink). Stark contrast. Heavy halftone or microfilm aesthetic. Massive blank void on one side. No legible text. ',
-  },
   'history-cinematic': {
     id: 'history-cinematic',
     instruction: 'Force a forensic archival aesthetic. Mediums: Degraded silver gelatin prints, classified evidence boards, macro shots of rust/shrapnel, or muddy trench photography.',

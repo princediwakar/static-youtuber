@@ -71,7 +71,7 @@ export async function uploadToYouTube(
           categoryId: '27', // Education
         },
         status: {
-          privacyStatus: 'unlisted',
+          privacyStatus: 'public',
           madeForKids: false,
           containsSyntheticMedia: labelAsSynthetic,
         },

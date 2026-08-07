@@ -80,7 +80,7 @@ export const SEEDS: [string, string, SeedTopic[]][] = [
       },
       {
         title: 'The last entry before a disappearance that was never solved',
-        research_context: 'In December 1900, the three lighthouse keepers of the remote Flannan Isles in Scotland vanished without a trace. The relief crew arrived to find the lighthouse locked, a meal uneaten on the table, and the logbook containing deeply unsettling final entries. Keeper Thomas Marshall noted \'severe winds the likes of which I have never seen\' and recorded that the deeply experienced Principal Keeper James Ducat had been \'quiet\' and William McArthur was \'crying.\' The final entry simply read, \'Storm ended, sea calm. God is over all.\' The mystery is compounded by the fact that weather stations on the nearby mainland recorded calm weather during the days the logbook described an apocalyptic storm. Source: https://en.wikipedia.org/wiki/Flannan_Isles_Lighthouse#1900_crew_disappearance'
+        research_context: 'In December 1900, the three lighthouse keepers of the remote Flannan Isles vanished. For over a century, their disappearance has been framed by dramatic, deeply unsettling final logbook entries: "severe winds the likes of which I have never seen," keeper Ducat being "quiet," McArthur "crying," and a final entry reading "Storm ended, sea calm. God is over all." However, these chilling logs are a well-documented complete fabrication. They were invented by Wilfrid Wilson Gibson in his 1912 poem "Flannan Isle." The actual final logbook entries were entirely routine weather readings until they abruptly stopped. The true mystery is not supernatural, but how an ordinary shift ended in a tragic accident that swept all three experienced men into the sea, and how a poet\'s fiction became accepted as historical fact. Source: https://en.wikipedia.org/wiki/Flannan_Isles_Lighthouse#1900_crew_disappearance'
       },
       {
         title: 'Meeting minutes that contradict the official story',
@@ -108,7 +108,7 @@ export const SEEDS: [string, string, SeedTopic[]][] = [
     [
       {
         title: 'The first 90 days after bankruptcy — what rebuilds credit vs. what\'s a myth',
-        research_context: 'Filing Chapter 7 bankruptcy immediately halts collections and wipes out unsecured debt, but it drops a credit score to the 300s. The rebuild doesn\'t start in a year; it starts on day one. Secured credit cards (where you put down a deposit) report positive payment history instantly. The myth is that you can\'t get credit for 7 years; the reality is that within 12-18 months of aggressive, flawless payment history on secured lines, scores can rebound to 650+.'
+        research_context: 'Filing Chapter 7 bankruptcy immediately halts collections and wipes out unsecured debt, but it drops a credit score to the 300s. The rebuild doesn\'t start in a year; it starts on day one. Secured credit cards (where you put down a deposit) report positive payment history instantly. The myth is that you can\'t get credit for 7 years; the reality is that in many cases, with 12-18 months of aggressive, flawless payment history on secured lines, scores can often rebound to 650+.'
       },
       {
         title: 'One year after: how income actually recovers after a business collapse',
@@ -197,9 +197,9 @@ export const SEEDS: [string, string, SeedTopic[]][] = [
     ]
   ],
 
-  // ─── Clinic Builders (clinic_playbook) ────────────────────────────────────
+  // ─── The Clinic Playbook (clinic_playbook) ────────────────────────────────────
   [
-    'Clinic Builders',
+    'The Clinic Playbook',
     'clinic_playbook',
     [
       {

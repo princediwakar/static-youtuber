@@ -53,6 +53,7 @@ BREVITY & STYLE (ORWELLIAN CONSTRAINTS):
 CONTENT POLICY (STRICT):
 - Do NOT describe graphic violence, gore, exposed internal anatomy, or visceral bodily trauma.
 - Build tension psychologically. Focus on the stakes and the situation, not blood.
+- The RESEARCH CONTEXT includes a "Source: URL". This is for grounding only. NEVER include the URL in the narrative, NEVER read it aloud, and NEVER mention "source" or the link.
 
 TONE MANDATE:
 ${toneInstruction}
