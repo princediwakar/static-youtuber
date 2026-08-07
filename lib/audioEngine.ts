@@ -18,11 +18,6 @@ async function callF5Tts(text: string, voiceName: string): Promise<Buffer> {
     throw new Error('[AudioEngine] Missing F5_TTS_URL environment variable.');
   }
 
-  // LLM occasionally hallucinates kelly instead of kelli
-  if (voiceName === 'kelly-winkler-american-female') {
-    voiceName = 'kelli-winkler-american-female';
-  }
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 

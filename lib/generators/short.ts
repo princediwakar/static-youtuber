@@ -127,12 +127,14 @@ Each shot has TWO text fields for different modalities:
    - Never add, remove, or reorder words beyond the digit→word substitution.
 
 VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
-- mallory-handford-american-female: Bright, conversational, friendly girl-next-door American female. Compelling, versatile, modern.
-- melissa-harlow-american-female: Conversational, natural, energetic American female. Warm, relatable, good for narration and explainers.
-- jon-british-male: Professional, clear, experienced British male. Polished, versatile narration.
-- kylie-hinze-american-female: Friendly, upbeat, energetic girl-next-door American female. Cheerful, youthful, positive.
-- kelli-winkler-american-female: Professional American female with radio/broadcasting background. Warm, clear, conversational.
-- dee-smith-american-male: Dynamic, energetic, professional African American male. Versatile, conversational, commercial-friendly.
+- greg-american-conversational-male: Conversational, natural American male.
+- jon-british-male: Professional, clear, experienced British male.
+- kylie-hinze-conversational-american-female: Conversational, upbeat American female.
+- mallory-handford-energetic-american-female: Energetic, bright American female.
+- melissa-harlow-slow-conversational-american-female: Slow, conversational American female.
+- phil-freeman-american-male: Deep, rich, authoritative American male.
+- sameer-hindi-male: Professional Hindi male voice. (Use ONLY if content is in Hindi)
+- vikram-hindi-male: Clear, conversational Hindi male voice. (Use ONLY if content is in Hindi)
 
 VISUAL AESTHETICS & SHOT VARIETY MANDATE (CRITICAL):
 Visual World: ${aestheticInstruction}
