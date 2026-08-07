@@ -256,6 +256,17 @@ async function executeAssetPipeline(
       }
     });
 
+  // When Modal returns the video URL synchronously (within the fetch timeout window)
+  // the webhook callback is never fired, so we must send the publish event here.
+  // For async renders, the webhook at /api/webhooks/modal handles this instead.
+  if (videoUrl && !skipPublish) {
+    await step.sendEvent('trigger-publish', {
+      name: 'slideshow/publish',
+      data: { jobId, accountId },
+    });
+    console.log(`[Pipeline] Sync Modal render — triggered publish for job ${jobId}`);
+  }
+
 }
 
 export const publishVideo = inngest.createFunction(
@@ -356,13 +367,26 @@ export const generateShort = inngest.createFunction(
     id: 'generate-short',
     retries: 1,
     timeouts: { finish: '20m' },
+    concurrency: { key: 'event.data.accountId', limit: 1 },
     triggers: [{ event: 'slideshow/trigger' }],
     onFailure: async ({ error, event }) => {
       console.error(`[CRITICAL] Pipeline failed: ${error.message}`);
       const accountId = (event as any)?.data?.accountId;
       const explicitJobId = (event as any)?.data?.jobId;
       try {
-        const job = explicitJobId ? await db.getJob(explicitJobId) : accountId ? await db.getIncompleteJob(accountId) : null;
+        // If we have an explicit jobId (from manual triggers), use it directly.
+        // Otherwise, query for the most recent pending job for this account to
+        // avoid races when multiple runs exist concurrently for the same account.
+        let job;
+        if (explicitJobId) {
+          job = await db.getJob(explicitJobId);
+        } else if (accountId) {
+          const res = await query<{ id: string }>(
+            `SELECT id FROM slideshow_jobs WHERE account_id = $1 AND content_type = 'shorts' AND status NOT IN ('published', 'failed') ORDER BY created_at DESC LIMIT 1`,
+            [accountId]
+          );
+          job = res.rows[0] ? await db.getJob(res.rows[0].id) : null;
+        }
         if (job?.id) {
           await db.updateJob(job.id, { status: 'failed', error_message: error.message });
           if (accountId) {
@@ -425,13 +449,26 @@ export const generateLongForm = inngest.createFunction(
     id: 'generate-long-form',
     retries: 1,
     timeouts: { finish: '20m' },
+    concurrency: { key: 'event.data.accountId', limit: 1 },
     triggers: [{ event: 'slideshow/trigger-long' }],
     onFailure: async ({ error, event }) => {
       console.error(`[CRITICAL] Long-form pipeline failed: ${error.message}`);
       const accountId = (event as any)?.data?.accountId;
       const explicitJobId = (event as any)?.data?.jobId;
       try {
-        const job = explicitJobId ? await db.getJob(explicitJobId) : accountId ? await db.getIncompleteJobByType(accountId, 'long') : null;
+        // Use a targeted query for pending jobs to avoid races between concurrent
+        // runs for the same account (getIncompleteJobByType can find the WRONG job
+        // when multiple executions exist simultaneously).
+        let job;
+        if (explicitJobId) {
+          job = await db.getJob(explicitJobId);
+        } else if (accountId) {
+          const res = await query<{ id: string }>(
+            `SELECT id FROM slideshow_jobs WHERE account_id = $1 AND content_type = 'long' AND status NOT IN ('published', 'failed') ORDER BY created_at DESC LIMIT 1`,
+            [accountId]
+          );
+          job = res.rows[0] ? await db.getJob(res.rows[0].id) : null;
+        }
         if (job?.id) {
           await db.updateJob(job.id, { status: 'failed', error_message: error.message });
           if (accountId) {
