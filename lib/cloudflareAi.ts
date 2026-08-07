@@ -113,12 +113,9 @@ export async function generateImage(
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          // Cloudflare's documented field name for flux-1-schnell is `steps`
-          // (max 8) — the previous version of this file sent `num_steps`,
-          // which isn't a documented parameter for this model. `num_steps`
-          // is still included here as a harmless hedge in case some deployed
-          // model revision expects it, but `steps` is the one that's real.
-          body: JSON.stringify({ prompt: enforcedPrompt, width, height, steps: resolvedSteps, num_steps: resolvedSteps }),
+          // Cloudflare's documented field name for flux-1-schnell is `steps`.
+          // The API strictly rejects `/width`, `/height`, and `/num_steps`.
+          body: JSON.stringify({ prompt: enforcedPrompt, steps: resolvedSteps }),
         };
 
     try {
