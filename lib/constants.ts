@@ -97,7 +97,7 @@ export const getAceStepWarmupUrl = () => {
 
 // ─── Music ─────────────────────────────────────────────────────────────────────
 export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
-export const MUSIC_ATTRIBUTION = 'Music by Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/';
+
 
 export const FORMATS = FORMAT_TEMPLATES; // alias for backward compatibility
 

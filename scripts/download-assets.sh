@@ -30,8 +30,8 @@ fi
 
 # ─── Background Music (Kevin MacLeod / incompetech.com) ──────────────────────
 # License: Creative Commons Attribution 4.0 (CC BY 4.0)
-# Required attribution in video description (added automatically by the pipeline
-# in the YouTube description field — see constants.ts MUSIC_ATTRIBUTION).
+# These tracks are legacy and no longer used by the pipeline,
+# which now generates music via ACE-Step.
 #
 # All URLs verified live as of 2026-06-25.
 # Format: https://incompetech.com/music/royalty-free/mp3-royaltyfree/<Track+Name>.mp3
@@ -76,9 +76,5 @@ echo "Files installed:"
 ls -lh "$FONT_DIR" 2>/dev/null | grep -v total || echo "  (font dir empty)"
 ls -lh "$MUSIC_DIR" 2>/dev/null | grep -v total || echo "  (music dir empty — pipeline will run silently)"
 echo ""
-echo "Attribution required in video descriptions:"
-echo "  Music by Kevin MacLeod (incompetech.com)"
-echo "  Licensed under Creative Commons: By Attribution 4.0 License"
-echo "  http://creativecommons.org/licenses/by/4.0/"
-echo ""
+
 echo "Next step: node setup-database.js (if not already done)"
