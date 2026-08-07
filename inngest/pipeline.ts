@@ -58,100 +58,90 @@ async function executeAssetPipeline(
   const musicDurationLimit = isLongForm ? 300 : 60;
   const renderTimeout = '30m';
 
-  // ── Step 2: Parallel Asset Generation (Narration, Images, Thumbnail) ────────
-  const [
-    { audioUrl, narrationDurationMs },
-    imageUrls,
-    thumbnailUrl
-  ] = await Promise.all([
-    
-    // Task A: Generate Narration
-    // Task A: Generate Narration
-    (async () => {
-      let audioUrl = '';
-      let durationMs = 0;
-      const jobA = await step.run('check-narration-resume', () => db.getJob(jobId));
-      if (jobA?.narration_audio_url) {
-        audioUrl = jobA.narration_audio_url;
-      } else {
-        const fullNarrative = script.shots.map((s: Shot) => {
-          let text = s.spoken_text.trim();
-          if (!/[.!?]$/.test(text)) {
-            text += '.';
-          }
-          return text;
-        }).join(' ');
+  // ── Step 2: Sequential Asset Generation (Narration, Images, Thumbnail) ────────
+  // Task A: Generate Narration
+  let audioUrl = '';
+  let durationMs = 0;
+  const jobA = await step.run('check-narration-resume', () => db.getJob(jobId));
+  if (jobA?.narration_audio_url) {
+    audioUrl = jobA.narration_audio_url;
+  } else {
+    const fullNarrative = script.shots.map((s: Shot) => {
+      let text = s.spoken_text.trim();
+      if (!/[.!?]$/.test(text)) {
+        text += '.';
+      }
+      return text;
+    }).join(' ');
+    const creds = await getAccountCredentials(accountId);
+    const res = await step.run('generate-audio-narrative', async () => {
+      const sanitized = fullNarrative
+        .replace(/[‘’`]/g, "'")
+        .replace(/[“”]/g, '"')
+        .replace(/[\u2014—]/g, '... ')
+        .replace(/[^\x00-\x7F]/g, '');
+      const result = await generateNarrativeSpeech(sanitized, script.voiceName);
+      const url = await uploadSlideAudio(result.audioBuffer, jobId, 'full', creds);
+      return { url, durationMs: result.durationMs };
+    });
+    audioUrl = res.url;
+    durationMs = res.durationMs;
+    await step.run('save-narration', () => db.updateJob(jobId, { narration_audio_url: audioUrl }));
+  }
+  const narrationDurationMs = durationMs;
+
+  // Task B: Generate Images
+  const imageUrls = await (async () => {
+    const job = await step.run('check-images-resume', () => db.getJob(jobId));
+    const existingUrls = job?.shot_image_urls || [];
+    const urls: string[] = [...existingUrls];
+
+    if (urls.length >= script.shots.length && urls.slice(0, script.shots.length).every(Boolean)) {
+      return urls.slice(0, script.shots.length);
+    }
+
+    const CONCURRENCY_LIMIT = 2;
+
+    for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
+      const batchUrls = await step.run(`generate-images-batch-${batchStart}`, async () => {
         const creds = await getAccountCredentials(accountId);
-        const res = await step.run('generate-audio-narrative', async () => {
-          const sanitized = fullNarrative
-            .replace(/[‘’`]/g, "'")
-            .replace(/[“”]/g, '"')
-            .replace(/[\u2014—]/g, '... ')
-            .replace(/[^\x00-\x7F]/g, '');
-          const result = await generateNarrativeSpeech(sanitized, script.voiceName);
-          const url = await uploadSlideAudio(result.audioBuffer, jobId, 'full', creds);
-          return { url, durationMs: result.durationMs };
-        });
-        audioUrl = res.url;
-        durationMs = res.durationMs;
-        await step.run('save-narration', () => db.updateJob(jobId, { narration_audio_url: audioUrl }));
-      }
-      return { shotAudioUrls: [], audioUrl, narrationDurationMs: durationMs };
-    })(),
+        const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
+        const batch = script.shots.slice(batchStart, batchEnd);
 
-    // Task B: Generate Images
-    (async () => {
-      const job = await step.run('check-images-resume', () => db.getJob(jobId));
-      const existingUrls = job?.shot_image_urls || [];
-      const urls: string[] = [...existingUrls];
+        return Promise.all(
+          batch.map(async (shot: Shot, offset: number) => {
+            const globalIndex = batchStart + offset;
+            if (urls[globalIndex]) return urls[globalIndex];
+            const rawImageBuffer = await generateImage(shot.visual_prompt, slideWidth, slideHeight);
+            return uploadSlideImage(rawImageBuffer, jobId, globalIndex, creds);
+          })
+        );
+      });
+      batchUrls.forEach((url: string, offset: number) => { urls[batchStart + offset] = url; });
+      await step.run(`save-images-batch-${batchStart}`, () => db.updateJob(jobId, { shot_image_urls: urls }));
+    }
 
-      if (urls.length >= script.shots.length && urls.slice(0, script.shots.length).every(Boolean)) {
-        return urls.slice(0, script.shots.length);
-      }
+    return urls;
+  })();
 
-      const CONCURRENCY_LIMIT = 2;
+  // Task D: Generate Thumbnail
+  const thumbnailUrl = await step.run('generate-thumbnail', async () => {
+    const job = await db.getJob(jobId);
+    if (job?.thumbnail_url) return job.thumbnail_url;
 
-      for (let batchStart = 0; batchStart < script.shots.length; batchStart += CONCURRENCY_LIMIT) {
-        const batchUrls = await step.run(`generate-images-batch-${batchStart}`, async () => {
-          const creds = await getAccountCredentials(accountId);
-          const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, script.shots.length);
-          const batch = script.shots.slice(batchStart, batchEnd);
-
-          return Promise.all(
-            batch.map(async (shot: Shot, offset: number) => {
-              const globalIndex = batchStart + offset;
-              if (urls[globalIndex]) return urls[globalIndex];
-              const rawImageBuffer = await generateImage(shot.visual_prompt, slideWidth, slideHeight);
-              return uploadSlideImage(rawImageBuffer, jobId, globalIndex, creds);
-            })
-          );
-        });
-        batchUrls.forEach((url: string, offset: number) => { urls[batchStart + offset] = url; });
-        await step.run(`save-images-batch-${batchStart}`, () => db.updateJob(jobId, { shot_image_urls: urls }));
-      }
-
-      return urls;
-    })(),
-
-    // Task D: Generate Thumbnail
-    step.run('generate-thumbnail', async () => {
-      const job = await db.getJob(jobId);
-      if (job?.thumbnail_url) return job.thumbnail_url;
-
-      const creds = await getAccountCredentials(accountId);
-      const thumbText = script.hook_intro
-        ? `${script.hook_intro.slice(0, 40)} — ${script.title}`
-        : script.title;
-        
-      const thumbBuffer = isLongForm 
-        ? await generateThumbnail(thumbText, script.thumbnailPrompt, niche, LONG_THUMBNAIL_WIDTH, LONG_THUMBNAIL_HEIGHT)
-        : await generateThumbnail(thumbText, script.thumbnailPrompt, niche);
-        
-      const url = await uploadThumbnail(thumbBuffer, jobId, creds);
-      await db.updateJob(jobId, { thumbnail_url: url });
-      return url;
-    })
-  ]);
+    const creds = await getAccountCredentials(accountId);
+    const thumbText = script.hook_intro
+      ? `${script.hook_intro.slice(0, 40)} — ${script.title}`
+      : script.title;
+      
+    const thumbBuffer = isLongForm 
+      ? await generateThumbnail(thumbText, script.thumbnailPrompt, niche, LONG_THUMBNAIL_WIDTH, LONG_THUMBNAIL_HEIGHT)
+      : await generateThumbnail(thumbText, script.thumbnailPrompt, niche);
+      
+    const url = await uploadThumbnail(thumbBuffer, jobId, creds);
+    await db.updateJob(jobId, { thumbnail_url: url });
+    return url;
+  });
 
   const narrationDurationSec = narrationDurationMs > 0 
     ? Math.ceil(narrationDurationMs / 1000) 
