@@ -358,7 +358,7 @@ export async function generateScript(
             description: `${validated.description}`,
             visual_world: validated.visual_world,
             format_template: validated.format_template,
-            voiceName: validated.voiceName,
+            voiceName: profile.preferredVoice || validated.voiceName,
             fact_check_and_sources: validated.fact_check_and_sources.map(f => `${f.claim} → ${f.source}`).join('\n'),
             tags: validated.tags,
             shots: validated.shots.map(shot => ({

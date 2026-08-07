@@ -91,9 +91,9 @@ Five channels, each locked to a distinct audience, emotional register, and niche
 
 ---
 
-## 5. Clinic Builders *(Doxxy — invisible/soft integration)*
+## 5. Clinic Builders
 **Audience arc:** Aspiring clinic owner → early-stage owner → growth-stage owner → multi-specialty owner.
-**Positioning:** The business education doctors never got in med school. Doxxy shows up as the tool behind the fix, not the subject of the video.
+**Positioning:** The business education doctors never got in med school. A software platform shows up as the tool behind the fix, not the subject of the video.
 **Register:** Empowering, competence-building — deliberately the opposite emotional register from the other four.
 **Pillars:** Starting Up · Running Smart · Growing the Core Specialty · Adding Specialties / Scaling.
 **Care note:** Any topic touching licensing, registration, or compliance gets a human review pass before production — these vary by state and the pipeline can't research live.

@@ -409,7 +409,7 @@ export async function generateLongFormScript(
               description: validated.description,
               visual_world: validated.visual_world,
               format_template: 'DEEP_DIVE',
-              voiceName: validated.voiceName,
+              voiceName: profile.preferredVoice || validated.voiceName,
               fact_check_and_sources: validated.fact_check_and_sources
                 .map(f => `${f.claim} → ${f.source}`).join('\n'),
               tags: validated.tags,

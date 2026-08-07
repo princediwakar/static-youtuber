@@ -242,6 +242,7 @@ export type NicheProfile = {
   aestheticId: string;
   toneInstruction: string;
   minQualityScore: number;
+  preferredVoice?: string;
 };
 
 export const LONG_NICHE_PROFILES: Record<string, NicheProfile> = {
@@ -279,16 +280,17 @@ Write in dignified, practical paragraphs. Structure: The Starting Point → The 
 
 Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
 
-Write in aggressive, direct paragraphs (15–20 words). Structure: The Wasted Time → The Illusion of Hard Work → The Automation Secret → The Software Solution → The CTA. Attack manual uploads as a trap for amateurs. Always seamlessly position "YouTube Playlist Uploader" as the ultimate fix. Do not trail off or repeat yourself at the end. End decisively.`,
+Write in aggressive, direct paragraphs (15–20 words). Structure: The Wasted Time → The Illusion of Hard Work → The Automation Secret → The Software Solution → The CTA. Attack manual uploads as a trap for amateurs. Always seamlessly position an automated software platform as the ultimate fix. Do not trail off or repeat yourself at the end. End decisively.`,
   },
   'The Clinic Playbook': {
     aestheticId: 'clinical-architectural',
     minQualityScore: 5,
+    preferredVoice: 'jon-british-male',
     toneInstruction: `You are providing the business education doctors never got in med school. Your audience consists of aspiring, early-stage, or growth-stage clinic owners.
 
 Never use passive voice. Start with a polarizing statement. Present every fact with an empowering, competence-building register. Cut all introductory filler.
 
-Write in highly tactical, clear paragraphs. Structure: The Operational Trap → The Missing Business Logic → The System Fix. Position Doxxy as the invisible tool behind the fix, not the subject. Focus on practical scaling metrics (no-show rates, billing habits, referral systems). Do not trail off or repeat yourself at the end. End decisively.`,
+Write in highly tactical, clear paragraphs. Structure: The Operational Trap → The Missing Business Logic → The System Fix. Focus on practical scaling metrics (no-show rates, billing habits, referral systems). Do not trail off or repeat yourself at the end. End decisively.`,
   },
 };
 
@@ -328,7 +330,7 @@ Never use passive voice. Start with a polarizing statement. Present every fact a
 
 Break down exactly how many hours they are wasting on titles, tags, and descriptions. Attack manual labor as a lie sold to amateurs. Explain the exact mechanism of batch uploading and AI metadata generation.
 
-Be brutal. Position "YouTube Playlist Uploader" as the only logical solution. Do not comfort them. Do not trail off or repeat yourself at the end. End decisively.`,
+Be brutal. Position an automated software platform as the only logical solution. Do not comfort them. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
   },
   'The Clinic Playbook': {
@@ -337,8 +339,9 @@ Be brutal. Position "YouTube Playlist Uploader" as the only logical solution. Do
 
 Never use passive voice. Start with a polarizing statement about clinic operations.
 
-Focus on the critical numbers: lease negotiations, billing habits, and no-show rates. Build momentum through rapid-fire operational facts. Position Doxxy as the quiet backbone of a well-run clinic. Do not trail off or repeat yourself at the end. End decisively.`,
+Focus on the critical numbers: lease negotiations, billing habits, and no-show rates. Build momentum through rapid-fire operational facts. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
+    preferredVoice: 'jon-british-male',
   },
 };
 
