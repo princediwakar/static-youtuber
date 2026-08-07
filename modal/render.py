@@ -312,7 +312,8 @@ def build_continuous_ass(
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        f"Style: Default,{style['fontFamily']},{font_size},{primary_colour},&H000000FF,{back_colour},{back_colour},-1,0,0,0,100,100,0,0,3,10,0,{alignment},120,120,{margin_v},1",
+        # BorderStyle 1 is Outline+DropShadow. We drop the old BorderStyle 3 (opaque box).
+        f"Style: Default,{style['fontFamily']},{font_size},{primary_colour},&H000000FF,{back_colour},&H40000000,-1,0,0,0,100,100,0,0,1,12,4,{alignment},120,120,{margin_v},1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -321,6 +322,7 @@ def build_continuous_ass(
     for i, (start_time, end_time, _words_data) in enumerate(shot_boundaries):
         if i >= len(shots):
             break
+        
         caption = shots[i].get("caption_text", "").strip()
         if not caption:
             continue

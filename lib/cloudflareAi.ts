@@ -113,9 +113,8 @@ export async function generateImage(
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          // Cloudflare's documented field name for flux-1-schnell is `steps`.
-          // The API strictly rejects `/width`, `/height`, and `/num_steps`.
-          body: JSON.stringify({ prompt: enforcedPrompt, steps: resolvedSteps }),
+          // Cloudflare accepts `width` and `height` for flux-1-schnell as well.
+          body: JSON.stringify({ prompt: enforcedPrompt, steps: resolvedSteps, width, height }),
         };
 
     try {
