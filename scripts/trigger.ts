@@ -188,7 +188,7 @@ async function triggerPipeline() {
 
   const result = await inngest.send({
     name: eventName,
-    data: { accountId, skipPublish: true },
+    data: { accountId, skipPublish: false },
   });
 
   console.log('✅ Trigger sent!');

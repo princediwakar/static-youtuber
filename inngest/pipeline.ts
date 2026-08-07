@@ -286,10 +286,10 @@ export const publishVideo = inngest.createFunction(
     const accountId: string = event.data.accountId;
     const jobId: string = event.data.jobId;
 
-    if (process.env.INNGEST_DEV === '1') {
-      console.log('[Pipeline] Skipping publish — INNGEST_DEV is set');
-      return;
-    }
+    // if (process.env.INNGEST_DEV === '1') {
+    //   console.log('[Pipeline] Skipping publish — INNGEST_DEV is set');
+    //   return;
+    // }
 
     const job = await db.getJob(jobId);
     if (!job) throw new NonRetriableError(`Job not found: ${jobId}`);
