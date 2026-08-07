@@ -548,7 +548,7 @@ export const channelScheduler = inngest.createFunction(
     for (const channel of channels) {
       const isCoolingDown = await step.run(`check-throttle-${channel.account_id}`, async () => {
         const recent = await query<{ id: string }>(
-          `SELECT id FROM slideshow_jobs WHERE account_id = $1 AND created_at > NOW() - INTERVAL '16 hours' LIMIT 1`,
+          `SELECT id FROM slideshow_jobs WHERE account_id = $1 AND created_at > NOW() - INTERVAL '40 hours' LIMIT 1`,
           [channel.account_id]
         );
         return recent.rows.length > 0;
