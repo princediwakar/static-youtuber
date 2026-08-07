@@ -24,14 +24,14 @@ export function getModalUrl(baseEnvVarName: string, fallback: string = ''): stri
 
 export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'canvas_center';
 
-export const NICHES = ['Anti-Status Wealth', 'Weaponized History', 'YouTube Automation', 'System Reverse-Engineering', 'Medical Education'];
+export const NICHES = ['Trade Wealth', 'The Case File', 'Second Act', 'YouTube Automation', 'Clinic Builders'];
 
 export const ACCOUNT_NICHE: Record<string, string> = {
-  canvas_center: 'Anti-Status Wealth',
-  canvas_area: 'Weaponized History',
+  canvas_center: 'Trade Wealth',
+  canvas_area: 'The Case File',
+  canvas_base: 'Second Act',
   canvas_station: 'YouTube Automation',
-  canvas_base: 'System Reverse-Engineering',
-  clinic_playbook: 'Medical Education',
+  clinic_playbook: 'Clinic Builders',
 };
 
 // Immutable YouTube channel IDs — handles can be renamed, these never change
@@ -49,11 +49,11 @@ export const FORMAT_TEMPLATES = ['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST', 'DEEP_DI
 export type FormatTemplate = typeof FORMAT_TEMPLATES[number];
 
 export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, number>> = {
-  'Anti-Status Wealth':         { RAPID_FIRE: 0.7, SLOW_BURN: 0,   THE_LIST: 0.3, DEEP_DIVE: 0 },
-  'Weaponized History':         { RAPID_FIRE: 0.6, SLOW_BURN: 0.4, THE_LIST: 0,   DEEP_DIVE: 0 },
-  'YouTube Automation':         { RAPID_FIRE: 1.0, SLOW_BURN: 0,   THE_LIST: 0.0, DEEP_DIVE: 0 },
-  'System Reverse-Engineering': { RAPID_FIRE: 0.9, SLOW_BURN: 0,   THE_LIST: 0.1, DEEP_DIVE: 0 },
-  'Medical Education':          { RAPID_FIRE: 0.5, SLOW_BURN: 0.3, THE_LIST: 0.2, DEEP_DIVE: 0 },
+  'Trade Wealth':       { RAPID_FIRE: 0.3, SLOW_BURN: 0.2, THE_LIST: 0.3, DEEP_DIVE: 0.2 },
+  'The Case File':      { RAPID_FIRE: 0.2, SLOW_BURN: 0.6, THE_LIST: 0.0, DEEP_DIVE: 0.2 },
+  'Second Act':         { RAPID_FIRE: 0.4, SLOW_BURN: 0.4, THE_LIST: 0.2, DEEP_DIVE: 0.0 },
+  'YouTube Automation': { RAPID_FIRE: 1.0, SLOW_BURN: 0.0, THE_LIST: 0.0, DEEP_DIVE: 0.0 },
+  'Clinic Builders':    { RAPID_FIRE: 0.5, SLOW_BURN: 0.3, THE_LIST: 0.2, DEEP_DIVE: 0.0 },
 };
 
 export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: number }> = {
@@ -182,6 +182,33 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
     maxCharsPerLine: 42,
     maxChars: 120,
   },
+  'industrial-wealth': {
+    fontFamily: 'Anton',
+    fontFile: 'Anton-Regular.ttf',
+    textColor: '#FFC000',      // High-vis yellow
+    strokeColor: '#000000',
+    accentColor: '#FFFFFF',
+    maxCharsPerLine: 32,
+    maxChars: 80,
+  },
+  'raw-rebuild': {
+    fontFamily: 'Inter',
+    fontFile: 'Inter-Bold.ttf',
+    textColor: '#FFFFFF',
+    strokeColor: '#000000',
+    accentColor: '#4A90E2',    // Calm rebuilding blue
+    maxCharsPerLine: 38,
+    maxChars: 95,
+  },
+  'clinical-architectural': {
+    fontFamily: 'Space Grotesk',
+    fontFile: 'SpaceGrotesk-Bold.ttf',
+    textColor: '#FFFFFF',
+    strokeColor: '#000000',
+    accentColor: '#00D15E',    // Surgical/medical green
+    maxCharsPerLine: 34,
+    maxChars: 85,
+  },
 };
 
 export function getCaptionStyle(aestheticId: string): CaptionStyle {
@@ -214,6 +241,9 @@ export const LONG_FORM_CAPTION_STYLES: Record<string, CaptionStyle & { maxWords:
   'wealth-editorial':      { ...CAPTION_STYLES['wealth-editorial'],      maxCharsPerLine: 60, maxChars: 150, maxWords: 20 },
   'history-cinematic':     { ...CAPTION_STYLES['history-cinematic'],     maxCharsPerLine: 48, maxChars: 120, maxWords: 20 },
   'learn-technical':       { ...CAPTION_STYLES['learn-technical'],       maxCharsPerLine: 80, maxChars: 200, maxWords: 20 },
+  'industrial-wealth':       { ...CAPTION_STYLES['industrial-wealth'],       maxCharsPerLine: 60, maxChars: 150, maxWords: 20 },
+  'raw-rebuild':             { ...CAPTION_STYLES['raw-rebuild'],             maxCharsPerLine: 70, maxChars: 175, maxWords: 20 },
+  'clinical-architectural':  { ...CAPTION_STYLES['clinical-architectural'],  maxCharsPerLine: 65, maxChars: 160, maxWords: 20 },
 };
 
 export function getLongFormCaptionStyle(aestheticId: string): CaptionStyle & { maxWords: number } {
@@ -235,23 +265,32 @@ export type NicheProfile = {
 };
 
 export const LONG_NICHE_PROFILES: Record<string, NicheProfile> = {
-  'Anti-Status Wealth': {
-    aestheticId: 'wealth-editorial',
+  'Trade Wealth': {
+    aestheticId: 'industrial-wealth',
     minQualityScore: 5,
-    toneInstruction: `You are ruthlessly tearing down middle-class money myths. Your audience needs a brutal wake-up call about how leverage and money actually work.
-    
-Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
+    toneInstruction: `You are breaking down the financial math for trade business owners (electricians, HVAC contractors, welders). Your audience is high-income but often struggles to build real wealth.
 
-Write in punchy, aggressive paragraphs (15–20 words). Structure: Controversial Hook → The Mathematical Proof → The Hidden Trap → The Elite Leverage → The Uncomfortable Reality. Include exact dates and massive dollar amounts. Expose luxury as a trap for the insecure. Sound like a deeply cynical hedge fund manager who is sick of the lies. Do not trail off or repeat yourself at the end. End decisively.`,
+Never use passive voice. Start with a polarizing statement. Present every fact as insider respect and competence. Cut all introductory filler.
+
+Write in forensic, story-driven paragraphs. Structure: One real deal → One real decision → The actual dollar difference. No contempt for the viewer's choices. Include exact dates, equipment costs, and dollar amounts. Break down the math on equipment financing, taxes, and solo-to-crew scaling. Do not trail off or repeat yourself at the end. End decisively.`,
   },
-  'Weaponized History': {
+  'The Case File': {
     aestheticId: 'history-cinematic',
     minQualityScore: 5,
-    toneInstruction: `You are connecting brutal historical realities directly to modern geopolitical anxiety. Your audience needs to realize that history is a terrifying, repeating loop.
+    toneInstruction: `You are presenting a serialized reconstruction from real primary sources (letters, transcripts, declassified files). Your audience wants production quality and procedural mystery.
 
-Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
+Never use passive voice. Start with a polarizing statement. Present every fact objectively but build extreme tension. Cut all introductory filler.
 
-Write in driving, relentless paragraphs (15–20 words). Structure: The Unsettling Parallel → The Historical Brutality → The Core Mechanism of Power → The Modern Execution → The Inevitable Collapse. Do not soften the edges of history. Make the viewer feel the dread of realizing that the systems controlling them now are identical to the ones that collapsed empires before. Do not trail off or repeat yourself at the end. End decisively.`,
+Write in a tone of procedural mystery. Structure: The Source Document → The Hidden Detail → The Chain Reaction. No "here's what this means for today" moralizing tacked on. Focus entirely on the forensic details of the evidence. Do not trail off or repeat yourself at the end. End decisively.`,
+  },
+  'Second Act': {
+    aestheticId: 'raw-rebuild',
+    minQualityScore: 5,
+    toneInstruction: `You are providing dignified, real-numbers rebuilding content for people starting over after bankruptcy, divorce, addiction recovery, or business failure.
+
+Never use passive voice. Start with a polarizing statement. Present every fact with hope without saccharine, real numbers without exploitation. Cut all introductory filler.
+
+Write in dignified, practical paragraphs. Structure: The Starting Point → The Principle Framework → The Real-Numbers Rebuild. Keep specific legal/financial/clinical advice out—focus on principles. Respect the viewer's agency. Do not trail off or repeat yourself at the end. End decisively.`,
   },
   'YouTube Automation': {
     aestheticId: 'learn-technical',
@@ -262,48 +301,43 @@ Never use passive voice. Start with a polarizing statement. Present every fact a
 
 Write in aggressive, direct paragraphs (15–20 words). Structure: The Wasted Time → The Illusion of Hard Work → The Automation Secret → The Software Solution → The CTA. Attack manual uploads as a trap for amateurs. Always seamlessly position "YouTube Playlist Uploader" as the ultimate fix. Do not trail off or repeat yourself at the end. End decisively.`,
   },
-  'System Reverse-Engineering': {
-    aestheticId: 'learn-technical',
+  'Clinic Builders': {
+    aestheticId: 'clinical-architectural',
     minQualityScore: 5,
-    toneInstruction: `You are exposing how modern systems—tech algorithms, supermarkets, media—actively manipulate human cognition. Your audience is blind to the matrix they live in.
+    toneInstruction: `You are providing the business education doctors never got in med school. Your audience consists of aspiring, early-stage, or growth-stage clinic owners.
 
-Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
+Never use passive voice. Start with a polarizing statement. Present every fact with an empowering, competence-building register. Cut all introductory filler.
 
-Write in sharp, rapid-fire paragraphs (15–20 words). Structure: The Invisible Trap → The Neurochemical Mechanism → The Corporate Intent → The Staggering Scale → The Escape. Expose the exact math and psychology used by corporations to drain attention and money. Your tone should be urgent, paranoid, and highly analytical. Do not trail off or repeat yourself at the end. End decisively.`,
-  },
-  'Medical Education': {
-    aestheticId: 'learn-technical',
-    minQualityScore: 5,
-    toneInstruction: `You are breaking down complex medical cases into sharp, life-or-death diagnostics. Your audience needs a rapid-fire clinical understanding of anatomy, diseases, and medical procedures.
-
-Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
-
-Write in intense, clinical paragraphs (15–20 words). Structure: The Symptom → The Hidden Cause → The Biological Mechanism → The Intervention. Be highly technical, but visceral. Sound like a trauma surgeon under extreme pressure. Do not trail off or repeat yourself at the end. End decisively.`,
+Write in highly tactical, clear paragraphs. Structure: The Operational Trap → The Missing Business Logic → The System Fix. Position Doxxy as the invisible tool behind the fix, not the subject. Focus on practical scaling metrics (no-show rates, billing habits, referral systems). Do not trail off or repeat yourself at the end. End decisively.`,
   },
 };
 
 export const NICHE_PROFILES: Record<string, NicheProfile> = {
-  'Anti-Status Wealth': {
-    aestheticId: 'wealth-editorial',
-    toneInstruction: `Your tone is ruthless, aggressive, and highly contrarian. You are destroying middle-class illusions about wealth and status. 
+  'Trade Wealth': {
+    aestheticId: 'industrial-wealth',
+    toneInstruction: `Your tone conveys insider respect and forensic competence. You are speaking to high-income trade business owners (electricians, welders) about how to build actual wealth.
 
-Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
+Never use passive voice. Start with a polarizing statement. Present one real deal and one real decision per script.
 
-Expose the specific mathematical traps of consumerism (e.g., buying a Rolex, saving in a checking account). Explain exactly how the 0.001% actually operate using leverage and hidden math. 
-
-Use specific numbers and harsh logic. Attack the viewer's preconceived notions of "success." 
-NEVER use "hustle," "grind," or motivational fluff. Speak like a cynical insider leaking the real rulebook. End with a statement that leaves them questioning every financial decision they've ever made. Do not trail off or repeat yourself at the end. End decisively.`,
+Expose the specific mathematical traps of running a trade business (e.g., equipment leases, S-Corp vs LLC math). Use specific numbers and harsh logic without ever showing contempt for the viewer's choices. Speak like an insider leaking the real financial rulebook. End with a statement that leaves them reconsidering their business structure. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
   },
-  'Weaponized History': {
+  'The Case File': {
     aestheticId: 'history-cinematic',
-    toneInstruction: `Your tone is urgent, cynical, and deeply unsettling. You are weaponizing historical events to explain exactly why modern society is currently collapsing in the exact same way.
+    toneInstruction: `Your tone is full of tension and procedural mystery. You are reconstructing historical cases from primary sources (letters, transcripts).
 
-Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
+Never use passive voice. Start with a polarizing statement about the document in question.
 
-Focus on the brutal realities of power, the absurdity of war, and the mechanisms of control. The facts should hit like a gut punch. Tie an obscure, terrifying historical event directly to a modern anxiety (e.g. tech monopolies, inflation, surveillance). 
+Focus on the forensic details of the evidence. Let the raw facts build the mystery. Never add moralizing or "what this means for today" takeaways. The facts should hit like a gut punch. Do not trail off or repeat yourself at the end. End decisively.`,
+    minQualityScore: 5,
+  },
+  'Second Act': {
+    aestheticId: 'raw-rebuild',
+    toneInstruction: `Your tone is dignified, providing hope without saccharine and real numbers without exploitation. You are speaking to people rebuilding after major life disruptions.
 
-Make the viewer feel the dread of realizing nothing has changed. Let the raw facts do the work—no need for exaggeration. Do not trail off or repeat yourself at the end. End decisively.`,
+Never use passive voice. Start with a polarizing statement. Present frameworks and principles for financial rebuilding.
+
+Focus on the real timeline of rebuilding credit, income, and stability. Never use real identifiable hardship without consent. Deliver practical, hard-earned wisdom that treats the viewer as capable and resilient. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
   },
   'YouTube Automation': {
@@ -317,26 +351,13 @@ Break down exactly how many hours they are wasting on titles, tags, and descript
 Be brutal. Position "YouTube Playlist Uploader" as the only logical solution. Do not comfort them. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
   },
-  'System Reverse-Engineering': {
-    aestheticId: 'learn-technical',
-    toneInstruction: `Your tone is paranoid, rapid-fire, and hyper-analytical. You are exposing the invisible systems designed to manipulate the viewer's behavior and wallet.
+  'Clinic Builders': {
+    aestheticId: 'clinical-architectural',
+    toneInstruction: `Your tone is empowering and competence-building. You are giving doctors the hardcore business education they missed in medical school.
 
-Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
+Never use passive voice. Start with a polarizing statement about clinic operations.
 
-Reverse-engineer exactly how supermarkets, tech algorithms, or casinos mathematically guarantee you lose. Focus on the sinister ingenuity of these systems. 
-
-Build momentum through rapid-fire facts. The viewer must leave feeling like they just took the red pill and can now see the matrix of manipulation around them. Never sound boring or academic. Do not trail off or repeat yourself at the end. End decisively.`,
-    minQualityScore: 5,
-  },
-  'Medical Education': {
-    aestheticId: 'learn-technical',
-    toneInstruction: `Your tone is clinical, high-stakes, and highly educational. You are dissecting medical cases with extreme precision.
-
-Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
-
-Explain exactly how the human body fails and recovers. Use specific medical terminology combined with visceral descriptions.
-
-Build momentum through rapid-fire diagnostic facts. The viewer must leave feeling like they just stepped out of an intense medical residency training. Never sound boring or academic. Do not trail off or repeat yourself at the end. End decisively.`,
+Focus on the critical numbers: lease negotiations, billing habits, and no-show rates. Build momentum through rapid-fire operational facts. Position Doxxy as the quiet backbone of a well-run clinic. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
   },
 };
@@ -380,6 +401,24 @@ export const AESTHETICS: Record<string, Aesthetic> = {
     instruction: 'Force a brutal industrial/schematic aesthetic. Mediums: Two-color risograph prints, heavy blueprint cyanotypes, electron microscope scans, or harsh xerox copies.',
     imagePrefix: 'An industrial technical document scan. Physical medium: heavy xerox photocopy, two-color risograph print, or high-contrast electron microscope scan. Gritty paper texture, absolute flat depth of field. Purely utilitarian. No 3D renders, no neon sci-fi HUDs. No text, letters, or numbers anywhere. ',
     thumbnailPrefix: 'An industrial xerox photocopy or risograph print aesthetic. High-contrast, gritty paper texture. Aggressively asymmetrical composition, large blank void for overlay. No text, letters, numbers, or labels anywhere. ',
+  },
+  'industrial-wealth': {
+    id: 'industrial-wealth',
+    instruction: 'Force an industrial, blue-collar wealth aesthetic. Mediums: Macro photography of copper pipes, raw welded steel, heavy-duty clipboards, dirty blueprints, high-vis industrial textures, and sparks.',
+    imagePrefix: 'A raw industrial photograph. Physical medium: gritty 35mm film, harsh job site lighting, or macro of heavy steel/copper. Extreme contrast, heavy textures of rust, metal, and dirt. No digital UIs, no luxury cars, no sterile offices. Pure physical labor and heavy machinery. No legible text or characters. ',
+    thumbnailPrefix: 'An aggressive macro shot of industrial texture (welded steel, copper, blueprints). Stark contrast. Heavy physical wear. Massive blank void on one side. No legible text. ',
+  },
+  'raw-rebuild': {
+    id: 'raw-rebuild',
+    instruction: 'Force a dignified, raw rebuilding aesthetic. Mediums: Minimalist raw concrete architecture, bright but harsh natural sunlight, blank ledger paper, scaffolding, empty rooms with hard shadows.',
+    imagePrefix: 'A stark, minimalist photograph of raw construction or rebuilding. Physical medium: clean 35mm architectural photography. Bright harsh sunlight, heavy shadows, raw concrete, exposed wood, or pristine blank ledgers. Austere, empty, but hopeful. Absolutely no paranoia, no messy clutter. No text or characters. ',
+    thumbnailPrefix: 'A clean architectural shot of raw materials or empty sunlit rooms. Harsh shadows, high contrast. Massive blank void on one side for text. No legible text. ',
+  },
+  'clinical-architectural': {
+    id: 'clinical-architectural',
+    instruction: 'Force a high-end, sterile medical architecture aesthetic. Mediums: Sleek brushed steel, sterile surgical trays, anatomical wireframes, high-contrast modern clinic architecture, frosted glass.',
+    imagePrefix: 'A pristine, high-end clinical photograph. Physical medium: ultra-sharp digital architectural photography. Cool tones, brushed steel, frosted glass, sterile white light, flawless surfaces. No messy hospitals, no warm cozy lighting. Pure clinical efficiency. No legible text or characters. ',
+    thumbnailPrefix: 'A sleek, sterile architectural shot of frosted glass or brushed steel. Cool tones, high contrast. Massive blank void on one side for text. No legible text. ',
   },
 };
 

@@ -42,6 +42,8 @@ image = (
         "curl -L -o /tmp/fontbuild/Cinzel.ttf 'https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel%5Bwght%5D.ttf'",
         "curl -L -o /tmp/fontbuild/BigShouldersStencilDisplay.ttf 'https://raw.githubusercontent.com/google/fonts/main/ofl/bigshouldersstencildisplay/BigShouldersStencilDisplay%5Bwght%5D.ttf'",
         "curl -L -o /tmp/fontbuild/Fraunces.ttf 'https://raw.githubusercontent.com/google/fonts/main/ofl/fraunces/Fraunces%5BSOFT,WONK,opsz,wght%5D.ttf'",
+        "curl -L -o /usr/share/fonts/truetype/custom/Anton-Regular.ttf 'https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf'",
+        "curl -L -o /usr/share/fonts/truetype/custom/Inter-Bold.ttf 'https://raw.githubusercontent.com/google/fonts/main/ofl/inter/static/Inter-Bold.ttf'",
         "fonttools varLib.instancer /tmp/fontbuild/SpaceGrotesk.ttf wght=700 --update-name-table -o /usr/share/fonts/truetype/custom/SpaceGrotesk-Bold.ttf",
         "fonttools varLib.instancer /tmp/fontbuild/Cinzel.ttf wght=900 --update-name-table -o /usr/share/fonts/truetype/custom/Cinzel-Black.ttf",
         "fonttools varLib.instancer /tmp/fontbuild/BigShouldersStencilDisplay.ttf wght=700 --update-name-table -o /usr/share/fonts/truetype/custom/BigShouldersStencilDisplay-Bold.ttf",
