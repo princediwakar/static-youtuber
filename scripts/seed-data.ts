@@ -354,5 +354,73 @@ export const SEEDS: [string, string, SeedTopic[]][] = [
         research_context: 'When you download a free flashlight app and it asks for permission to use your GPS location and microphone, it’s not an accident. The entire "free app" industry exists just to secretly gather data about where you go, who you talk to, and what you do. They package all this creepy personal data and sell it to massive advertising companies. You happily put a corporate tracking device in your pocket just to play a free game.'
       }
     ]
+  ],
+
+  // ─── Medical Education (clinic_playbook) ────────────────────────────────────
+  [
+    'Medical Education',
+    'clinic_playbook',
+    [
+      {
+        title: 'Why a simple headache can actually mean your brain is bleeding',
+        research_context: 'Most headaches are harmless, but a "thunderclap headache" that peaks in intensity within 60 seconds is a massive red flag. This often signals a subarachnoid hemorrhage—a bleeding in the space around your brain. Ignoring this symptom because you think it’s just stress can lead to permanent brain damage or death. The intervention requires immediate CT scans and often emergency neurosurgery to clip the bleeding aneurysm.'
+      },
+      {
+        title: 'How your immune system accidentally destroys your own heart',
+        research_context: 'When you get a simple strep throat infection and do not treat it with antibiotics, your immune system fights off the bacteria. But the proteins on the bacteria look identical to the proteins on your heart valves. In a terrifying case of mistaken identity called Rheumatic Fever, your own white blood cells attack and destroy your heart valves. A simple childhood sore throat can lead to heart failure decades later.'
+      },
+      {
+        title: 'The hidden cause of sudden cardiac arrest in healthy young athletes',
+        research_context: 'Hypertrophic cardiomyopathy is a genetic condition where the heart muscle grows incredibly thick and stiff. A young athlete might feel completely fine, but during intense exercise, the thickened muscle blocks blood flow out of the heart and disrupts the electrical signals. This triggers sudden cardiac arrest without any warning signs. Routine physicals miss it; only an echocardiogram can catch the silent killer before it strikes.'
+      },
+      {
+        title: 'Why drinking too much water too fast can literally kill you',
+        research_context: 'We are told to stay hydrated, but chugging massive amounts of water rapidly causes hyponatremia. The water dilutes the sodium in your blood so fast that your cells try to balance it by pulling water inside. Your brain cells swell, but because they are trapped inside your rigid skull, the pressure builds. This crushes your brain stem, leading to seizures, coma, and death. Hydration is a delicate balance, not a race.'
+      },
+      {
+        title: 'The terrifying reason a tiny scratch can lead to losing a limb',
+        research_context: 'Necrotizing fasciitis, known as flesh-eating bacteria, enters through a tiny cut and spreads along the fascia—the tissue covering your muscles—at a rate of an inch per hour. It releases toxins that rapidly kill the tissue, turning a red bump into black, necrotic flesh in less than a day. The only intervention is aggressive, immediate surgical amputation or debridement to literally cut out the dead flesh faster than the bacteria can spread.'
+      },
+      {
+        title: 'How a blood clot in your leg travels up and suffocates your lungs',
+        research_context: 'Sitting on a long flight can cause a deep vein thrombosis (DVT)—a blood clot in your leg. If that clot breaks free, it travels through your veins, passes through your heart, and gets wedged directly into the main artery of your lungs. This is a pulmonary embolism. It instantly blocks oxygen from getting into your blood, causing sudden, terrifying breathlessness. If the clot is large enough, it causes immediate right-heart failure.'
+      },
+      {
+        title: 'The exact mechanism of how sepsis shuts down your entire body in hours',
+        research_context: 'Sepsis is not an infection; it is your body’s extreme, toxic response to an infection. Your immune system panics and releases massive amounts of chemicals into your blood. These chemicals cause widespread inflammation, making your blood vessels leaky. Your blood pressure plummets catastrophically. Without enough pressure, your kidneys, liver, and brain stop getting oxygen and start failing one by one. It is a race against the clock requiring massive IV fluids and broad-spectrum antibiotics.'
+      },
+      {
+        title: 'Why a sudden loss of vision in one eye is a brain emergency',
+        research_context: 'If a dark curtain suddenly falls over the vision in one eye, it is called amaurosis fugax. This is often caused by a tiny piece of cholesterol breaking off from an artery in your neck and getting stuck in the artery that feeds your retina. The terrifying part is that this is a giant warning sign. It means the plaque is unstable, and the next piece could travel to your brain and cause a massive, paralyzing stroke.'
+      },
+      {
+        title: 'How high blood sugar silently destroys your kidneys over time',
+        research_context: 'Diabetes isn’t just about feeling tired; high blood sugar acts like tiny shards of glass scraping the inside of your blood vessels. In your kidneys, it destroys the delicate filtering system (the glomeruli). Over the years, the filters scar and completely shut down. The patient feels absolutely nothing until their kidneys are 90% destroyed, at which point their blood becomes toxic and they require hours of dialysis three days a week just to survive.'
+      },
+      {
+        title: 'The brutal reality of what a heart attack actually physically is',
+        research_context: 'A heart attack is not your heart stopping; it is your heart muscle suffocating to death. A plaque in your coronary artery ruptures, causing a blood clot to form instantly. Blood flow to a section of the heart muscle stops. Within 20 minutes, the muscle cells begin to die and turn to scar tissue. The pain you feel is literally your heart tissue dying inside your chest. Time is muscle; the artery must be stented open immediately.'
+      },
+      {
+        title: 'Why taking Tylenol for a hangover can destroy your liver',
+        research_context: 'Acetaminophen (Tylenol) is incredibly safe normally, but it is broken down by the exact same liver enzymes that process alcohol. If you take Tylenol while you still have alcohol in your system, the liver gets overwhelmed and produces a highly toxic byproduct called NAPQI. This toxic chemical rapidly kills liver cells, leading to acute liver failure within days. It is one of the leading causes for emergency liver transplants.'
+      },
+      {
+        title: 'How a ruptured appendix floods your abdomen with deadly bacteria',
+        research_context: 'The appendix is a small pouch attached to your large intestine. If it gets blocked, bacteria multiply rapidly, and it swells like a balloon. When the pressure gets too high, it explodes. This instantly spills millions of toxic gut bacteria directly into your sterile abdominal cavity, causing peritonitis. The infection spreads to the blood rapidly, requiring emergency surgery to wash out the abdomen before sepsis takes over.'
+      },
+      {
+        title: 'The terrifying reason some people wake up during surgery',
+        research_context: 'Anesthesia awareness happens when the paralytic drugs work, but the unconsciousness drugs fail. The patient is completely paralyzed and cannot speak or move, but they are fully awake and can feel the surgeon cutting into them. This horrifying failure is often due to an incorrect drug dosage or equipment failure. The trauma is so extreme it causes severe PTSD. Anesthesiologists must constantly monitor brain waves to prevent this nightmare.'
+      },
+      {
+        title: 'Why ignoring heartburn can literally lead to throat cancer',
+        research_context: 'Chronic heartburn (acid reflux) means stomach acid is constantly splashing up into your esophagus. Your esophagus isn\'t built for acid. To protect itself, the cells literally mutate and change their structure to look like stomach cells—a condition called Barrett’s Esophagus. This mutation is a giant red flag, because these mutated cells are highly prone to turning into aggressive esophageal cancer. Chronic heartburn is a silent cellular mutation.'
+      },
+      {
+        title: 'How an asthma attack physically suffocates you from the inside',
+        research_context: 'During a severe asthma attack, three terrifying things happen at once. The muscles around your airways violently spasm and clamp shut. The inside of the airways swells up. And your body dumps thick, sticky mucus into the shrinking tubes. Air can get into your lungs, but you can’t push it out. Your lungs hyperinflate, trapping stale air, and oxygen levels plummet. Without immediate albuterol and steroids to break the spasm, it is fatal.'
+      }
+    ]
   ]
 ];

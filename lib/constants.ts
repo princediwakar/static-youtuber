@@ -24,14 +24,14 @@ export function getModalUrl(baseEnvVarName: string, fallback: string = ''): stri
 
 export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'canvas_center';
 
-export const NICHES = ['Anti-Status Wealth', 'Weaponized History', 'YouTube Automation', 'System Reverse-Engineering'];
+export const NICHES = ['Anti-Status Wealth', 'Weaponized History', 'YouTube Automation', 'System Reverse-Engineering', 'Medical Education'];
 
-// One niche per channel — deterministic, no random selection
 export const ACCOUNT_NICHE: Record<string, string> = {
   canvas_center: 'Anti-Status Wealth',
   canvas_area: 'Weaponized History',
   canvas_station: 'YouTube Automation',
   canvas_base: 'System Reverse-Engineering',
+  clinic_playbook: 'Medical Education',
 };
 
 // Immutable YouTube channel IDs — handles can be renamed, these never change
@@ -40,6 +40,7 @@ export const ACCOUNT_YOUTUBE_CHANNEL_ID: Record<string, string> = {
   canvas_area: 'UCzKvcGH7IyS684PQ4aCw2PQ',
   canvas_base: 'UC6gH91v6aGmQFdNwMFC5RwQ',
   canvas_station: 'UCnBL50AkM_6BmvrNlS1rxVw',
+  clinic_playbook: 'UC29YBI6AEHANR5sad6P2sww',
 };
 
 
@@ -52,6 +53,7 @@ export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, numb
   'Weaponized History':         { RAPID_FIRE: 0.6, SLOW_BURN: 0.4, THE_LIST: 0,   DEEP_DIVE: 0 },
   'YouTube Automation':         { RAPID_FIRE: 1.0, SLOW_BURN: 0,   THE_LIST: 0.0, DEEP_DIVE: 0 },
   'System Reverse-Engineering': { RAPID_FIRE: 0.9, SLOW_BURN: 0,   THE_LIST: 0.1, DEEP_DIVE: 0 },
+  'Medical Education':          { RAPID_FIRE: 0.5, SLOW_BURN: 0.3, THE_LIST: 0.2, DEEP_DIVE: 0 },
 };
 
 export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: number }> = {
@@ -269,6 +271,15 @@ Never use passive voice. Start with a polarizing statement. Present every fact a
 
 Write in sharp, rapid-fire paragraphs (15–20 words). Structure: The Invisible Trap → The Neurochemical Mechanism → The Corporate Intent → The Staggering Scale → The Escape. Expose the exact math and psychology used by corporations to drain attention and money. Your tone should be urgent, paranoid, and highly analytical. Do not trail off or repeat yourself at the end. End decisively.`,
   },
+  'Medical Education': {
+    aestheticId: 'learn-technical',
+    minQualityScore: 5,
+    toneInstruction: `You are breaking down complex medical cases into sharp, life-or-death diagnostics. Your audience needs a rapid-fire clinical understanding of anatomy, diseases, and medical procedures.
+
+Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
+
+Write in intense, clinical paragraphs (15–20 words). Structure: The Symptom → The Hidden Cause → The Biological Mechanism → The Intervention. Be highly technical, but visceral. Sound like a trauma surgeon under extreme pressure. Do not trail off or repeat yourself at the end. End decisively.`,
+  },
 };
 
 export const NICHE_PROFILES: Record<string, NicheProfile> = {
@@ -315,6 +326,17 @@ Never use passive voice. Start with a polarizing statement. Present every fact a
 Reverse-engineer exactly how supermarkets, tech algorithms, or casinos mathematically guarantee you lose. Focus on the sinister ingenuity of these systems. 
 
 Build momentum through rapid-fire facts. The viewer must leave feeling like they just took the red pill and can now see the matrix of manipulation around them. Never sound boring or academic. Do not trail off or repeat yourself at the end. End decisively.`,
+    minQualityScore: 5,
+  },
+  'Medical Education': {
+    aestheticId: 'learn-technical',
+    toneInstruction: `Your tone is clinical, high-stakes, and highly educational. You are dissecting medical cases with extreme precision.
+
+Never use passive voice. Start with a polarizing statement. Present every fact as a counter-narrative to mainstream belief. Cut all introductory filler.
+
+Explain exactly how the human body fails and recovers. Use specific medical terminology combined with visceral descriptions.
+
+Build momentum through rapid-fire diagnostic facts. The viewer must leave feeling like they just stepped out of an intense medical residency training. Never sound boring or academic. Do not trail off or repeat yourself at the end. End decisively.`,
     minQualityScore: 5,
   },
 };
