@@ -274,8 +274,8 @@ export const publishVideo = inngest.createFunction(
     triggers: [{ event: 'slideshow/publish' }],
     onFailure: async ({ error, event }) => {
       console.error(`[CRITICAL] Publish failed: ${error.message}`);
-      const explicitJobId = (event as any)?.data?.jobId;
-      const accountId = (event as any)?.data?.accountId;
+      const explicitJobId = (event as any)?.data?.event?.data?.jobId;
+      const accountId = (event as any)?.data?.event?.data?.accountId;
       if (explicitJobId) {
         try {
           await db.updateJob(explicitJobId, { status: 'failed', error_message: `Publish failed: ${error.message}` });
@@ -368,8 +368,8 @@ export const generateShort = inngest.createFunction(
     triggers: [{ event: 'slideshow/trigger' }],
     onFailure: async ({ error, event }) => {
       console.error(`[CRITICAL] Pipeline failed: ${error.message}`);
-      const accountId = (event as any)?.data?.accountId;
-      const explicitJobId = (event as any)?.data?.jobId;
+      const accountId = (event as any)?.data?.event?.data?.accountId;
+      const explicitJobId = (event as any)?.data?.event?.data?.jobId;
       try {
         // If we have an explicit jobId (from manual triggers), use it directly.
         // Otherwise, query for the most recent pending job for this account to
