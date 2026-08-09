@@ -196,7 +196,11 @@ async function executeAssetPipeline(
     const timeout = setTimeout(() => controller.abort(), timeoutDuration);
 
     try {
-        const callbackUrl = new URL('/api/webhooks/modal', process.env.NEXTAUTH_URL || 'http://localhost:3000');
+        const baseUrl = process.env.NEXTAUTH_URL 
+          || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
+          || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+          || 'http://localhost:3000';
+        const callbackUrl = new URL('/api/webhooks/modal', baseUrl);
         callbackUrl.searchParams.set('accountId', accountId);
         callbackUrl.searchParams.set('skipPublish', String(skipPublish));
 
