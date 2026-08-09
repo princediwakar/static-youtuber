@@ -1,11 +1,44 @@
 // Path: lib/llm.ts
 import { getModalLlmUrl } from './constants';
 
+// Whether to use DeepSeek API directly instead of the Modal-hosted vLLM server.
+// Falls back to DeepSeek when MODAL_LLM_URL is not configured.
+function getLlmConfig(): { url: string; headers: Record<string, string>; modelOverride?: string } {
+  const modalUrl = getModalLlmUrl();
+  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  const deepseekModel = process.env.DEEPSEEK_TEXT_MODEL || 'deepseek-chat';
+
+  if (modalUrl) {
+    return {
+      url: `${modalUrl}/v1/chat/completions`,
+      headers: { 'Content-Type': 'application/json' },
+    };
+  }
+
+  if (deepseekKey) {
+    console.log(`[LLM] No MODAL_LLM_URL — using DeepSeek API directly (model: ${deepseekModel})`);
+    return {
+      url: 'https://api.deepseek.com/v1/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${deepseekKey}`,
+      },
+      modelOverride: deepseekModel,
+    };
+  }
+
+  // Last resort: hardcoded Modal fallback
+  return {
+    url: `https://mental-alternate--llm-server-fastapi-app.modal.run/v1/chat/completions`,
+    headers: { 'Content-Type': 'application/json' },
+  };
+}
+
 export async function chatCompletion(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
   options: { temperature?: number; maxTokens?: number; responseJson?: boolean; timeout?: number } = {},
 ): Promise<string> {
-  const llmUrl = `${getModalLlmUrl()}/v1/chat/completions`;
+  const { url: llmUrl, headers: llmHeaders, modelOverride } = getLlmConfig();
 
   const { temperature = 0.7, maxTokens = 4096, responseJson = false, timeout = 600_000 } = options;
 
@@ -14,6 +47,10 @@ export async function chatCompletion(
     temperature,
     max_tokens: maxTokens,
   };
+
+  if (modelOverride) {
+    body.model = modelOverride;
+  }
 
   if (responseJson) {
     body.response_format = { type: 'json_object' };
@@ -32,9 +69,7 @@ export async function chatCompletion(
       try {
         const res = await fetch(llmUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: llmHeaders,
           body: JSON.stringify({
             ...body,
             messages: currentMessages,
@@ -45,7 +80,7 @@ export async function chatCompletion(
 
         if (!res.ok) {
           const errorBody = await res.text().catch(() => 'unknown');
-          throw new Error(`Modal LLM API error ${res.status}: ${errorBody.slice(0, 500)}`);
+          throw new Error(`LLM API error ${res.status}: ${errorBody.slice(0, 500)}`);
         }
 
         const json = await res.json();
