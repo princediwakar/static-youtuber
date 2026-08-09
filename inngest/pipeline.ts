@@ -5,7 +5,7 @@ import { generateScript, generateLongFormScript } from '@/lib/generators';
 import type { Shot } from '@/lib/types';
 import type { FormatTemplate } from '@/lib/constants';
 import { generateImage } from '@/lib/cloudflareAi';
-import { generateNarrativeSpeech } from '@/lib/audioEngine';
+import { generateShotSpeech, concatWavs } from '@/lib/audioEngine';
 import { selectMusicTrack } from '@/lib/musicSelector';
 import {
   uploadSlideImage,
@@ -66,23 +66,30 @@ async function executeAssetPipeline(
   if (jobA?.narration_audio_url) {
     audioUrl = jobA.narration_audio_url;
   } else {
-    const fullNarrative = script.shots.map((s: Shot) => {
-      let text = s.spoken_text.trim();
-      if (!/[.!?]$/.test(text)) {
-        text += '.';
-      }
-      return text;
-    }).join(' ');
     const creds = await getAccountCredentials(accountId);
     const res = await step.run('generate-audio-narrative', async () => {
-      const sanitized = fullNarrative
-        .replace(/[‘’`]/g, "'")
-        .replace(/[“”]/g, '"')
-        .replace(/[\u2014—]/g, '... ')
-        .replace(/[^\x00-\x7F]/g, '');
-      const result = await generateNarrativeSpeech(sanitized, script.voiceName);
-      const url = await uploadSlideAudio(result.audioBuffer, jobId, 'full', creds);
-      return { url, durationMs: result.durationMs };
+      const buffers: Buffer[] = [];
+      let totalDurationMs = 0;
+      
+      for (let i = 0; i < script.shots.length; i++) {
+        const s = script.shots[i];
+        let text = s.spoken_text.trim();
+        if (!/[.!?]$/.test(text)) text += '.';
+        
+        const sanitized = text
+          .replace(/[‘’`]/g, "'")
+          .replace(/[“”]/g, '"')
+          .replace(/[\u2014—]/g, '... ')
+          .replace(/[^\x00-\x7F]/g, '');
+          
+        const result = await generateShotSpeech(sanitized, script.voiceName, i + 1);
+        buffers.push(result.audioBuffer);
+        totalDurationMs += result.durationMs;
+      }
+      
+      const combinedBuffer = concatWavs(buffers);
+      const url = await uploadSlideAudio(combinedBuffer, jobId, 'full', creds);
+      return { url, durationMs: totalDurationMs };
     });
     audioUrl = res.url;
     durationMs = res.durationMs;

@@ -155,7 +155,7 @@ Each shot has TWO text fields:
    - Never add, remove, or reorder words beyond digit substitution.
 
 VOICE SELECTION (same catalog as shorts — pick best for long-form niche):
-- phil-freeman-american-male: Deep, rich, authoritative American male. Best for Wealth & Mindset / Fascinating History.
+- aaron-american-male: Deep, rich, authoritative American male. Best for Wealth & Mindset / Fascinating History.
 - jon-british-male: Professional, clear, polished. Good for Growth Psychology.
 - greg-american-conversational-male: Conversational, natural American male. Good for Learn Something New.
 - mallory-handford-energetic-american-female: Energetic, bright American female. Alternative for any niche.

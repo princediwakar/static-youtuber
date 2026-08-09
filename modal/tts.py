@@ -54,6 +54,7 @@ image = (
         "openai-whisper",
         "soundfile",
         "numpy",
+        "transformers==4.44.2",
         "fastapi[standard]",
     )
 )

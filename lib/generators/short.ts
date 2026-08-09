@@ -132,7 +132,7 @@ VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
 - kylie-hinze-conversational-american-female: Conversational, upbeat American female.
 - mallory-handford-energetic-american-female: Energetic, bright American female.
 - melissa-harlow-slow-conversational-american-female: Slow, conversational American female.
-- phil-freeman-american-male: Deep, rich, authoritative American male.
+- aaron-american-male: Deep, rich, authoritative American male.
 - sameer-hindi-male: Professional Hindi male voice. (Use ONLY if content is in Hindi)
 - vikram-hindi-male: Clear, conversational Hindi male voice. (Use ONLY if content is in Hindi)
 

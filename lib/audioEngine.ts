@@ -3,10 +3,9 @@ import { getF5TtsUrl, F5_TTS_API_KEY } from './constants';
 
 const MAX_RETRIES = 3;
 
-// F5-TTS on Modal: GPU cold start (~40s) + chunked synthesis of a full
-// narration (~60-120s) = up to ~3 minutes total. Give it 8 minutes before
-// treating the request as hung, which comfortably covers any cold start.
-const FETCH_TIMEOUT_MS = 8 * 60 * 1000;
+// F5-TTS on Modal: GPU cold start (~30s) + synthesis of a short chunk (~2s).
+// Give it 60 seconds before treating the request as hung.
+const FETCH_TIMEOUT_MS = 60 * 1000;
 
 /**
  * Single attempt: POST to F5-TTS Modal endpoint, return WAV buffer.
@@ -58,6 +57,41 @@ async function callF5Tts(text: string, voiceName: string): Promise<Buffer> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export function concatWavs(buffers: Buffer[]): Buffer {
+  if (buffers.length === 0) throw new Error('No buffers provided');
+  if (buffers.length === 1) return buffers[0];
+
+  const parsed = buffers.map((buf, i) => {
+    let offset = 12;
+    let dataOffset = 0;
+    let dataSize = 0;
+    while (offset + 8 <= buf.length) {
+      const chunkId = buf.toString('ascii', offset, offset + 4);
+      const chunkSize = buf.readUInt32LE(offset + 4);
+      if (chunkId === 'data') {
+        dataOffset = offset + 8;
+        dataSize = chunkSize;
+        break;
+      }
+      offset += 8 + chunkSize;
+    }
+    if (!dataOffset) throw new Error(`Missing data chunk in WAV at index ${i}`);
+    return { buf, dataOffset, dataSize };
+  });
+
+  const totalDataSize = parsed.reduce((sum, p) => sum + p.dataSize, 0);
+  const first = parsed[0];
+  
+  const newHeader = Buffer.alloc(first.dataOffset);
+  first.buf.copy(newHeader, 0, 0, first.dataOffset);
+  
+  newHeader.writeUInt32LE(first.dataOffset - 8 + totalDataSize, 4);
+  newHeader.writeUInt32LE(totalDataSize, first.dataOffset - 4);
+  
+  const dataChunks = parsed.map(p => p.buf.subarray(p.dataOffset, p.dataOffset + p.dataSize));
+  return Buffer.concat([newHeader, ...dataChunks]);
 }
 
 function getWavDuration(buffer: Buffer): number {
