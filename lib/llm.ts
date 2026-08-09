@@ -2,13 +2,16 @@
 import { getModalLlmUrl } from './constants';
 
 // Whether to use DeepSeek API directly instead of the Modal-hosted vLLM server.
-// Falls back to DeepSeek when MODAL_LLM_URL is not configured.
+// Checks raw env vars directly — getModalLlmUrl() always returns a non-empty hardcoded
+// fallback even when the env var is not set, so we cannot rely on its return value.
 function getLlmConfig(): { url: string; headers: Record<string, string>; modelOverride?: string } {
-  const modalUrl = getModalLlmUrl();
   const deepseekKey = process.env.DEEPSEEK_API_KEY;
   const deepseekModel = process.env.DEEPSEEK_TEXT_MODEL || 'deepseek-chat';
 
-  if (modalUrl) {
+  // Only use Modal if the env var is actually configured (not just falling back to the hardcoded URL)
+  const hasModalUrl = !!(process.env.MODAL_LLM_URL || process.env.MODAL_LLM_URL_2);
+  if (hasModalUrl) {
+    const modalUrl = getModalLlmUrl();
     return {
       url: `${modalUrl}/v1/chat/completions`,
       headers: { 'Content-Type': 'application/json' },
@@ -16,7 +19,7 @@ function getLlmConfig(): { url: string; headers: Record<string, string>; modelOv
   }
 
   if (deepseekKey) {
-    console.log(`[LLM] No MODAL_LLM_URL — using DeepSeek API directly (model: ${deepseekModel})`);
+    console.log(`[LLM] No MODAL_LLM_URL set — using DeepSeek API directly (model: ${deepseekModel})`);
     return {
       url: 'https://api.deepseek.com/v1/chat/completions',
       headers: {
@@ -28,6 +31,7 @@ function getLlmConfig(): { url: string; headers: Record<string, string>; modelOv
   }
 
   // Last resort: hardcoded Modal fallback
+  console.warn('[LLM] No MODAL_LLM_URL or DEEPSEEK_API_KEY configured — using hardcoded Modal fallback');
   return {
     url: `https://mental-alternate--llm-server-fastapi-app.modal.run/v1/chat/completions`,
     headers: { 'Content-Type': 'application/json' },
