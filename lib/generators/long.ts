@@ -154,15 +154,14 @@ Each shot has TWO text fields:
    - Acronyms stay as-is: "CEO", "FBI", "POW"
    - Never add, remove, or reorder words beyond digit substitution.
 
-VOICE SELECTION (same catalog as shorts — pick best for long-form niche):
-- aaron-american-male: Deep, rich, authoritative American male. Best for Wealth & Mindset / Fascinating History.
+VOICE SELECTION (pick best for long-form niche):
+- phil-freeman-american-male: Deep, rich, authoritative American male. Best for Wealth & Mindset / Fascinating History.
 - jon-british-male: Professional, clear, polished. Good for Growth Psychology.
-- greg-american-conversational-male: Conversational, natural American male. Good for Learn Something New.
-- mallory-handford-energetic-american-female: Energetic, bright American female. Alternative for any niche.
-- melissa-harlow-slow-conversational-american-female: Warm, slow conversational American female narration.
-- kylie-hinze-conversational-american-female: Friendly, upbeat conversational American female.
-- sameer-hindi-male: Professional Hindi male voice. (Use ONLY if content is in Hindi)
-- vikram-hindi-male: Clear, conversational Hindi male voice. (Use ONLY if content is in Hindi)
+- dee-smith-american-male: Conversational, natural American male. Good for Learn Something New.
+- mallory-handford-american-female: Energetic, bright American female. Alternative for any niche.
+- melissa-harlow-american-female: Warm, slow conversational American female narration.
+- kylie-hinze-american-female: Friendly, upbeat conversational American female.
+- kelli-winkler-american-female: Clear, professional American female.
 
 VISUAL AESTHETICS & SHOT VARIETY MANDATE (CRITICAL):
 Visual World: ${aestheticInstruction}

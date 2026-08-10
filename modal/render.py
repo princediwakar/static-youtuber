@@ -357,7 +357,10 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
 
     try:
         def download_asset(url, filename):
-            urllib.request.urlretrieve(url, filename)
+            try:
+                urllib.request.urlretrieve(url, filename)
+            except urllib.error.HTTPError as e:
+                raise Exception(f"HTTPError {e.code} for URL: {url}") from None
             return filename
 
         img_paths = [f"{work_dir}/img_{i}.jpg" for i in range(len(shots))]

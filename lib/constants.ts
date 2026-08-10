@@ -170,8 +170,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
     textColor: '#FFC000',      // High-vis yellow
     strokeColor: '#000000',
     accentColor: '#FFFFFF',
-    maxCharsPerLine: 32,
-    maxChars: 80,
+    maxCharsPerLine: 42,
+    maxChars: 120,
   },
   'raw-rebuild': {
     fontFamily: 'Inter',
@@ -393,4 +393,4 @@ export const AESTHETICS: Record<string, Aesthetic> = {
   },
 };
 
-export const QUALITY_GATE_MAX_RETRIES = 4;
+export const QUALITY_GATE_MAX_RETRIES = 6;

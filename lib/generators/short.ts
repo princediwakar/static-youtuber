@@ -106,7 +106,7 @@ Each shot has TWO text fields for different modalities:
 1. "caption_text" — The EXACT verbatim text from the narrative, burned onto the screen.
    - VERBATIM SLICING ONLY: You MUST preserve the exact prose, grammar, and punctuation of the narrative. Do NOT rewrite, paraphrase, summarize, or convert to title-case fragments.
    - PUNCTUATION IS CRITICAL (DO NOT DROP PERIODS!): You MUST keep all commas, periods, and question marks EXACTLY as they appear in the narrative. If a shot completes a sentence, IT MUST END WITH A PERIOD. Do not strip ending punctuation, as it dictates the pacing for the text-to-speech engine!
-   - WORD LIMIT: No shot may contain more than 12 words.
+   - WORD LIMIT: No shot may contain more than 10 words.
    - If a sentence is long, SPLIT it across multiple consecutive shots. Maintain the exact flow and punctuation of the sentence across the shots (e.g., Shot 1: "When the market crashed,", Shot 2: "they bought everything.").
    - Keep symbols and abbreviations as-is from the narrative (e.g., "$1.4B", "26%", "CEO").
    - NO REPETITION: Do NOT repeat the exact same caption or spoken text across multiple shots.
@@ -127,14 +127,13 @@ Each shot has TWO text fields for different modalities:
    - Never add, remove, or reorder words beyond the digit→word substitution.
 
 VOICE SELECTION — Choose the voiceName that best matches the niche's tone:
-- greg-american-conversational-male: Conversational, natural American male.
+- dee-smith-american-male: Conversational, natural American male.
 - jon-british-male: Professional, clear, experienced British male.
-- kylie-hinze-conversational-american-female: Conversational, upbeat American female.
-- mallory-handford-energetic-american-female: Energetic, bright American female.
-- melissa-harlow-slow-conversational-american-female: Slow, conversational American female.
-- aaron-american-male: Deep, rich, authoritative American male.
-- sameer-hindi-male: Professional Hindi male voice. (Use ONLY if content is in Hindi)
-- vikram-hindi-male: Clear, conversational Hindi male voice. (Use ONLY if content is in Hindi)
+- kylie-hinze-american-female: Conversational, upbeat American female.
+- mallory-handford-american-female: Energetic, bright American female.
+- melissa-harlow-american-female: Slow, conversational American female.
+- phil-freeman-american-male: Deep, rich, authoritative American male.
+- kelli-winkler-american-female: Clear, professional American female.
 
 VISUAL AESTHETICS & SHOT VARIETY MANDATE (CRITICAL):
 Visual World: ${aestheticInstruction}
