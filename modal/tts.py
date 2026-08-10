@@ -158,8 +158,8 @@ class F5TTSModel:
         """
         import pathlib
         import subprocess
-        import whisper
-        from f5_tts.api import F5TTS
+        import whisper  # type: ignore
+        from f5_tts.api import F5TTS  # type: ignore
 
         mp3_files = sorted(pathlib.Path(VOICES_DIR).glob("*.mp3"))
         if not mp3_files:
