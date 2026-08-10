@@ -6,12 +6,18 @@ export const ShotSchema = z.object({
   visual_prompt: z.string()
     .min(15, 'Scene description too short — expand with visual details (lighting, mood, camera angle)')
     .max(600, 'Image prompt must be ≤600 chars'),
-  caption_text: z.string()
+  caption_text: z
+    .string()
+    .describe('The exact verbatim text from the narrative. Natural flow, punctuated.')
     .refine(t => t.trim().split(/\s+/).length >= 1, 'Min 1 word')
-    .refine(t => t.trim().split(/\s+/).length <= 25, 'Max 25 words')
-    .refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
-  spoken_text: z.string()
-    .min(1, 'Must contain spoken phonetic text for TTS'),
+    .refine(t => t.trim().split(/\s+/).length <= 40, 'Max 40 words')
+    .refine(t => !/\[.*?\]/.test(t), 'No director tags in text')
+    .refine(t => /[.!?]$/.test(t.trim()) === false || true, 'Optional punctuation check'),
+  spoken_text: z
+    .string()
+    .describe('Identical to caption_text except digits are written out as words.')
+    .min(1, 'Must contain spoken phonetic text for TTS')
+    .refine(t => t.trim().split(/\s+/).length <= 40, 'Max 40 words'),
   is_conclusion: z.boolean().default(false),
 });
 
@@ -64,7 +70,7 @@ export const LongShotSchema = z.object({
     .max(800, 'Image prompt must be ≤800 chars'),
   caption_text: z.string()
     .refine(t => t.trim().split(/\s+/).length >= 1, 'Min 1 word')
-    .refine(t => t.trim().split(/\s+/).length <= 30, 'Max 30 words')
+    .refine(t => t.trim().split(/\s+/).length <= 50, 'Max 50 words')
     .refine(t => !/\[.*?\]/.test(t), 'No director tags in text'),
   spoken_text: z.string().min(1),
   is_conclusion: z.boolean().default(false),
