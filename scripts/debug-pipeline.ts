@@ -16,8 +16,7 @@
  *   8. YouTube    — are the account OAuth credentials still valid?
  */
 
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
+import './env';
 
 import pg from 'pg';
 import { getAccountCredentials } from '../lib/accountService';
@@ -207,7 +206,7 @@ async function main() {
   try {
     const start = Date.now();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30_000);
+    const timer = setTimeout(() => controller.abort(), 120_000);
     const res = await fetch(llmUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -231,7 +230,7 @@ async function main() {
     }
   } catch (e: any) {
     const isTimeout = e?.name === 'AbortError';
-    fail(`LLM ${isTimeout ? 'TIMED OUT after 30s' : `threw: ${e.message}`}`);
+    fail(`LLM ${isTimeout ? 'TIMED OUT after 120s' : `threw: ${e.message}`}`);
     results.push({ step: 'Modal LLM', ok: false, notes: e.message });
   }
 
