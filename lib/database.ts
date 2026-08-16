@@ -2,13 +2,9 @@
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 
 const pool = new Pool({
-  connectionString: (process.env.DATABASE_URL || '').replace(
-    /[?&]sslmode=(?:prefer|require|verify-ca)(?=\?|&|$)/,
-    (m) => m.replace(/(prefer|require|verify-ca)/, 'verify-full')
-  ),
-  ssl: { rejectUnauthorized: false },
+  connectionString: process.env.DATABASE_URL,
   max: 3,
-  connectionTimeoutMillis: 30000,
+  connectionTimeoutMillis: 60_000, // 60s — Neon cold start can take up to 90s
   idleTimeoutMillis: 300000, // 5 min — keep alive through long pipeline steps
 });
 
@@ -20,18 +16,30 @@ export async function query<T extends QueryResultRow = any>(text: string, params
       console.warn('[DB] Connection lost or DNS failed, retrying...');
       return await pool.query<T>(text, params);
     }
-    // Neon cold start — retry with backoff (compute needs ~3–10s to wake)
-    if (error?.code === 'ECONNREFUSED') {
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        // Base delay + up to 2 seconds of random jitter to prevent thundering herd
+    // Neon scale-to-zero cold start — compute can take up to 90s to wake.
+    // Retry with exponential backoff + jitter across 8 attempts (~2 min total).
+    const isColdStart =
+      error?.code === 'ECONNREFUSED' ||
+      error?.code === 'ETIMEDOUT' ||
+      error?.message?.includes('connect ECONNREFUSED') ||
+      error?.message?.includes('Connection timeout') ||
+      error?.message?.includes('SASL') // Neon sometimes rejects mid-wake
+    if (isColdStart) {
+      for (let attempt = 1; attempt <= 8; attempt++) {
+        // Exponential delay: 3s, 6s, 9s, 12s, 16s, 20s, 25s, 30s + jitter
         const jitter = Math.floor(Math.random() * 2000);
-        const delay = attempt * 3000 + jitter;
-        console.warn(`[DB] Compute cold (attempt ${attempt}/5), waiting ${delay / 1000}s...`);
+        const delay = Math.min(attempt * 4000, 30_000) + jitter;
+        console.warn(`[DB] Compute cold (attempt ${attempt}/8), waiting ${(delay / 1000).toFixed(1)}s...`);
         await new Promise(r => setTimeout(r, delay));
         try {
           return await pool.query<T>(text, params);
         } catch (retryError: any) {
-          if (retryError?.code !== 'ECONNREFUSED') throw retryError;
+          const stillCold =
+            retryError?.code === 'ECONNREFUSED' ||
+            retryError?.code === 'ETIMEDOUT' ||
+            retryError?.message?.includes('Connection timeout') ||
+            retryError?.message?.includes('SASL');
+          if (!stillCold) throw retryError; // different error — surface immediately
         }
       }
       throw error; // exhausted retries — surface the original error

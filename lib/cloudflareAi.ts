@@ -113,8 +113,11 @@ export async function generateImage(
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          // Cloudflare accepts `width` and `height` for flux-1-schnell as well.
-          body: JSON.stringify({ prompt: enforcedPrompt, steps: resolvedSteps, width, height }),
+          // NOTE: flux-1-schnell does NOT accept width/height in the JSON body —
+          // Cloudflare dropped those properties from the schnell schema. The model
+          // generates at its native resolution. Only flux-2-* supports explicit dims
+          // (via multipart/form-data, handled in the branch above).
+          body: JSON.stringify({ prompt: enforcedPrompt, steps: resolvedSteps }),
         };
 
     try {
