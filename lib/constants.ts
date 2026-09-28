@@ -24,14 +24,19 @@ export function getModalUrl(baseEnvVarName: string, fallback: string = ''): stri
 
 export const ACCOUNT_ID = process.env.ACCOUNT_ID || 'canvas_center';
 
-export const NICHES = ['Trade Wealth', 'The Case File', 'Second Act', 'YouTube Automation', 'The Clinic Playbook'];
+export const NICHES = ['The Case File'];
 
 export const ACCOUNT_NICHE: Record<string, string> = {
-  canvas_center: 'Trade Wealth',
+  canvas_center: 'The Case File',
   canvas_area: 'The Case File',
-  canvas_base: 'Second Act',
-  canvas_station: 'YouTube Automation',
-  clinic_playbook: 'The Clinic Playbook',
+  canvas_base: 'The Case File',
+  canvas_station: 'The Case File',
+  clinic_playbook: 'The Case File',
+  // Fallbacks for DB migration mismatch
+  CanvasCenter: 'The Case File',
+  CanvasSquare: 'The Case File',
+  CanvasBase: 'The Case File',
+  CanvasStation: 'The Case File',
 };
 
 // Immutable YouTube channel IDs — handles can be renamed, these never change
@@ -49,11 +54,11 @@ export const FORMAT_TEMPLATES = ['RAPID_FIRE', 'SLOW_BURN', 'THE_LIST', 'DEEP_DI
 export type FormatTemplate = typeof FORMAT_TEMPLATES[number];
 
 export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, number>> = {
-  'Trade Wealth':       { RAPID_FIRE: 0.3, SLOW_BURN: 0.2, THE_LIST: 0.3, DEEP_DIVE: 0.2 },
-  'The Case File':      { RAPID_FIRE: 0.4, SLOW_BURN: 0.4, THE_LIST: 0.0, DEEP_DIVE: 0.2 },
-  'Second Act':         { RAPID_FIRE: 0.3, SLOW_BURN: 0.4, THE_LIST: 0.2, DEEP_DIVE: 0.1 },
+  'Trade Wealth':       { RAPID_FIRE: 0.5, SLOW_BURN: 0.5, THE_LIST: 0.0, DEEP_DIVE: 0.0 },
+  'The Case File':      { RAPID_FIRE: 0.5, SLOW_BURN: 0.5, THE_LIST: 0.0, DEEP_DIVE: 0.0 },
+  'Second Act':         { RAPID_FIRE: 0.5, SLOW_BURN: 0.5, THE_LIST: 0.0, DEEP_DIVE: 0.0 },
   'YouTube Automation': { RAPID_FIRE: 1.0, SLOW_BURN: 0.0, THE_LIST: 0.0, DEEP_DIVE: 0.0 },
-  'The Clinic Playbook':    { RAPID_FIRE: 0.4, SLOW_BURN: 0.3, THE_LIST: 0.2, DEEP_DIVE: 0.1 },
+  'The Clinic Playbook':    { RAPID_FIRE: 0.5, SLOW_BURN: 0.5, THE_LIST: 0.0, DEEP_DIVE: 0.0 },
 };
 
 export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: number }> = {

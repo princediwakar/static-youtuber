@@ -2,12 +2,10 @@
 // Inngest SDK serve handler — all Inngest function invocations come through here.
 import { serve } from 'inngest/next';
 import { inngest } from '@/inngest/client';
-import { 
+import {
   generateShort, 
   channelScheduler, 
   syncAnalyticsCron, 
-  generateLongForm, 
-  longFormScheduler,
   publishVideo
 } from '@/inngest/pipeline';
 
@@ -17,8 +15,6 @@ export const { GET, POST, PUT } = serve({
     generateShort, 
     channelScheduler, 
     syncAnalyticsCron, 
-    generateLongForm, 
-    longFormScheduler,
     publishVideo
   ],
 });

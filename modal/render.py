@@ -3,9 +3,12 @@ import modal
 import os
 import subprocess
 import urllib.request
+from urllib.error import HTTPError
 import re
 import shutil
+from typing import Optional, Dict, List, Any
 from concurrent.futures import ThreadPoolExecutor
+from fastapi import Request, HTTPException
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -65,23 +68,13 @@ DEFAULT_CAPTION_STYLE = {
 }
 
 
-def get_render_config(content_type: str) -> dict:
-    """Return per-content-type render settings.
-    Shorts: portrait 1080×1920. Long-form: landscape 1920×1080."""
-    if content_type == 'long':
-        return {
-            'play_res_x': 1920, 'play_res_y': 1080,
-            'font_size': 72,
-            'margin_l': 120, 'margin_r': 120, 'margin_v': 80,
-            'alignment': 2,
-            'scale': '1920:1080', 'size': '1920x1080',
-            'cloudinary_folder': 'ai-slideshow/rendered-long',
-        }
+def get_render_config() -> dict:
+    """Return shorts render settings: portrait 1080×1920."""
     return {
         'play_res_x': 1080, 'play_res_y': 1920,
-        'font_size': 72,
-        'margin_l': 120, 'margin_r': 120, 'margin_v': 1080,
-        'alignment': 8,
+        'font_size': 96,
+        'margin_l': 100, 'margin_r': 100, 'margin_v': 800,
+        'alignment': 2,
         'scale': '1080:1920', 'size': '1080x1920',
         'cloudinary_folder': 'ai-slideshow/rendered',
     }
@@ -292,16 +285,15 @@ def proportional_split(shots: list, total_duration: float) -> list:
 def build_continuous_ass(
     shot_boundaries: list,
     shots: list,
-    caption_style: dict,
+    caption_style: Optional[Dict[str, Any]],
     play_res_x: int = 1080,
     play_res_y: int = 1920,
-    font_size: int = 72,
-    margin_v: int = 1080,
-    alignment: int = 8,
+    font_size: int = 96,
+    margin_v: int = 800,
+    alignment: int = 2,
 ) -> str:
     style = {**DEFAULT_CAPTION_STYLE, **(caption_style or {})}
-    primary_colour = hex_to_ass_color(style.get("textColor", "#000000"), alpha="00")
-    back_colour = hex_to_ass_color(style.get("strokeColor", "#FFFFFF"), alpha="00")
+    primary_colour = hex_to_ass_color(style.get("textColor", "#FFFFFF"), alpha="00")
 
     ass_content = [
         "[Script Info]",
@@ -312,8 +304,8 @@ def build_continuous_ass(
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        # BorderStyle 1 is Outline+DropShadow. We drop the old BorderStyle 3 (opaque box).
-        f"Style: Default,{style['fontFamily']},{font_size},{primary_colour},&H000000FF,{back_colour},&H40000000,-1,0,0,0,100,100,0,0,1,12,4,{alignment},120,120,{margin_v},1",
+        # BorderStyle 3 is opaque box.
+        f"Style: Default,{style['fontFamily']},{font_size},{primary_colour},&H000000FF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,3,10,0,{alignment},100,100,{margin_v},1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -323,9 +315,16 @@ def build_continuous_ass(
         if i >= len(shots):
             break
         
-        caption = shots[i].get("caption_text", "").strip()
+        caption = shots[i].get("caption_text", "").strip().upper()
         if not caption:
             continue
+
+        # Wrap manually: ~3 words per line for better readability in shorts
+        words = caption.split()
+        wrapped_caption = ""
+        for j, w in enumerate(words):
+            wrapped_caption += w + (" " if (j + 1) % 3 != 0 else "\\N")
+        caption = wrapped_caption.strip().removesuffix("\\N")
 
         ass_start = format_ass_time(start_time)
         ass_end = format_ass_time(end_time)
@@ -334,14 +333,14 @@ def build_continuous_ass(
     return "\n".join(ass_content)
 
 @app.function(cpu=8.0, timeout=1800, secrets=[modal.Secret.from_name("cloudinary")])
-def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str, visual_world: str = None, caption_style: dict = None, shot_audio_urls: list = None, content_type: str = 'shorts', payload_creds: dict = None):
+def render_video(job_id: str, account_id: str, shots: list, audio_url: str, music_url: str, callback_url: str, visual_world: Optional[str] = None, caption_style: Optional[Dict[str, Any]] = None, shot_audio_urls: Optional[List[str]] = None, payload_creds: Optional[Dict[str, Any]] = None):
     import cloudinary.uploader
     import requests
 
-    cfg = get_render_config(content_type)
+    cfg = get_render_config()
     work_dir = f"/tmp/{job_id}"
     os.makedirs(work_dir, exist_ok=True)
-    print(f"[{job_id}] Starting render — account={account_id}, content_type={content_type}, visual_world={visual_world or 'default'}, shots={len(shots)}")
+    print(f"[{job_id}] Starting render — account={account_id}, visual_world={visual_world or 'default'}, shots={len(shots)}")
 
     def send_failure_callback(error_msg: str):
         if not callback_url:
@@ -359,12 +358,13 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         def download_asset(url, filename):
             try:
                 urllib.request.urlretrieve(url, filename)
-            except urllib.error.HTTPError as e:
+            except HTTPError as e:
                 raise Exception(f"HTTPError {e.code} for URL: {url}") from None
             return filename
 
         img_paths = [f"{work_dir}/img_{i}.jpg" for i in range(len(shots))]
         bg_music_path = f"{work_dir}/bg_music.mp3"
+        shot_audio_paths: List[str] = []
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             tasks = [executor.submit(download_asset, shot["image_url"], img_paths[i]) for i, shot in enumerate(shots)]
@@ -583,7 +583,6 @@ def render_video(job_id: str, account_id: str, shots: list, audio_url: str, musi
         shutil.rmtree(work_dir, ignore_errors=True)
 
 
-from fastapi import Request, HTTPException
 
 @app.function(secrets=[modal.Secret.from_name("cloudinary")])
 @modal.fastapi_endpoint(method="POST")
@@ -601,8 +600,6 @@ async def trigger_render(request: Request):
     caption_style = payload.get("caption_style")
     # Per-shot TTS — when present, bypasses Whisper alignment entirely
     shot_audio_urls = payload.get("shot_audio_urls")
-    # content_type: 'shorts' (portrait 1080x1920) or 'long' (landscape 1920x1080)
-    content_type = payload.get("content_type", "shorts")
     payload_creds = payload.get("cloudinary_credentials")
     sync = payload.get("sync", False)
 
@@ -614,10 +611,10 @@ async def trigger_render(request: Request):
     try:
         if sync:
             print(f"[trigger_render] Running synchronously for job {job_id}")
-            result = render_video.remote(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type, payload_creds)
+            result = render_video.remote(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, payload_creds)
             return {"status": "completed", "jobId": job_id, "videoUrl": result["videoUrl"]}
         else:
-            render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, content_type, payload_creds)
+            render_video.spawn(job_id, account_id, shots, audio_url, music_url, callback_url, visual_world, caption_style, shot_audio_urls, payload_creds)
             return {"status": "queued", "jobId": job_id}
     except Exception as e:
         print(f"[trigger_render] render_video failed: {e}")

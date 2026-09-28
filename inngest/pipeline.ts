@@ -1,7 +1,7 @@
 // inngest/pipeline.ts
 import { inngest } from './client';
 import { NonRetriableError } from 'inngest';
-import { generateScript, generateLongFormScript } from '@/lib/generators';
+import { generateScript } from '@/lib/generators';
 import type { Shot } from '@/lib/types';
 import type { FormatTemplate } from '@/lib/constants';
 import { generateImage } from '@/lib/cloudflareAi';
@@ -18,10 +18,6 @@ import { db, query } from '@/lib/database';
 import {
   CF_AI_SLIDE_WIDTH,
   CF_AI_SLIDE_HEIGHT,
-  LONG_CF_AI_SLIDE_WIDTH,
-  LONG_CF_AI_SLIDE_HEIGHT,
-  LONG_THUMBNAIL_WIDTH,
-  LONG_THUMBNAIL_HEIGHT,
   NICHE_PROFILES,
   DEFAULT_NICHE_PROFILE,
   NICHES,
@@ -44,7 +40,6 @@ async function executeAssetPipeline(
   niche: string,
   topic: string,
   skipPublish: boolean,
-  isLongForm: boolean,
   variant: string | null = null
 ) {
   // ── Step 2: All Assets Parallel (Narration, Images, Music, Thumbnail) ────────
@@ -53,9 +48,9 @@ async function executeAssetPipeline(
   const estimatedDurationSec = Math.ceil(totalWords / 2.5) + 10;
   
   // Settings based on content type
-  const slideWidth = isLongForm ? LONG_CF_AI_SLIDE_WIDTH : CF_AI_SLIDE_WIDTH;
-  const slideHeight = isLongForm ? LONG_CF_AI_SLIDE_HEIGHT : CF_AI_SLIDE_HEIGHT;
-  const musicDurationLimit = isLongForm ? 300 : 60;
+  const slideWidth = CF_AI_SLIDE_WIDTH;
+  const slideHeight = CF_AI_SLIDE_HEIGHT;
+  const musicDurationLimit = 60;
   const renderTimeout = '30m';
 
   // ── Step 2: Sequential Asset Generation (Narration, Images, Thumbnail) ────────
@@ -141,9 +136,7 @@ async function executeAssetPipeline(
       ? `${script.hook_intro.slice(0, 40)} — ${script.title}`
       : script.title;
       
-    const thumbBuffer = isLongForm 
-      ? await generateThumbnail(thumbText, script.thumbnailPrompt, niche, LONG_THUMBNAIL_WIDTH, LONG_THUMBNAIL_HEIGHT)
-      : await generateThumbnail(thumbText, script.thumbnailPrompt, niche);
+    const thumbBuffer = await generateThumbnail(thumbText, script.thumbnailPrompt, niche);
       
     const url = await uploadThumbnail(thumbBuffer, jobId, creds);
     await db.updateJob(jobId, { thumbnail_url: url });
@@ -210,7 +203,7 @@ async function executeAssetPipeline(
           body: JSON.stringify({
             jobId,
             accountId,
-            content_type: isLongForm ? 'long' : 'shorts',
+            content_type: 'shorts',
             visual_world: script.visual_world,
             caption_style: getCaptionStyle(script.visual_world),
             shots: script.shots.map((shot: Shot, i: number) => ({
@@ -440,91 +433,12 @@ export const generateShort = inngest.createFunction(
 
     await executeAssetPipeline(
       step, accountId, scriptResult.jobId, scriptResult.script, scriptResult.format_template, 
-      scriptResult.niche, scriptResult.topic, skipPublish, false, scriptResult.variant
+      scriptResult.niche, scriptResult.topic, skipPublish, scriptResult.variant
     );
   }
 );
 
-export const generateLongForm = inngest.createFunction(
-  {
-    id: 'generate-long-form',
-    retries: 1,
-    timeouts: { finish: '20m' },
-    concurrency: { key: 'event.data.accountId', limit: 1 },
-    triggers: [{ event: 'slideshow/trigger-long' }],
-    onFailure: async ({ error, event }) => {
-      console.error(`[CRITICAL] Long-form pipeline failed: ${error.message}`);
-      const accountId = (event as any)?.data?.accountId;
-      const explicitJobId = (event as any)?.data?.jobId;
-      try {
-        // Use a targeted query for pending jobs to avoid races between concurrent
-        // runs for the same account (getIncompleteJobByType can find the WRONG job
-        // when multiple executions exist simultaneously).
-        let job;
-        if (explicitJobId) {
-          job = await db.getJob(explicitJobId);
-        } else if (accountId) {
-          const res = await query<{ id: string }>(
-            `SELECT id FROM slideshow_jobs WHERE account_id = $1 AND content_type = 'long' AND status NOT IN ('published', 'failed') ORDER BY created_at DESC LIMIT 1`,
-            [accountId]
-          );
-          job = res.rows[0] ? await db.getJob(res.rows[0].id) : null;
-        }
-        if (job?.id) {
-          await db.updateJob(job.id, { status: 'failed', error_message: error.message });
-          if (accountId) {
-            const creds = await getAccountCredentials(accountId);
-            await cleanupJobArtifacts(job.id, creds);
-          }
-        }
-      } catch (dbErr: any) {
-        console.error(`[CRITICAL] Failed to update long-form job failure status or cleanup: ${dbErr.message}`);
-      }
-    },
-  },
-  async ({ step, event }) => {
-    const accountId: string = event.data.accountId;
-    const explicitJobId: string | undefined = event.data.jobId;
-    const skipPublish: boolean = event.data.skipPublish === true;
 
-    // ── Step 1: Script + GPU warmup (parallel) ────────────────────────────────────
-    const generateLongFormScriptTask = async () => {
-      const jobToResume = await step.run('check-resume', async () => {
-        const job = explicitJobId ? await db.getJob(explicitJobId) : await db.getIncompleteJobByType(accountId, 'long');
-        if (job && !job.script) {
-          await db.updateJob(job.id, { status: 'failed', error_message: 'Abandoned before script generation completed' });
-          return null;
-        }
-        return job;
-      });
-      
-      if (jobToResume) {
-        return { script: jobToResume.script, jobId: jobToResume.id, format_template: jobToResume.format_template, niche: jobToResume.niche, topic: jobToResume.topic };
-      }
-
-      const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
-      
-      const jobId = await step.run('create-job', () => 
-        db.createJob({ account_id: accountId, topic: 'Generating Script...', niche, format_template: 'pending', script: null, status: 'pending', content_type: 'long' })
-      );
-      
-      const { script, topic, formatTemplate } = await generateLongFormScript(step, niche, accountId);
-      
-      await step.run('update-job', () => 
-        db.updateJob(jobId, { topic, format_template: formatTemplate, script, status: 'script_ready' })
-      );
-      
-      return { script, jobId, format_template: formatTemplate, niche, topic };
-    };
-
-    const scriptResult = await generateLongFormScriptTask();
-
-    await executeAssetPipeline(
-      step, accountId, scriptResult.jobId, scriptResult.script, scriptResult.format_template, 
-      scriptResult.niche, scriptResult.topic, skipPublish, true, null
-    );
-  }
-);
 
 export const channelScheduler = inngest.createFunction(
   {
@@ -559,7 +473,7 @@ export const channelScheduler = inngest.createFunction(
     for (const channel of channels) {
       const isCoolingDown = await step.run(`check-throttle-${channel.account_id}`, async () => {
         const recent = await query<{ id: string }>(
-          `SELECT id FROM slideshow_jobs WHERE account_id = $1 AND created_at > NOW() - INTERVAL '40 hours' LIMIT 1`,
+          `SELECT id FROM slideshow_jobs WHERE account_id = $1 AND created_at > NOW() - INTERVAL '16 hours' LIMIT 1`,
           [channel.account_id]
         );
         return recent.rows.length > 0;
@@ -591,44 +505,5 @@ export const syncAnalyticsCron = inngest.createFunction(
   },
   async () => {
     await syncAnalytics();
-  }
-);
-
-export const longFormScheduler = inngest.createFunction(
-  {
-    id: 'long-form-scheduler',
-    retries: 1,
-    triggers: [{ cron: '0 11 * * *' }],
-    onFailure: async ({ error }) => {
-      console.error(`[CRITICAL] Long-form scheduler failed: ${error.message}`);
-    },
-  },
-  async ({ step }) => {
-  
-    const accounts = await step.run('get-accounts', async () => {
-      const result = await query<{ id: string }>("SELECT id FROM accounts WHERE status = 'active'");
-      return result.rows.map(r => r.id);
-    });
-
-    let triggered = 0;
-    let skipped = 0;
-
-    for (const accountId of accounts) {
-      const shouldRun = await step.run(`check-48h-throttle-${accountId}`, async () => {
-        const recent = await db.getLastJobByType(accountId, 'long', 48);
-        return recent === null;
-      });
-
-      if (shouldRun) {
-        await step.sendEvent(`trigger-long-${accountId}`, {
-          name: 'slideshow/trigger-long',
-          data: { accountId },
-        });
-        triggered++;
-      } else {
-        skipped++;
-      }
-    }
-    return { triggered, skipped };
   }
 );
