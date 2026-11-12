@@ -308,19 +308,25 @@ export const publishVideo = inngest.createFunction(
     await step.run('publish', async () => {
       const creds = await getAccountCredentials(accountId);
       
-      let thumbRes;
-      for (let t = 0; t < 3; t++) {
-        thumbRes = await fetch(job.thumbnail_url);
-        if (thumbRes.ok) break;
-        await new Promise(res => setTimeout(res, 1000));
+      let thumbBuffer: Buffer = Buffer.alloc(0);
+      if (job.thumbnail_url) {
+        for (let t = 0; t < 3; t++) {
+          try {
+            const thumbRes = await fetch(job.thumbnail_url);
+            if (thumbRes.ok) {
+              thumbBuffer = Buffer.from(await thumbRes.arrayBuffer());
+              break;
+            }
+          } catch {}
+          await new Promise(res => setTimeout(res, 1000));
+        }
       }
-      if (!thumbRes?.ok) throw new Error('Failed to fetch thumbnail for YouTube upload after retries');
+      if (thumbBuffer.length === 0) {
+        console.warn(`[Pipeline] Thumbnail fetch failed or empty for job ${jobId}. Proceeding with default video frame.`);
+      }
 
-      const thumbBuffer = Buffer.from(await thumbRes.arrayBuffer());
       const labelAsSynthetic = Math.random() < 0.5;
-      
       const script = typeof job.script === 'string' ? JSON.parse(job.script) : job.script;
-      
       const result = await uploadToYouTube(job.video_url, thumbBuffer, script, creds, labelAsSynthetic);
 
       await query(
@@ -402,11 +408,13 @@ export const generateShort = inngest.createFunction(
     const generateScriptTask = async () => {
       const jobToResume = await step.run('check-resume', async () => {
         const job = explicitJobId ? await db.getJob(explicitJobId) : await db.getIncompleteJob(accountId);
-        if (job && !job.script) {
-          await db.updateJob(job.id, { status: 'failed', error_message: 'Abandoned before script generation completed' });
-          return null;
+        if (job && job.script) {
+          return job;
         }
-        return job;
+        if (job && !job.script && !explicitJobId) {
+          await db.updateJob(job.id, { status: 'failed', error_message: 'Abandoned before script generation completed' });
+        }
+        return null;
       });
       
       if (jobToResume) {
@@ -416,9 +424,10 @@ export const generateShort = inngest.createFunction(
       const niche = ACCOUNT_NICHE[accountId] ?? NICHES[Math.floor(Math.random() * NICHES.length)];
       const variant = Math.random() < 0.5 ? 'A' : 'B';
       
-      const jobId = await step.run('create-job', () => 
-        db.createJob({ account_id: accountId, topic: 'Generating Script...', niche, format_template: 'pending', script: null, status: 'pending', variant })
-      );
+      const jobId: string = await step.run('create-job', async () => {
+        if (explicitJobId) return explicitJobId;
+        return await db.createJob({ account_id: accountId, topic: 'Generating Script...', niche, format_template: 'pending', script: null, status: 'pending', variant });
+      });
       
       const { script, topic, formatTemplate: chosenFormat } = await generateScript(step, niche, accountId);
       

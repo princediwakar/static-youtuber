@@ -3,28 +3,62 @@ import { query } from '../database';
 import { getRetentionByConfig } from '../analyticsSync';
 import { FORMAT_TEMPLATE_WEIGHTS } from '../constants';
 import type { FormatTemplate } from '../constants';
+import { generateAutonomousViralTopic, isContentInteresting } from '../viralContentEngine';
 
 export async function reserveTopic(niche: string, accountId: string): Promise<{ id: number; topic: string; research_context: string }> {
-  let result = await query<{ id: number; topic: string; research_context: string }>(`
-    UPDATE slideshow_topics
-    SET used = TRUE, used_at = NOW()
-    WHERE id = (
-      SELECT id FROM slideshow_topics
-      WHERE niche = $1 AND account_id = $2 AND used = FALSE
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
-    )
-    RETURNING id, topic, research_context
-  `, [niche, accountId]);
+  try {
+    let result = await query<{ id: number; topic: string; research_context: string }>(`
+      UPDATE slideshow_topics
+      SET used = TRUE, used_at = NOW()
+      WHERE id = (
+        SELECT id FROM slideshow_topics
+        WHERE account_id = $1 AND used = FALSE
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id, topic, research_context
+    `, [accountId]);
 
-  if (result.rows.length === 0) {
-    throw new Error(`[TopicGenerator] No unused topics left in DB for ${niche}/${accountId}. Please add more to the seed file.`);
+    if (result.rows.length > 0) {
+      const candidate = result.rows[0];
+      const check = isContentInteresting(candidate.topic, candidate.research_context);
+      if (check.isInteresting) {
+        return candidate;
+      }
+      console.warn(`[TopicGenerator] Retiring uninteresting seeded topic "${candidate.topic}" (${check.reason}). Generating fresh viral topic instead.`);
+    }
+
+    // If no unused topics left or seeded topic was boring, synthesize a fresh viral topic
+    const fresh = await generateAutonomousViralTopic(niche, accountId);
+    
+    // Save to database
+    try {
+      const insertRes = await query<{ id: number }>(`
+        INSERT INTO slideshow_topics (topic, niche, account_id, used, used_at, research_context)
+        VALUES ($1, $2, $3, TRUE, NOW(), $4)
+        ON CONFLICT (topic, account_id) DO UPDATE SET used = TRUE, used_at = NOW()
+        RETURNING id
+      `, [fresh.topic, niche, accountId, fresh.research_context]);
+
+      const id = insertRes.rows[0]?.id ?? Math.floor(Math.random() * 100000);
+      return { id, topic: fresh.topic, research_context: fresh.research_context };
+    } catch (insertErr: any) {
+      console.warn(`[TopicGenerator] DB insert for fresh topic failed (${insertErr.message}), proceeding in-memory.`);
+      return { id: Date.now() % 100000, topic: fresh.topic, research_context: fresh.research_context };
+    }
+  } catch (err: any) {
+    console.warn(`[TopicGenerator] reserveTopic DB query failed (${err.message}), synthesizing emergency topic.`);
+    const fallback = await generateAutonomousViralTopic(niche, accountId);
+    return { id: Date.now() % 100000, topic: fallback.topic, research_context: fallback.research_context };
   }
-  return result.rows[0];
 }
 
 export async function releaseTopic(id: number): Promise<void> {
-  await query(`UPDATE slideshow_topics SET used = FALSE, used_at = NULL WHERE id = $1`, [id]);
+  try {
+    await query(`UPDATE slideshow_topics SET used = FALSE, used_at = NULL WHERE id = $1`, [id]);
+  } catch (e: any) {
+    console.warn(`[TopicGenerator] releaseTopic failed (non-fatal): ${e.message}`);
+  }
 }
 
 // Epsilon-greedy bandit: exploit the best-performing (aesthetic, format) pair

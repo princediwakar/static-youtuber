@@ -33,7 +33,7 @@ function getLlmConfig(): { url: string; headers: Record<string, string>; modelOv
   // Last resort: hardcoded Modal fallback
   console.warn('[LLM] No MODAL_LLM_URL or DEEPSEEK_API_KEY configured — using hardcoded Modal fallback');
   return {
-    url: `https://mental-alternate--llm-server-fastapi-app.modal.run/v1/chat/completions`,
+    url: `https://princediwakar25--llm-server-fastapi-app.modal.run/v1/chat/completions`,
     headers: { 'Content-Type': 'application/json' },
   };
 }

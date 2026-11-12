@@ -1,5 +1,4 @@
 // Path: lib/thumbnailGenerator.ts
-import sharp from 'sharp';
 import { generateImage } from './cloudflareAi';
 import { THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, AESTHETICS, NICHE_PROFILES, DEFAULT_NICHE_PROFILE } from './constants';
 
@@ -61,57 +60,65 @@ function wordWrap(text: string, maxChars = 24, maxLines = 3): string[] {
 }
 
 async function addTextOverlay(imageBuffer: Buffer, title: string, width: number, height: number): Promise<Buffer> {
-  const displayTitle = title.length > 72 ? title.substring(0, 69) + '…' : title;
-  const maxCharsPerLine = Math.floor(width / (height > width ? 34 : 20)); // landscape vs portrait
-  const lines = wordWrap(displayTitle, maxCharsPerLine, 3);
+  try {
+    const sharpModule = await import('sharp');
+    const sharp = (sharpModule as any).default || sharpModule;
 
-  const lineHeight = Math.round(height * 0.095);
-  const fontSize = Math.round(height * 0.073);
+    const displayTitle = title.length > 72 ? title.substring(0, 69) + '…' : title;
+    const maxCharsPerLine = Math.floor(width / (height > width ? 34 : 20)); // landscape vs portrait
+    const lines = wordWrap(displayTitle, maxCharsPerLine, 3);
 
-  const yStart = height * 0.75;
+    const lineHeight = Math.round(height * 0.095);
+    const fontSize = Math.round(height * 0.073);
 
-  const svgLines = lines.map((line, i) => {
-    const y = yStart + i * lineHeight;
-    return `
-      <text
-        x="50%"
-        y="${y}"
-        text-anchor="middle"
-        dominant-baseline="middle"
-        font-family="Montserrat, Inter, system-ui, -apple-system, sans-serif"
-        font-size="${fontSize}"
-        font-weight="700"
-        fill="white"
-        stroke="black"
-        stroke-width="3"
-        stroke-linejoin="round"
-        paint-order="stroke"
-        letter-spacing="-0.5"
-      >${escapeXml(line)}</text>
-      <text
-        x="50%"
-        y="${y}"
-        text-anchor="middle"
-        dominant-baseline="middle"
-        font-family="Montserrat, Inter, system-ui, -apple-system, sans-serif"
-        font-size="${fontSize}"
-        font-weight="700"
-        fill="white"
-        stroke-width="0"
-        letter-spacing="-0.5"
-      >${escapeXml(line)}</text>`;
-  });
+    const yStart = height * 0.75;
 
-  const svg = `
-    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      ${svgLines.join('')}
-    </svg>`;
+    const svgLines = lines.map((line, i) => {
+      const y = yStart + i * lineHeight;
+      return `
+        <text
+          x="50%"
+          y="${y}"
+          text-anchor="middle"
+          dominant-baseline="middle"
+          font-family="Montserrat, Inter, system-ui, -apple-system, sans-serif"
+          font-size="${fontSize}"
+          font-weight="700"
+          fill="white"
+          stroke="black"
+          stroke-width="3"
+          stroke-linejoin="round"
+          paint-order="stroke"
+          letter-spacing="-0.5"
+        >${escapeXml(line)}</text>
+        <text
+          x="50%"
+          y="${y}"
+          text-anchor="middle"
+          dominant-baseline="middle"
+          font-family="Montserrat, Inter, system-ui, -apple-system, sans-serif"
+          font-size="${fontSize}"
+          font-weight="700"
+          fill="white"
+          stroke-width="0"
+          letter-spacing="-0.5"
+        >${escapeXml(line)}</text>`;
+    });
 
-  return sharp(imageBuffer)
-    .resize(width, height, { fit: 'cover', position: 'centre' })
-    .composite([{ input: Buffer.from(svg), blend: 'over' }])
-    .jpeg({ quality: 92 })
-    .toBuffer();
+    const svg = `
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        ${svgLines.join('')}
+      </svg>`;
+
+    return await sharp(imageBuffer)
+      .resize(width, height, { fit: 'cover', position: 'centre' })
+      .composite([{ input: Buffer.from(svg), blend: 'over' }])
+      .jpeg({ quality: 92 })
+      .toBuffer();
+  } catch (err: any) {
+    console.warn(`[Thumbnail] sharp processing failed or unavailable (${err.message}). Using raw image buffer.`);
+    return imageBuffer;
+  }
 }
 
 function escapeXml(str: string): string {

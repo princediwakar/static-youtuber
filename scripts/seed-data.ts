@@ -3,19 +3,16 @@ export type SeedTopic = {
   research_context: string;
 };
 
+import { canvasCenter } from "./seeds/canvas-center.js";
 import { canvasArea } from "./seeds/canvas-area.js";
-
-const allTopics = canvasArea[2];
-const chunkSize = Math.floor(allTopics.length / 4);
+import { canvasBase } from "./seeds/canvas-base.js";
+import { canvasStation } from "./seeds/canvas-station.js";
+import { clinicPlaybook } from "./seeds/clinic-playbook.js";
 
 export const SEEDS: [string, string, SeedTopic[]][] = [
-  ['The Case File', 'canvas_center', allTopics.slice(0, chunkSize)],
-  ['The Case File', 'canvas_area', allTopics.slice(chunkSize, chunkSize * 2)],
-  ['The Case File', 'canvas_base', allTopics.slice(chunkSize * 2, chunkSize * 3)],
-  ['The Case File', 'canvas_station', allTopics.slice(chunkSize * 3)],
-  // Also add PascalCase versions just in case the DB has PascalCase
-  ['The Case File', 'CanvasCenter', allTopics.slice(0, chunkSize)],
-  ['The Case File', 'CanvasSquare', allTopics.slice(chunkSize, chunkSize * 2)],
-  ['The Case File', 'CanvasBase', allTopics.slice(chunkSize * 2, chunkSize * 3)],
-  ['The Case File', 'CanvasStation', allTopics.slice(chunkSize * 3)],
+  ['The Case File', 'canvas_center', canvasCenter[2]],
+  ['The Case File', 'canvas_area', canvasArea[2]],
+  ['The Case File', 'canvas_base', canvasBase[2]],
+  ['The Case File', 'canvas_station', canvasStation[2]],
+  ['The Case File', 'clinic_playbook', clinicPlaybook[2]],
 ];

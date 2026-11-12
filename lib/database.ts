@@ -9,6 +9,9 @@ const pool = new Pool({
 });
 
 export async function query<T extends QueryResultRow = any>(text: string, params?: unknown[]): Promise<QueryResult<T>> {
+  if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('[SENSITIVE]')) {
+    throw new Error('DATABASE_URL is not configured or is a placeholder ([SENSITIVE])');
+  }
   try {
     return await pool.query<T>(text, params);
   } catch (error: any) {

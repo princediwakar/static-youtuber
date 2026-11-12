@@ -55,7 +55,9 @@ export async function uploadToYouTube(
 
   try {
     await fs.writeFile(tempVideo, new Uint8Array(videoBuffer));
-    await fs.writeFile(tempThumb, new Uint8Array(thumbnailBuffer));
+    if (thumbnailBuffer && thumbnailBuffer.length > 0) {
+      await fs.writeFile(tempThumb, new Uint8Array(thumbnailBuffer));
+    }
 
     const title = script.title.substring(0, 100);
     const description = buildDescription(script, labelAsSynthetic);
@@ -86,17 +88,19 @@ export async function uploadToYouTube(
     console.log(`[YouTube] Uploaded: https://www.youtube.com/watch?v=${videoId}`);
 
     // Upload thumbnail (best-effort — channels need 1000 subs for custom thumbs)
-    try {
-      await youtube.thumbnails.set({
-        videoId,
-        media: {
-          body: require('fs').createReadStream(tempThumb),
-          mimeType: 'image/png',
-        },
-      });
-      console.log(`[YouTube] Thumbnail set for ${videoId}`);
-    } catch (err) {
-      console.warn('[YouTube] Thumbnail upload skipped:', err instanceof Error ? err.message : err);
+    if (thumbnailBuffer && thumbnailBuffer.length > 0) {
+      try {
+        await youtube.thumbnails.set({
+          videoId,
+          media: {
+            body: require('fs').createReadStream(tempThumb),
+            mimeType: 'image/png',
+          },
+        });
+        console.log(`[YouTube] Thumbnail set for ${videoId}`);
+      } catch (err) {
+        console.warn('[YouTube] Thumbnail upload skipped:', err instanceof Error ? err.message : err);
+      }
     }
 
     return { youtubeVideoId: videoId, title, description };

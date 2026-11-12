@@ -26,6 +26,8 @@ export type SlideshowScript = {
   voiceName: string;
   /** Set to 'long' by generateLongFormScript; undefined / 'shorts' for standard pipeline. */
   contentType?: ContentType;
+  experiment_id?: string;
+  experiment_config?: Record<string, any>;
 };
 
 export interface SlideshowJob {

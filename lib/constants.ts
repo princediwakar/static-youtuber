@@ -62,14 +62,14 @@ export const FORMAT_TEMPLATE_WEIGHTS: Record<string, Record<FormatTemplate, numb
 };
 
 export const TEMPLATE_SHOT_COUNTS: Record<FormatTemplate, { min: number; max: number }> = {
-  RAPID_FIRE: { min: 15, max: 25 },
-  SLOW_BURN:  { min: 12, max: 18 },
-  THE_LIST:   { min: 12, max: 20 },
+  RAPID_FIRE: { min: 7, max: 14 },
+  SLOW_BURN:  { min: 8, max: 16 },
+  THE_LIST:   { min: 8, max: 16 },
   DEEP_DIVE:  { min: 30, max: 60 }, // long-form only — never selected by shorts bandit
 };
 
 // LLM config (Modal vLLM endpoint)
-export const getModalLlmUrl = () => getModalUrl('MODAL_LLM_URL', 'https://mental-alternate--llm-server-fastapi-app.modal.run');
+export const getModalLlmUrl = () => getModalUrl('MODAL_LLM_URL', 'https://princediwakar25--llm-server-fastapi-app.modal.run');
 
 // FLUX.1 [schnell] — fast + cheap.
 export const CF_AI_IMAGE_MODEL = process.env.CF_AI_IMAGE_MODEL || '@cf/black-forest-labs/flux-1-schnell';
@@ -84,11 +84,11 @@ export const CF_AI_IMAGE_GUIDANCE_FLUX2 = Number(process.env.CF_AI_IMAGE_GUIDANC
 export const CF_AI_SLIDE_WIDTH = 768;
 export const CF_AI_SLIDE_HEIGHT = 1344;
 // F5-TTS Modal endpoint (voice cloning)
-export const getF5TtsUrl = () => getModalUrl('F5_TTS_URL');
+export const getF5TtsUrl = () => getModalUrl('F5_TTS_URL', 'https://princediwakar25--f5-tts-f5ttsmodel-generate-speech.modal.run');
 export const F5_TTS_API_KEY = process.env.F5_TTS_API_KEY || '';
 
 // ACE-Step BGM Modal endpoint (instrumental music generation)
-export const getAceStepBgmUrl = () => getModalUrl('ACE_STEP_BGM_URL');
+export const getAceStepBgmUrl = () => getModalUrl('ACE_STEP_BGM_URL', 'https://princediwakar25--bgm-generator-bgmgenerator-generate-bgm.modal.run');
 export const ACE_STEP_API_KEY = process.env.ACE_STEP_API_KEY || '';
 // Separate endpoint for warmup. Modal fastapi_endpoint creates a unique domain
 // per method, so appending /warmup to the BGM URL won't work.
@@ -106,7 +106,7 @@ export const MUSIC_DIR = path.join(process.cwd(), 'assets', 'music');
 
 export const FORMATS = FORMAT_TEMPLATES; // alias for backward compatibility
 
-export const getModalRenderUrl = () => getModalUrl('MODAL_RENDER_URL', 'https://example-modal-url.com/render');
+export const getModalRenderUrl = () => getModalUrl('MODAL_RENDER_URL', 'https://princediwakar25--slideshow-render-trigger-render.modal.run');
 
 export const FFMPEG_CRF = '23';
 export const FFMPEG_PRESET = 'medium';
@@ -311,11 +311,11 @@ Expose the specific mathematical traps of running a trade business (e.g., equipm
   },
   'The Case File': {
     aestheticId: 'history-cinematic',
-    toneInstruction: `Your tone is full of tension and procedural mystery. You are reconstructing historical cases from primary sources (letters, transcripts).
+    toneInstruction: `Your tone is full of tension, forensic intrigue, and procedural mystery. You are reconstructing real-world historical cases, bizarre geographical anomalies, medical oddities, and high-stakes deceptions from cold, irrefutable facts.
 
-Never use passive voice. Start with a polarizing statement about the document in question.
+Never use passive voice. Start with an arresting statement that opens a massive curiosity gap in the first 7 words.
 
-Focus on the forensic details of the evidence. Let the raw facts build the mystery. Never add moralizing or "what this means for today" takeaways. The facts should hit like a gut punch. Do not trail off or repeat yourself at the end. End decisively.`,
+Focus on the raw, high-stakes details: exact numbers, physical geography, hidden motives, and astonishing anomalies. Let the bizarre facts build the mystery. Never add corporate advice, moralizing, or "what this teaches us" conclusions. The story must hit like a gut punch. Do not trail off or repeat yourself. End on a sudden, powerful realization.`,
     minQualityScore: 5,
   },
   'Second Act': {

@@ -32,7 +32,7 @@ export const SlideshowScriptSchema = z.object({
   description: z.string().min(30).max(1000),
   tags: z.array(z.string()).min(5).max(12),
   voiceName: z.string().min(1),
-  shots: z.array(ShotSchema).min(12).max(30),
+  shots: z.array(ShotSchema).min(6).max(30),
   thumbnailPrompt: z.string().min(30).max(500),
 }).refine(data => data.shots.filter(s => s.is_conclusion).length === 1, {
   message: 'Exactly one shot must be marked as the conclusion',

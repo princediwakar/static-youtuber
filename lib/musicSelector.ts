@@ -106,6 +106,30 @@ async function generateWithAceStep(prompt: string, duration: number): Promise<Bu
   }
 }
 
+import fs from 'fs';
+import path from 'path';
+
+function getFallbackMusic(formatTemplate: FormatTemplate): Buffer {
+  const assetsDir = path.join(process.cwd(), 'assets', 'music');
+  let filename = 'tension-01.mp3';
+  if (formatTemplate === 'SLOW_BURN') {
+    filename = 'ambient-01.mp3';
+  } else if (formatTemplate === 'THE_LIST') {
+    filename = 'focus-01.mp3';
+  }
+  const fullPath = path.join(assetsDir, filename);
+  if (fs.existsSync(fullPath)) {
+    console.log(`[MusicSelector] Loaded bundled fallback BGM: ${filename}`);
+    return fs.readFileSync(fullPath);
+  }
+  // Try any .mp3 in directory
+  const files = fs.readdirSync(assetsDir).filter(f => f.endsWith('.mp3'));
+  if (files.length > 0) {
+    return fs.readFileSync(path.join(assetsDir, files[0]));
+  }
+  throw new Error('[MusicSelector] No BGM audio available');
+}
+
 export async function selectMusicTrack(
   scriptTitle: string,
   niche: string,
@@ -114,20 +138,22 @@ export async function selectMusicTrack(
   narrationText: string,
   durationSeconds: number,
 ): Promise<{ buffer: Buffer; filename: string; title: string }> {
-  
   const aceStepBgmUrl = getAceStepBgmUrl();
-  if (!aceStepBgmUrl || aceStepBgmUrl.includes('example-modal-url')) {
-    throw new Error('CRITICAL: ACE_STEP_BGM_URL is not configured. Pipeline halting.');
-  }
-
   const prompt = pickMusicPrompt(niche, formatTemplate, scriptTitle, visualWorld, narrationText);
-  // For shorts, narrationDurationSec is already ≤60s in practice.
-  // For long-form, it can be up to 300s — no artificial cap.
   const duration = Math.max(30, Math.min(durationSeconds, 300));
 
-  console.log(`[MusicSelector] ${niche}/${formatTemplate} → ${duration}s BGM: "${prompt.slice(0, 100)}..."`);
+  if (aceStepBgmUrl && !aceStepBgmUrl.includes('example-modal-url')) {
+    try {
+      console.log(`[MusicSelector] ${niche}/${formatTemplate} → ${duration}s ACE-Step BGM: "${prompt.slice(0, 100)}..."`);
+      const buffer = await generateWithAceStep(prompt, duration);
+      return { buffer, filename: 'acestep-bgm.mp3', title: scriptTitle };
+    } catch (err: any) {
+      console.warn(`[MusicSelector] ACE-Step generation failed (${err.message}). Falling back to bundled CC-BY track.`);
+    }
+  } else {
+    console.warn(`[MusicSelector] ACE_STEP_BGM_URL not configured. Using bundled CC-BY track.`);
+  }
 
-  const buffer = await generateWithAceStep(prompt, duration);
-
-  return { buffer, filename: 'acestep-bgm.mp3', title: scriptTitle };
+  const fallbackBuffer = getFallbackMusic(formatTemplate);
+  return { buffer: fallbackBuffer, filename: 'fallback-bgm.mp3', title: scriptTitle };
 }
