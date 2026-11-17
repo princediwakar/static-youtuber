@@ -412,12 +412,18 @@ export const generateShort = inngest.createFunction(
           return job;
         }
         if (job && !job.script && !explicitJobId) {
-          await db.updateJob(job.id, { status: 'failed', error_message: 'Abandoned before script generation completed' });
+          const ageMs = Date.now() - new Date(job.created_at).getTime();
+          if (ageMs > 45 * 60 * 1000) {
+            await db.updateJob(job.id, { status: 'failed', error_message: 'Abandoned before script generation completed (>45m old)' });
+          } else {
+            console.log(`[Pipeline] Reusing active pending job ${job.id} (created ${(ageMs / 1000).toFixed(0)}s ago)`);
+            return { id: job.id, reusePending: true };
+          }
         }
         return null;
       });
       
-      if (jobToResume) {
+      if (jobToResume && !jobToResume.reusePending && jobToResume.script) {
         return { script: jobToResume.script, jobId: jobToResume.id, format_template: jobToResume.format_template, niche: jobToResume.niche, variant: jobToResume.variant ?? 'A', topic: jobToResume.topic };
       }
 
@@ -426,6 +432,7 @@ export const generateShort = inngest.createFunction(
       
       const jobId: string = await step.run('create-job', async () => {
         if (explicitJobId) return explicitJobId;
+        if (jobToResume?.reusePending && jobToResume.id) return jobToResume.id;
         return await db.createJob({ account_id: accountId, topic: 'Generating Script...', niche, format_template: 'pending', script: null, status: 'pending', variant });
       });
       

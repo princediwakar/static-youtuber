@@ -121,8 +121,10 @@ export function isContentInteresting(topic: string, context?: string): { isInter
 
   // Must have some curiosity trigger
   const curiositySignals = [
-    /\b(mystery|secret|only|never|impossible|shortest|longest|deadliest|bizarre|curious|unclaimed|disaster|heist|swindle|stole|vanished|trapped|fell|survived|miracle|hack|glitch|plague|poison|submerged|banned|forbidden|anomaly|accident|surgery|mortality|brain|epidemic|crash|collapsed|exploded|unsolved)\b/i,
-    /\b(\$\d+|\d+ days|\d+ hours|\d+ miles|\d+ percent|\d+%|\d+ feet|\d+ years|\d+ mins|\d+ minutes)\b/i,
+    /\b(mystery|secret|only|never|impossible|shortest|longest|deadliest|bizarre|curious|unclaimed|disaster|heist|swindle|stole|vanished|trapped|fell|survived|miracle|hack|glitch|plague|poison|submerged|banned|forbidden|anomaly|accident|surgery|mortality|brain|epidemic|crash|collapsed|exploded|unsolved|radiation|lethal|fatal|killed|destroyed|weapon|malware|radioactive|catastrophe|unforgiving|hostile|extreme|frozen|buried|lost|robbery|scandal|fraud|shocking|unbelievable|miraculous|escape|strangest|strange|disintegrated|decayed|bullet|shot|wound|fistula|horrifying|terrifying|border|empty|impenetrable|explosion|blast|atomic|bomb|rigged|erased|navy|island|lake|underground|bunkers|war|pirates|largest|coldest|hottest|highest|deepest|isolated|ancient|divided|split|dispute|disputed|uninhabited|accidentally)\b/i,
+    /(?:\$|₹|€|£)\s*\d+/i,
+    /\b\d+(?:,\d+)*(?:\.\d+)?%/i,
+    /\b\d+(?:,\d+)*(?:\.\d+)?\s*(?:billion|million|trillion|k|m|b|thousand|days?|hours?|miles?|percent|feet|years?|mins?|minutes?|deaths?|casualties|people|lives|lost|killed|volts?|tons?|meters?|km|degrees?|celsius)\b/i,
   ];
 
   const hasSignal = curiositySignals.some(s => s.test(combined));
