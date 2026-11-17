@@ -25,13 +25,15 @@ async function triggerPipeline() {
   }
 
   const VALID_ACCOUNTS = ['canvas_center', 'canvas_area', 'canvas_base', 'canvas_station', 'clinic_playbook'];
-  const accountsToTrigger = triggerAll ? VALID_ACCOUNTS : [accountIdArg || process.env.ACCOUNT_ID || 'canvas_center'];
+  const rawAccountId = accountIdArg || (!process.env.ACCOUNT_ID?.includes('[SENSITIVE]') ? process.env.ACCOUNT_ID : '') || 'canvas_center';
+  const accountsToTrigger = triggerAll ? VALID_ACCOUNTS : [rawAccountId];
 
   const eventKey = process.env.INNGEST_EVENT_KEY;
   const isKeyUsable = eventKey && !eventKey.includes('[SENSITIVE]');
 
   if (!isKeyUsable) {
     console.log(`[trigger-prod] Routing trigger via production endpoint https://staticyoutuber.vercel.app/api/trigger...`);
+    const triggerKey = (!process.env.CRON_SECRET?.includes('[SENSITIVE]') ? process.env.CRON_SECRET : '') || 'static-yt-trigger-2026';
     for (const acc of accountsToTrigger) {
       console.log(`  ▶ Triggering [${acc}]...`);
       const prodRes = await fetch('https://staticyoutuber.vercel.app/api/trigger', {
@@ -39,7 +41,7 @@ async function triggerPipeline() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           accountId: acc,
-          key: process.env.CRON_SECRET || 'static-yt-trigger-2026',
+          key: triggerKey,
         }),
       });
       const json = await prodRes.json();

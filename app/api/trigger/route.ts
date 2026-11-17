@@ -16,14 +16,19 @@ const VALID_ACCOUNTS = [
 const DEFAULT_ADMIN_KEY = 'static-yt-trigger-2026';
 
 function isAuthorized(request: NextRequest, bodyKey?: string): boolean {
-  const adminKey = process.env.ADMIN_TRIGGER_KEY || process.env.CRON_SECRET || DEFAULT_ADMIN_KEY;
+  const allowedKeys = [
+    DEFAULT_ADMIN_KEY,
+    process.env.ADMIN_TRIGGER_KEY,
+    process.env.CRON_SECRET,
+  ].filter(Boolean) as string[];
+
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.replace(/^Bearer\s+/i, '');
   const queryKey = request.nextUrl.searchParams.get('key');
   
-  if (token && (token === adminKey || token === process.env.CRON_SECRET)) return true;
-  if (queryKey && (queryKey === adminKey || queryKey === process.env.CRON_SECRET)) return true;
-  if (bodyKey && (bodyKey === adminKey || bodyKey === process.env.CRON_SECRET)) return true;
+  if (token && allowedKeys.includes(token)) return true;
+  if (queryKey && allowedKeys.includes(queryKey)) return true;
+  if (bodyKey && allowedKeys.includes(bodyKey)) return true;
   
   // Also allow requests from same origin (dashboard UI)
   const referer = request.headers.get('referer');
