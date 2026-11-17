@@ -7,31 +7,60 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
 async function triggerPipeline() {
-  // Import Inngest, creating a fresh client that ignores INNGEST_DEV
-  delete process.env.INNGEST_DEV;
-  const { Inngest } = await import('inngest');
-
-  const eventKey = process.env.INNGEST_EVENT_KEY;
-  if (!eventKey) throw new Error('INNGEST_EVENT_KEY not set');
-
-  const inngest = new Inngest({
-    id: 'ai-slideshow',
-    eventKey,
-  });
-
   const args = process.argv.slice(2);
   let contentType = 'shorts';
   let accountIdArg = '';
+  let triggerAll = false;
   
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--contentType' && i + 1 < args.length) {
       contentType = args[++i];
     } else if (args[i] === '--accountId' && i + 1 < args.length) {
       accountIdArg = args[++i];
+    } else if (args[i] === '--all' || args[i] === 'all') {
+      triggerAll = true;
     } else if (!args[i].startsWith('--')) {
       accountIdArg = args[i];
     }
   }
+
+  const VALID_ACCOUNTS = ['canvas_center', 'canvas_area', 'canvas_base', 'canvas_station', 'clinic_playbook'];
+  const accountsToTrigger = triggerAll ? VALID_ACCOUNTS : [accountIdArg || process.env.ACCOUNT_ID || 'canvas_center'];
+
+  const eventKey = process.env.INNGEST_EVENT_KEY;
+  const isKeyUsable = eventKey && !eventKey.includes('[SENSITIVE]');
+
+  if (!isKeyUsable) {
+    console.log(`[trigger-prod] Routing trigger via production endpoint https://staticyoutuber.vercel.app/api/trigger...`);
+    for (const acc of accountsToTrigger) {
+      console.log(`  ▶ Triggering [${acc}]...`);
+      const prodRes = await fetch('https://staticyoutuber.vercel.app/api/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: acc,
+          key: process.env.CRON_SECRET || 'static-yt-trigger-2026',
+        }),
+      });
+      const json = await prodRes.json();
+      if (!prodRes.ok) {
+        console.error(`  ❌ Failed for [${acc}]:`, json);
+      } else {
+        console.log(`  ✅ Successfully triggered [${acc}]:`, json.message);
+      }
+    }
+    console.log('\nAll requested channels triggered in Inngest Cloud!');
+    return;
+  }
+
+  // Import Inngest, creating a fresh client that ignores INNGEST_DEV
+  delete process.env.INNGEST_DEV;
+  const { Inngest } = await import('inngest');
+
+  const inngest = new Inngest({
+    id: 'ai-slideshow',
+    eventKey,
+  });
 
   const accountId = accountIdArg || process.env.ACCOUNT_ID || 'canvas_center';
   const eventName = contentType === 'long' ? 'slideshow/trigger-long' : 'slideshow/trigger';
