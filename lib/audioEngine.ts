@@ -3,6 +3,39 @@ import { getF5TtsUrl, F5_TTS_API_KEY } from './constants';
 
 const MAX_RETRIES = 3;
 
+const AVAILABLE_F5_VOICES = [
+  'dee-smith-american-male',
+  'jon-british-male',
+  'kelli-winkler-american-female',
+  'kylie-hinze-american-female',
+  'mallory-handford-american-female',
+  'melissa-harlow-american-female',
+  'phil-freeman-american-male',
+];
+
+const VOICE_ALIAS_MAP: Record<string, string> = {
+  'melissa-harlow-slow-conversational-american-female': 'melissa-harlow-american-female',
+  'kylie-hinze-conversational-american-female': 'kylie-hinze-american-female',
+  'mallory-handford-energetic-american-female': 'mallory-handford-american-female',
+  'dee-smith-authoritative-american-male': 'dee-smith-american-male',
+  'phil-freeman-gravelly-american-male': 'phil-freeman-american-male',
+  'kelli-winkler-narrative-american-female': 'kelli-winkler-american-female',
+  'aaron-american-male': 'dee-smith-american-male',
+  'greg-american-conversational-male': 'phil-freeman-american-male',
+  'sameer-hindi-male': 'dee-smith-american-male',
+  'vikram-hindi-male': 'jon-british-male',
+};
+
+export function normalizeVoice(voiceName: string): string {
+  if (AVAILABLE_F5_VOICES.includes(voiceName)) return voiceName;
+  if (VOICE_ALIAS_MAP[voiceName]) return VOICE_ALIAS_MAP[voiceName];
+  for (const v of AVAILABLE_F5_VOICES) {
+    const prefix = v.split('-').slice(0, 2).join('-');
+    if (voiceName.includes(prefix)) return v;
+  }
+  return 'jon-british-male';
+}
+
 // F5-TTS on Modal: GPU cold start (~30s) + synthesis of a short chunk (~2s).
 // Give it 60 seconds before treating the request as hung.
 const FETCH_TIMEOUT_MS = 60 * 1000;
@@ -17,6 +50,8 @@ async function callF5Tts(text: string, voiceName: string): Promise<Buffer> {
     throw new Error('[AudioEngine] Missing F5_TTS_URL environment variable.');
   }
 
+  const normalizedVoice = normalizeVoice(voiceName);
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -27,7 +62,7 @@ async function callF5Tts(text: string, voiceName: string): Promise<Buffer> {
         'Content-Type': 'application/json',
         ...(F5_TTS_API_KEY && { Authorization: `Bearer ${F5_TTS_API_KEY}` }),
       },
-      body: JSON.stringify({ text, voice: voiceName }),
+      body: JSON.stringify({ text, voice: normalizedVoice }),
       signal: controller.signal,
     });
 
