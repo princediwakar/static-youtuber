@@ -4,34 +4,31 @@ import { getF5TtsUrl, F5_TTS_API_KEY } from './constants';
 const MAX_RETRIES = 3;
 
 const AVAILABLE_F5_VOICES = [
-  'dee-smith-american-male',
+  'aaron-american-male',
+  'greg-american-conversational-male',
   'jon-british-male',
-  'kelli-winkler-american-female',
-  'kylie-hinze-american-female',
-  'mallory-handford-american-female',
-  'melissa-harlow-american-female',
-  'phil-freeman-american-male',
+  'kylie-hinze-conversational-american-female',
+  'mallory-handford-energetic-american-female',
+  'melissa-harlow-slow-conversational-american-female',
+  'sameer-hindi-male',
+  'vikram-hindi-male',
 ];
 
 const VOICE_ALIAS_MAP: Record<string, string> = {
-  'melissa-harlow-slow-conversational-american-female': 'melissa-harlow-american-female',
-  'kylie-hinze-conversational-american-female': 'kylie-hinze-american-female',
-  'mallory-handford-energetic-american-female': 'mallory-handford-american-female',
-  'dee-smith-authoritative-american-male': 'dee-smith-american-male',
-  'phil-freeman-gravelly-american-male': 'phil-freeman-american-male',
-  'kelli-winkler-narrative-american-female': 'kelli-winkler-american-female',
-  'aaron-american-male': 'dee-smith-american-male',
-  'greg-american-conversational-male': 'phil-freeman-american-male',
-  'sameer-hindi-male': 'dee-smith-american-male',
-  'vikram-hindi-male': 'jon-british-male',
+  'dee-smith-american-male': 'aaron-american-male',
+  'phil-freeman-american-male': 'greg-american-conversational-male',
+  'kelli-winkler-american-female': 'kylie-hinze-conversational-american-female',
+  'kylie-hinze-american-female': 'kylie-hinze-conversational-american-female',
+  'mallory-handford-american-female': 'mallory-handford-energetic-american-female',
+  'melissa-harlow-american-female': 'melissa-harlow-slow-conversational-american-female',
 };
 
 export function normalizeVoice(voiceName: string): string {
   if (AVAILABLE_F5_VOICES.includes(voiceName)) return voiceName;
   if (VOICE_ALIAS_MAP[voiceName]) return VOICE_ALIAS_MAP[voiceName];
   for (const v of AVAILABLE_F5_VOICES) {
-    const prefix = v.split('-').slice(0, 2).join('-');
-    if (voiceName.includes(prefix)) return v;
+    const key = v.split('-')[0];
+    if (voiceName.includes(key)) return v;
   }
   return 'jon-british-male';
 }
