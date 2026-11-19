@@ -63,8 +63,8 @@ FPS = 30
 # manual test calls, etc.) — the same look the pipeline always had.
 DEFAULT_CAPTION_STYLE = {
     "fontFamily": "Montserrat",
-    "textColor": "#000000",
-    "strokeColor": "#FFFFFF",
+    "textColor": "#FFFFFF",
+    "strokeColor": "#000000",
 }
 
 
@@ -72,7 +72,7 @@ def get_render_config() -> dict:
     """Return shorts render settings: portrait 1080×1920."""
     return {
         'play_res_x': 1080, 'play_res_y': 1920,
-        'font_size': 96,
+        'font_size': 88,
         'margin_l': 100, 'margin_r': 100, 'margin_v': 800,
         'alignment': 2,
         'scale': '1080:1920', 'size': '1080x1920',
@@ -288,12 +288,24 @@ def build_continuous_ass(
     caption_style: Optional[Dict[str, Any]],
     play_res_x: int = 1080,
     play_res_y: int = 1920,
-    font_size: int = 96,
+    font_size: int = 88,
     margin_v: int = 800,
     alignment: int = 2,
 ) -> str:
     style = {**DEFAULT_CAPTION_STYLE, **(caption_style or {})}
-    primary_colour = hex_to_ass_color(style.get("textColor", "#FFFFFF"), alpha="00")
+
+    # Safeguard: text must never be black or empty. Default to #FFFFFF
+    text_color = style.get("textColor", "#FFFFFF")
+    if not text_color or text_color.lower() in ("#000000", "#000", "black"):
+        text_color = "#FFFFFF"
+    primary_colour = hex_to_ass_color(text_color, alpha="00")
+
+    stroke_color = style.get("strokeColor", "#000000")
+    if not stroke_color or stroke_color.lower() in ("#ffffff", "#fff", "white"):
+        stroke_color = "#000000"
+    outline_colour = hex_to_ass_color(stroke_color, alpha="00")
+
+    font_family = style.get("fontFamily") or "Montserrat"
 
     ass_content = [
         "[Script Info]",
@@ -304,8 +316,11 @@ def build_continuous_ass(
         "",
         "[V4+ Styles]",
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        # BorderStyle 3 is opaque box.
-        f"Style: Default,{style['fontFamily']},{font_size},{primary_colour},&H000000FF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,3,10,0,{alignment},100,100,{margin_v},1",
+        # BorderStyle 1: Outline + Drop Shadow.
+        # Outline 6px solid black gives high contrast over any background.
+        # Shadow 2px with &H80000000 provides depth.
+        # Alignment 2 is Bottom-Center with margin_v=800 placing subtitles at the optimal eye level.
+        f"Style: Default,{font_family},{font_size},{primary_colour},&H000000FF,{outline_colour},&H80000000,-1,0,0,0,100,100,0,0,1,6,2,{alignment},100,100,{margin_v},1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -319,16 +334,30 @@ def build_continuous_ass(
         if not caption:
             continue
 
-        # Wrap manually: ~3 words per line for better readability in shorts
+        # Wrap words cleanly: 2-4 words per line without orphaned 1-word lines
         words = caption.split()
-        wrapped_caption = ""
-        for j, w in enumerate(words):
-            wrapped_caption += w + (" " if (j + 1) % 3 != 0 else "\\N")
-        caption = wrapped_caption.strip().removesuffix("\\N")
+        if len(words) <= 3:
+            wrapped = " ".join(words)
+        elif len(words) == 4:
+            wrapped = f"{words[0]} {words[1]}\\N{words[2]} {words[3]}"
+        elif len(words) == 5:
+            wrapped = f"{words[0]} {words[1]} {words[2]}\\N{words[3]} {words[4]}"
+        elif len(words) == 6:
+            wrapped = f"{words[0]} {words[1]} {words[2]}\\N{words[3]} {words[4]} {words[5]}"
+        else:
+            chunks = []
+            for k in range(0, len(words), 3):
+                chunks.append(" ".join(words[k:k+3]))
+            if len(chunks) > 1 and len(chunks[-1].split()) == 1:
+                prev = chunks[-2].split()
+                if len(prev) >= 2:
+                    chunks[-2] = " ".join(prev[:-1])
+                    chunks[-1] = f"{prev[-1]} {chunks[-1]}"
+            wrapped = "\\N".join(chunks)
 
         ass_start = format_ass_time(start_time)
         ass_end = format_ass_time(end_time)
-        ass_content.append(f"Dialogue: 0,{ass_start},{ass_end},Default,,0,0,0,,{caption}")
+        ass_content.append(f"Dialogue: 0,{ass_start},{ass_end},Default,,0,0,0,,{wrapped}")
 
     return "\n".join(ass_content)
 

@@ -154,8 +154,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
   'history-cinematic': {
     fontFamily: 'Cinzel Black',
     fontFile: 'Cinzel-Black.ttf',
-    textColor: '#000000',
-    strokeColor: '#FFFFFF',
+    textColor: '#FFFFFF',
+    strokeColor: '#000000',
     accentColor: '#E6A822',    // Oxidized gold
     maxCharsPerLine: 28,
     maxChars: 72,
@@ -163,8 +163,8 @@ export const CAPTION_STYLES: Record<string, CaptionStyle> = {
   'learn-technical': {
     fontFamily: 'Big Shoulders Stencil Display',
     fontFile: 'BigShouldersStencilDisplay-Bold.ttf',
-    textColor: '#000000',
-    strokeColor: '#FFFFFF',
+    textColor: '#FFFFFF',
+    strokeColor: '#000000',
     accentColor: '#FFC000',    // High-vis hazard yellow
     maxCharsPerLine: 42,
     maxChars: 120,
@@ -202,8 +202,8 @@ export function getCaptionStyle(aestheticId: string): CaptionStyle {
   return CAPTION_STYLES[aestheticId] ?? {
     fontFamily: 'Montserrat',
     fontFile: 'Montserrat-Bold.ttf',
-    textColor: '#000000',
-    strokeColor: '#FFFFFF',
+    textColor: '#FFFFFF',
+    strokeColor: '#000000',
     accentColor: '#FFD23F',
     maxCharsPerLine: CAPTION_MAX_CHARS_PER_LINE,
     maxChars: CAPTION_MAX_CHARS,
